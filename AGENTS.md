@@ -10,14 +10,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before 
 
 ### Dependencies
 
-- Install with `npm install` from the repo root.
-- **Web in Cloud VMs:** `package.json` does not list `react-native-web` / `react-dom` by default. Before `npx expo start --web`, run once per environment:
-
-  ```bash
-  npx expo install react-native-web react-dom @expo/metro-runtime
-  ```
-
-  (Expo pins SDK 54–compatible versions.)
+- Install with `npm install` from the repo root (includes `react-native-web`, `react-dom`, and `@expo/metro-runtime` for `npm run web` / `npx expo start --web`).
 
 ### Running the dev server
 
@@ -36,7 +29,7 @@ No ESLint, test runner, or production build is configured. Use `npx tsc --noEmit
 ### External services
 
 - **Supabase** (hosted): URL and anon key are in `lib/supabase.ts`. Auth and cloud task sync require network access to that project.
-- **Sign-up** sends a confirmation email; **sign-in fails** until the email is confirmed (`email_not_confirmed`). For full E2E (TODAY tab, add/toggle tasks), use a **pre-confirmed test account** (see Cloud Agent secrets) or confirm sign-up via email.
+- **Sign-up** sends a confirmation email; **sign-in fails** until the email is confirmed (`email_not_confirmed`). Full E2E (TODAY tab, add/toggle tasks) needs a confirmed account (your own sign-up + email link, or any existing project user). Without that, verify the dev environment via the login UI and `npx tsc --noEmit`.
 - No local Supabase/Docker stack in this repo.
 
 ### Auth / hello-world in the browser
