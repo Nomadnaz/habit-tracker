@@ -21,8 +21,10 @@ export default function FocusTimerScreen() {
   const [secsLeft,  setSecsLeft]  = useState(workSecs);
   const [running,   setRunning]   = useState(false);
   const [round,     setRound]     = useState(1);
+  const [strikeBannerVisible, setStrikeBannerVisible] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const strikeBannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appStateRef = useRef(AppState.currentState);
   // Track when the timer was last paused so we can adjust after backgrounding.
   const bgTimestampRef = useRef<number | null>(null);
@@ -49,6 +51,19 @@ export default function FocusTimerScreen() {
     }
   }
 
+  const showStrikeBanner = useCallback(() => {
+    if (strikeBannerTimeoutRef.current) {
+      clearTimeout(strikeBannerTimeoutRef.current);
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    setStrikeBannerVisible(true);
+    strikeBannerTimeoutRef.current = setTimeout(() => {
+      setStrikeBannerVisible(false);
+      strikeBannerTimeoutRef.current = null;
+    }, 3000);
+  }, []);
+
   // ── Tick ──────────────────────────────────────────────────────
   useEffect(() => {
     if (running) {
@@ -69,6 +84,12 @@ export default function FocusTimerScreen() {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running, phase]);
 
+  useEffect(() => {
+    return () => {
+      if (strikeBannerTimeoutRef.current) clearTimeout(strikeBannerTimeoutRef.current);
+    };
+  }, []);
+
   // ── Background / foreground handling ──────────────────────────
   useEffect(() => {
     const sub = AppState.addEventListener('change', nextState => {
@@ -81,11 +102,12 @@ export default function FocusTimerScreen() {
         const elapsed = Math.floor((Date.now() - bgTimestampRef.current) / 1000);
         bgTimestampRef.current = null;
         setSecsLeft(s => Math.max(0, s - elapsed));
+        if (phase === 'focus') showStrikeBanner();
       }
       appStateRef.current = nextState;
     });
     return () => sub.remove();
-  }, [running]);
+  }, [running, phase, showStrikeBanner]);
 
   // ── UI ────────────────────────────────────────────────────────
   const isBreak = phase === 'break';
@@ -169,6 +191,15 @@ export default function FocusTimerScreen() {
         </TouchableOpacity>
 
       </View>
+
+      {strikeBannerVisible && (
+        <View pointerEvents="none" style={styles.strikeBannerOverlay}>
+          <View style={styles.strikeBanner}>
+            <Text style={styles.strikeBannerTitle}>STRIKE 1</Text>
+            <Text style={styles.strikeBannerBody}>Stay in focus mode until the timer ends.</Text>
+          </View>
+        </View>
+      )}
 
     </SafeAreaView>
   );
@@ -291,5 +322,45 @@ const styles = StyleSheet.create({
   },
   textLight: {
     color: '#FCFBF9',
+  },
+  strikeBannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    zIndex: 10,
+  },
+  strikeBanner: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#1A1714',
+    borderWidth: 3,
+    borderColor: '#FF4D00',
+    borderRadius: 16,
+    paddingHorizontal: 22,
+    paddingVertical: 24,
+    alignItems: 'center',
+    shadowColor: '#1A1714',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  strikeBannerTitle: {
+    fontFamily: 'PressStart2P_400Regular',
+    fontSize: 18,
+    color: '#FF4D00',
+    letterSpacing: 1,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  strikeBannerBody: {
+    fontFamily: 'SpaceMono_700Bold',
+    fontSize: 12,
+    color: '#FCFBF9',
+    lineHeight: 18,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 });
