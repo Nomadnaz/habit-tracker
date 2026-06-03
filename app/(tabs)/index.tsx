@@ -1,7 +1,11 @@
 // useState stores values that can change and re-renders the screen when they do.
 // useEffect runs code at specific moments — like when the screen first loads.
 // useRef holds a value that survives re-renders without causing one (we use it for the scroll wheel).
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+
+// useFocusEffect runs each time this screen comes into focus (e.g. switching back to this tab).
+// useRouter lets us navigate to the focus timer screen.
+import { useFocusEffect, useRouter } from 'expo-router';
 
 // expo-haptics triggers the phone's vibration motor — used for the tactile "click" as dates scroll.
 import * as Haptics from 'expo-haptics';
@@ -24,6 +28,7 @@ import {
   TouchableOpacity, // A pressable element (button) that responds to taps.
   TextInput,        // A field the user can type into.
   Keyboard,         // Lets us manually dismiss (hide) the on-screen keyboard.
+  Animated,         // Lets us drive animations directly from the scroll position (for the wheel mask).
 } from 'react-native';
 
 // SafeAreaView automatically adds padding so content isn't hidden behind the camera notch
@@ -42,15 +47,25 @@ const MONTH_NAMES = [
   'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
 ];
 
-// Builds an array of date objects starting from June 1, 2026.
-// Each object has a unique key (used as an ID), the day name, the date number, and the month name.
-// We generate 60 days so the user can scroll forward through upcoming dates.
-function buildDates(count: number) {
-  const start = new Date(2026, 5, 1); // Month 5 = June (JavaScript months start at 0, not 1).
+// How many days of history to show before today, and how many days ahead.
+const PAST_DAYS = 30;
+const FUTURE_DAYS = 120;
+
+// Builds the array of date objects, running from PAST_DAYS before today to FUTURE_DAYS after.
+// Each object has a unique key (used as an ID + task lookup), the day name, date number, and month.
+// Returns the list plus the index of today, so the wheel can start centred on the current day.
+function buildDates() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);                 // Ignore the time of day — we only care about the date.
+
+  const start = new Date(today);
+  start.setDate(today.getDate() - PAST_DAYS); // Begin a month before today.
+
+  const total = PAST_DAYS + 1 + FUTURE_DAYS;  // past days + today + future days.
   const out = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < total; i++) {
     const d = new Date(start);
-    d.setDate(start.getDate() + i); // Move forward i days from the start date.
+    d.setDate(start.getDate() + i);
     out.push({
       // The key is a unique string like "2026-5-1" used to look up tasks for that day.
       key: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
@@ -63,17 +78,17 @@ function buildDates(count: number) {
 }
 
 // Build the list of dates once at startup. This never changes while the app is running.
-const DATES = buildDates(60);
+const DATES = buildDates();
+
+// The index of TODAY in the list — it's always PAST_DAYS in (we put 30 days of history first).
+// The wheel starts centred here, and the task list opens on today.
+const TODAY_INDEX = PAST_DAYS;
 
 // ── Date wheel sizing ──────────────────────────────────────────────
-// ITEM_HEIGHT: the height of one date row. The wheel snaps in steps of this size.
-// VISIBLE: how many date rows are visible at once (must be odd so one sits dead-centre).
-// WHEEL_HEIGHT: total height of the wheel. SPACER: blank padding above the first / below
-// the last date, so the very first and very last dates can still reach the centre slot.
-const ITEM_HEIGHT = 92;
+// VISIBLE: how many date rows show at once (odd, so one sits dead-centre).
+// The actual row height is measured at runtime so 3 big dates fill the whole column —
+// see the `itemH` state and the wheel's onLayout handler below.
 const VISIBLE = 3;
-const WHEEL_HEIGHT = ITEM_HEIGHT * VISIBLE;
-const SPACER = ITEM_HEIGHT * Math.floor(VISIBLE / 2);
 
 // TypeScript type definitions — these describe the shape of our data.
 // A Task has an id (unique string), a label (the task name), and a done flag (checked or not).
@@ -95,6 +110,14 @@ function generateId() {
   });
 }
 
+// Available focus block durations and their corresponding break lengths.
+const FOCUS_BLOCKS = [
+  { minutes: 25,  label: '25 MIN BLOCK',  breakMins: 5  },
+  { minutes: 45,  label: '45 MIN BLOCK',  breakMins: 10 },
+  { minutes: 60,  label: '60 MIN BLOCK',  breakMins: 15 },
+  { minutes: 90,  label: '90 MIN BLOCK',  breakMins: 20 },
+];
+
 // Static data for the tracker bar at the bottom of the screen.
 // These are placeholder values — real step/calorie data would come from the phone's health APIs.
 const TRACKERS = [
@@ -108,12 +131,18 @@ const TRACKERS = [
 export default function TodayScreen() {
 
   // The date key of the currently selected date card (e.g. "2026-5-1").
-  // Starts on the first date in the list (June 1, 2026).
-  const [selectedKey, setSelectedKey] = useState(DATES[0].key);
+  // Starts on TODAY so the app opens on the current day.
+  const [selectedKey, setSelectedKey] = useState(DATES[TODAY_INDEX].key);
 
   // All tasks for all dates, stored as a dictionary keyed by date string.
   // Starts empty — tasks are loaded from AsyncStorage when the screen mounts.
   const [taskMap, setTaskMap] = useState<TaskMap>({});
+
+  // ── Focus block state ─────────────────────────────────────────────
+  const [focusName, setFocusName]   = useState('');
+  const [focusBlockIdx, setFocusBlockIdx] = useState(3); // Default: 90 MIN BLOCK
+  const [editingFocus, setEditingFocus]   = useState(false);
+  const router = useRouter();
 
   // The text the user is currently typing into the "add task" input field.
   const [newTaskText, setNewTaskText] = useState('');
@@ -127,26 +156,88 @@ export default function TodayScreen() {
 
   // A direct reference to the scroll wheel, so we can programmatically scroll it
   // (e.g. when the user taps a date instead of dragging).
-  const wheelRef = useRef<ScrollView>(null);
+  const wheelRef = useRef<any>(null);
+
+  // The live scroll position as an Animated value. This drives the white-text overlay so its
+  // colour change tracks the orange square pixel-for-pixel, on the native thread (very smooth).
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   // Remembers which date index was last centred. We only update the selection (and fire a
   // haptic tick) when the centred date actually CHANGES — not on every pixel of scrolling.
-  const lastIndexRef = useRef(0);
+  // Starts at TODAY_INDEX so the initial position on today doesn't fire a stray haptic.
+  const lastIndexRef = useRef(TODAY_INDEX);
+
+  // True only while the USER is dragging/flinging the wheel. We use this to fire haptics ONLY
+  // for real finger scrolls — never for programmatic centring (launch / returning to the tab).
+  const userScrollingRef = useRef(false);
+
+  // The measured height of one date row. Set from the wheel's real height ÷ VISIBLE so that
+  // exactly 3 big dates fill the column. Starts at 0 (unknown) until the column is measured.
+  // The wheel itself isn't rendered until this is known, so it can start parked on today.
+  const [itemH, setItemH] = useState(0);
+
+  // The wheel stays invisible until it has been positioned on today, so the user never sees it
+  // settle into place — it just appears already parked on the current date.
+  const [wheelReady, setWheelReady] = useState(false);
+
+  // The blank padding above the first / below the last date, so they can reach the centre slot.
+  const spacer = itemH * Math.floor(VISIBLE / 2);
+
+  // The index of the currently centred date (used to colour past vs upcoming dates differently).
+  const selectedIndex = DATES.findIndex(d => d.key === selectedKey);
+
+  // Jumps the wheel so TODAY sits dead-centre (no animation, no haptic — it's not a user scroll).
+  function centerOnToday() {
+    if (itemH > 0) {
+      userScrollingRef.current = false;
+      wheelRef.current?.scrollTo({ y: TODAY_INDEX * itemH, animated: false });
+    }
+  }
+
+  // Every time this screen comes into focus (first open, or switching back to this tab),
+  // reset the selection to today and re-centre the wheel on it.
+  useFocusEffect(
+    useCallback(() => {
+      setSelectedKey(DATES[TODAY_INDEX].key);
+      lastIndexRef.current = TODAY_INDEX;
+      // Only position + reveal once the row height is known (this callback re-runs when itemH
+      // is measured). Two frames: the first centres on today, the second reveals the wheel —
+      // so the positioning happens while it's still invisible.
+      if (itemH > 0) {
+        requestAnimationFrame(() => {
+          centerOnToday();
+          requestAnimationFrame(() => setWheelReady(true));
+        });
+      }
+    }, [itemH])
+  );
 
   // Runs as the wheel scrolls. Works out which date is currently in the centre slot,
-  // and if it's a new one, selects it (updating the task list live) and gives a haptic tick.
+  // and if it's a new one, selects it (task list updates live) and fires a haptic tick.
   function onWheelScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (itemH <= 0) return;                           // Not measured yet — nothing to compute.
     const y = e.nativeEvent.contentOffset.y;          // How far we've scrolled, in pixels.
-    let index = Math.round(y / ITEM_HEIGHT);          // The nearest date row to the centre.
+    let index = Math.round(y / itemH);                // The nearest date row to the centre.
     if (index < 0) index = 0;                         // Clamp so we never go out of bounds.
     if (index > DATES.length - 1) index = DATES.length - 1;
 
     if (index !== lastIndexRef.current) {             // Only act when the centred date changes.
       lastIndexRef.current = index;
       setSelectedKey(DATES[index].key);               // Update selection → task list updates instantly.
-      Haptics.selectionAsync();                       // The tactile "click" on each turn of the wheel.
+
+      // Only tick for real finger scrolls — not for the programmatic jump-to-today on launch.
+      // selectionAsync is the exact haptic Apple uses for its pickers — a crisp, light tick
+      // that's designed to fire in rapid succession without being dropped, even on fast spins.
+      if (userScrollingRef.current) Haptics.selectionAsync();
     }
   }
+
+  // Feeds the scroll position into both `scrollY` (drives the smooth white-text overlay, native
+  // thread) and our onWheelScroll listener (handles selection + haptics on the JS thread).
+  const onScrollEvent = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: true, listener: onWheelScroll }
+  );
 
   // Runs once when the screen first loads.
   // Loads tasks from AsyncStorage (instant) and gets the user's ID from Supabase.
@@ -278,13 +369,22 @@ export default function TodayScreen() {
 
       {/* ── Header ─────────────────────────────────────── */}
       <View style={styles.header}>
-        {/* The "TODAY" title with decorative orange corner lines. */}
+        {/* The "TODAY" title with decorative orange corner lines + logout button. */}
         <View style={styles.titleWrap}>
           <View style={[styles.corner, styles.cornerTL]} />{/* Top-left orange corner line. */}
           <Text style={styles.title}>TODAY</Text>
+          <TouchableOpacity
+            onPress={async () => {
+              await supabase.auth.signOut();
+              router.replace('/(auth)/login');
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="logout" size={18} color="#FF4D00" />
+          </TouchableOpacity>
           <View style={[styles.corner, styles.cornerBR]} />{/* Bottom-right orange corner line. */}
         </View>
-        <Text style={styles.tagline}>TRACK. GROW. THRIVE.</Text>
+        <Text style={styles.tagline}>PLAN. TRACK. EXECUTE.</Text>
       </View>
 
       {/* ── Main body: date column + task list ─────────── */}
@@ -292,55 +392,92 @@ export default function TodayScreen() {
       <View style={styles.row}>
 
         {/* Left column: an iOS-style date wheel. Drag to spin it; whichever date is locked
-            in the centre orange band is the selected one, and the task list updates to match. */}
-        <View style={styles.wheelWrap}>
-
-          {/* The orange highlight band fixed in the centre slot.
-              pointerEvents="none" lets touches pass through to the wheel underneath it. */}
-          <View style={styles.wheelBand} pointerEvents="none" />
-
-          <ScrollView
+            in the centre orange band is the selected one, and the task list updates to match.
+            onLayout measures the column so 3 big dates fill its full height. */}
+        <View
+          style={[styles.wheelWrap, { opacity: wheelReady ? 1 : 0 }]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            const next = Math.floor(h / VISIBLE);
+            if (next > 0 && next !== itemH) {
+              setItemH(next);
+              // Park the overlay on today straight away so the white text lines up from frame one.
+              scrollY.setValue(TODAY_INDEX * next);
+            }
+          }}
+        >
+          {/* Only render the wheel once we know the row height, so it can start already parked
+              on today (via contentOffset) instead of visibly scrolling there after launch. */}
+          {itemH > 0 && (
+            <>
+          {/* LAYER 1 (bottom): the scrollable list of dates in their DARK appearance.
+              This is the real scroll view — it owns the scrolling, snapping and tap targets. */}
+          <Animated.ScrollView
             ref={wheelRef}
             style={styles.wheel}
             showsVerticalScrollIndicator={false}
-            snapToInterval={ITEM_HEIGHT}      // Snaps so a date always lands dead-centre.
-            decelerationRate="fast"           // Comes to rest quickly, like a real picker.
-            scrollEventThrottle={16}          // Fire the scroll handler smoothly (~60fps).
-            onScroll={onWheelScroll}          // Updates the selection + haptic as it spins.
-            contentContainerStyle={{ paddingVertical: SPACER }}
+            snapToInterval={itemH}            // Snaps so a date always lands dead-centre.
+            decelerationRate="normal"         // Long, glassy momentum — a fling keeps rolling.
+            scrollEventThrottle={1}           // Fire on (almost) every frame so no tick is missed.
+            onScroll={onScrollEvent}          // Drives the overlay (native) + selection/haptic (JS).
+            onScrollBeginDrag={() => { userScrollingRef.current = true; }}    // Real finger scroll → allow ticks.
+            onMomentumScrollEnd={() => { userScrollingRef.current = false; }} // Settled → stop ticking.
+            contentOffset={{ x: 0, y: TODAY_INDEX * itemH }}                  // Start parked on today.
+            contentContainerStyle={{ paddingVertical: spacer }}
           >
             {DATES.map((d, i) => {
-              const active = selectedKey === d.key; // Is this the date currently in the centre?
-
-              // How many tasks for this date are not yet done — shown as a small badge.
+              const isPast = i < selectedIndex;          // Dates we've already scrolled past (above).
+              // Faded grey once passed; solid black for upcoming dates. (The white version lives
+              // in the overlay layer below, clipped to the orange square.)
+              const color = isPast ? '#C7C1B8' : '#1A1714';
               const pending = (taskMap[d.key] ?? []).filter(t => !t.done).length;
 
               return (
                 <TouchableOpacity
                   key={d.key}
-                  style={styles.wheelItem}
+                  style={[styles.wheelItem, { height: itemH }]}
                   activeOpacity={0.8}
-                  // Tapping a date smoothly scrolls it into the centre slot.
-                  onPress={() => wheelRef.current?.scrollTo({ y: i * ITEM_HEIGHT, animated: true })}
+                  onPress={() => wheelRef.current?.scrollTo({ y: i * itemH, animated: true })}
                 >
-                  <Text style={[styles.wheelDay, active ? styles.wheelTextActive : styles.wheelTextDim]}>
-                    {d.day}
-                  </Text>
-                  <Text style={[styles.wheelNum, active ? styles.wheelTextActive : styles.wheelNumDim]}>
-                    {d.date}
-                  </Text>
-
+                  <Text style={[styles.wheelDay, { color }]}>{d.day}</Text>
+                  <Text style={[styles.wheelNum, { color }]}>{d.date}</Text>
                   {pending > 0 && (
-                    <View style={[styles.badge, { backgroundColor: active ? '#FCFBF9' : '#FF4D00' }]}>
-                      <Text style={[styles.badgeText, { color: active ? '#FF4D00' : '#FCFBF9' }]}>
-                        {pending}
-                      </Text>
+                    <View style={[styles.badge, { backgroundColor: '#FF4D00' }]}>
+                      <Text style={[styles.badgeText, { color: '#FCFBF9' }]}>{pending}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
+          </Animated.ScrollView>
+
+          {/* LAYER 2 (top): the orange square. It is CLIPPED to the centre slot (overflow hidden),
+              and holds a second copy of the dates in WHITE. We slide that copy by -scrollY so it
+              lines up exactly with the layer below — so only the part of a number that's actually
+              over the orange square appears white. pointerEvents none lets touches reach layer 1. */}
+          <View style={[styles.bandClip, { top: spacer, height: itemH }]} pointerEvents="none">
+            <Animated.View style={{ transform: [{ translateY: Animated.multiply(scrollY, -1) }] }}>
+              {DATES.map((d, i) => {
+                const pending = (taskMap[d.key] ?? []).filter(t => !t.done).length;
+                return (
+                  <View key={d.key} style={[styles.wheelItem, { height: itemH }]}>
+                    <Text style={[styles.wheelDay, { color: '#FCFBF9' }]}>{d.day}</Text>
+                    <Text style={[styles.wheelNum, { color: '#FCFBF9' }]}>{d.date}</Text>
+                    {/* Month sits at the bottom of the orange square. Absolutely positioned so it
+                        doesn't push the number off-centre (keeping it aligned with the layer below). */}
+                    <Text style={styles.wheelMonth}>{d.month}</Text>
+                    {pending > 0 && (
+                      <View style={[styles.badge, { backgroundColor: '#FCFBF9' }]}>
+                        <Text style={[styles.badgeText, { color: '#FF4D00' }]}>{pending}</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </Animated.View>
+          </View>
+            </>
+          )}
         </View>
 
         {/* A thin vertical line separating the date column from the task list. */}
@@ -354,13 +491,74 @@ export default function TodayScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* ── TODAY'S FOCUS card ────────────────────────── */}
+          <Text style={styles.focusSection}>TODAY'S FOCUS</Text>
+
+          {/* Tapping the name switches it to an editable input. */}
+          {editingFocus ? (
+            <TextInput
+              style={styles.focusNameInput}
+              value={focusName}
+              onChangeText={setFocusName}
+              placeholder="E.G. DEEP WORK"
+              placeholderTextColor="#C7C1B8"
+              autoFocus
+              autoCapitalize="characters"
+              returnKeyType="done"
+              onSubmitEditing={() => setEditingFocus(false)}
+              onBlur={() => setEditingFocus(false)}
+            />
+          ) : (
+            <TouchableOpacity onPress={() => setEditingFocus(true)} activeOpacity={0.7}>
+              <Text style={[styles.focusName, !focusName && styles.focusNamePlaceholder]}>
+                {focusName || 'TAP TO SET FOCUS'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Tapping the block label cycles through 25/45/60/90 min options. */}
+          <TouchableOpacity
+            style={styles.focusBlockBtn}
+            onPress={() => setFocusBlockIdx(i => (i + 1) % FOCUS_BLOCKS.length)}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="clock-outline" size={13} color="#8C857B" />
+            <Text style={styles.focusBlockLabel}>{FOCUS_BLOCKS[focusBlockIdx].label}</Text>
+          </TouchableOpacity>
+
+          {/* START FOCUS button — navigates to the timer screen. */}
+          <TouchableOpacity
+            style={styles.startFocusBtn}
+            activeOpacity={0.85}
+            onPress={() => {
+              if (!focusName.trim()) {
+                setEditingFocus(true);
+                return;
+              }
+              router.push({
+                pathname: '/focus-timer',
+                params: {
+                  name:       focusName.trim(),
+                  workMins:   FOCUS_BLOCKS[focusBlockIdx].minutes,
+                  breakMins:  FOCUS_BLOCKS[focusBlockIdx].breakMins,
+                },
+              });
+            }}
+          >
+            <Text style={styles.startFocusBtnText}>START FOCUS</Text>
+            <MaterialCommunityIcons name="chevron-right" size={16} color="#1A1714" />
+          </TouchableOpacity>
+
+          <View style={styles.focusDivider} />
+
           <Text style={styles.cardLabel}>TODAY'S TASKS</Text>
 
           {/* Show a placeholder message if there are no tasks and the input isn't open. */}
           {tasks.length === 0 && !adding && (
-            <Text style={styles.emptyText}>
-              NOTHING PLANNED YET.{'\n'}TAP + BELOW TO ADD YOUR FIRST TASK.
-            </Text>
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyTitle}>NOTHING PLANNED</Text>
+              <Text style={styles.emptyHint}>Tap + below to add your first task.</Text>
+            </View>
           )}
 
           {/* Render one row per task for the selected date. */}
@@ -457,9 +655,11 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 14,
   },
-  // Wraps the "TODAY" text so the corner decorations can be positioned relative to it.
+  // Wraps the "TODAY" text, logout button, and corner decorations in a horizontal row.
   titleWrap: {
-    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
@@ -497,52 +697,58 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
   },
-  // The wheel's outer container — fixed height, holds the scroll view + the centre band.
+  // The wheel's outer container — fills the full column height (so 3 big dates fit).
+  // The row's default stretch makes this full-height; width sets the column size.
   wheelWrap: {
-    width: 132,
-    height: WHEEL_HEIGHT,
+    width: 136,
+    alignSelf: 'stretch',
     flexGrow: 0,
   },
-  // The orange highlight band locked in the centre slot. Positioned absolutely so it
-  // stays put while the dates scroll past it. Sits BEHIND the scrolling dates.
-  wheelBand: {
+  // The orange square locked in the centre slot. overflow:'hidden' clips the white date copy
+  // inside it, so only the portion of a number over the square shows white. top + height inline.
+  bandClip: {
     position: 'absolute',
     left: 0,
     right: 0,
-    top: SPACER,            // Push it down past the top spacer so it's in the middle slot.
-    height: ITEM_HEIGHT,
     backgroundColor: '#FF4D00',
-    borderRadius: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
   },
-  // The scroll view itself — transparent so the orange band shows through behind the dates.
+  // The scroll view itself — fills the wrap; transparent so the orange band shows through.
   wheel: {
-    height: WHEEL_HEIGHT,
-    flexGrow: 0,
+    flex: 1,
   },
-  // One date row in the wheel. Fixed height (so snapping works), content centred.
+  // One date row in the wheel. Height is set inline from itemH; content centred.
   wheelItem: {
-    height: ITEM_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   // Day name (e.g. "MONDAY") above the number.
   wheelDay: {
     fontFamily: 'SpaceMono_700Bold',
-    fontSize: 10,
-    marginBottom: 6,
+    fontSize: 12,
+    marginBottom: 8,
+    letterSpacing: 1,
   },
-  // The big date number.
+  // The big bold date number.
   wheelNum: {
     fontFamily: 'PressStart2P_400Regular',
-    fontSize: 34,
-    lineHeight: 40,
+    fontSize: 52,
+    lineHeight: 58,
   },
-  // Centre (selected) date — white text, to read on the orange band.
-  wheelTextActive: { color: '#FCFBF9' },
-  // Off-centre day labels — faded so the centre stands out.
-  wheelTextDim: { color: '#B3ABA0' },
-  // Off-centre numbers — muted but still legible.
-  wheelNumDim: { color: '#C7C1B8' },
+  // Month label at the bottom of the orange square (overlay copy only). Absolute so it doesn't
+  // affect the vertical centring of the day + number above it.
+  wheelMonth: {
+    position: 'absolute',
+    bottom: 14,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontFamily: 'SpaceMono_700Bold',
+    fontSize: 11,
+    letterSpacing: 1,
+    color: '#FCFBF9',
+  },
   // The thin vertical line between the date column and task list.
   vDivider: {
     width: 1,
@@ -563,12 +769,22 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   // "NO TASKS YET." shown when the task list is empty.
-  emptyText: {
+  emptyWrap: {
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontFamily: 'SpaceMono_700Bold',
+    fontSize: 13,
+    color: '#8C857B',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  emptyHint: {
     fontFamily: 'SpaceMono_400Regular',
-    fontSize: 12,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
     color: '#C7C1B8',
-    marginBottom: 20,
   },
   // A single task row — the tappable main area plus the archive button, laid out horizontally.
   taskRow: {
@@ -612,7 +828,7 @@ const styles = StyleSheet.create({
   taskLabel: {
     fontFamily: 'SpaceMono_400Regular',
     fontSize: 15,
-    color: '#1A1714',
+    color: '#000000',
     flex: 1,
   },
   // Strikethrough and grey text when the task is done.
@@ -665,8 +881,9 @@ const styles = StyleSheet.create({
   },
   addText: {
     fontFamily: 'SpaceMono_700Bold',
-    fontSize: 12,
+    fontSize: 13,
     color: '#FF4D00',
+    letterSpacing: 0.5,
   },
   // The white card at the very bottom showing steps, active time, calories, elevation.
   trackerBar: {
@@ -731,5 +948,68 @@ const styles = StyleSheet.create({
   badgeText: {
     fontFamily: 'SpaceMono_700Bold',
     fontSize: 10,
+  },
+
+  // ── Today's Focus card ───────────────────────────────────────────
+  focusSection: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 11,
+    color: '#FF4D00',
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  focusName: {
+    fontFamily: 'SpaceMono_700Bold',
+    fontSize: 30,
+    color: '#1A1714',
+    lineHeight: 36,
+    marginBottom: 8,
+  },
+  focusNamePlaceholder: {
+    color: '#C7C1B8',
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  focusNameInput: {
+    fontFamily: 'SpaceMono_700Bold',
+    fontSize: 26,
+    color: '#1A1714',
+    borderBottomWidth: 2,
+    borderBottomColor: '#FF4D00',
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  focusBlockBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 14,
+  },
+  focusBlockLabel: {
+    fontFamily: 'SpaceMono_400Regular',
+    fontSize: 12,
+    color: '#8C857B',
+  },
+  startFocusBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 2,
+    borderColor: '#1A1714',
+    borderRadius: 50,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    marginBottom: 4,
+  },
+  startFocusBtnText: {
+    fontFamily: 'SpaceMono_700Bold',
+    fontSize: 12,
+    color: '#1A1714',
+    letterSpacing: 1,
+  },
+  focusDivider: {
+    height: 1,
+    backgroundColor: '#E5E1DA',
+    marginVertical: 20,
   },
 });
