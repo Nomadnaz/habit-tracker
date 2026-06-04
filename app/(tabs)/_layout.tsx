@@ -8,7 +8,7 @@ import { Text } from 'react-native';
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
   return (
     <Text style={{
-      fontFamily: 'PressStart2P_400Regular',
+      fontFamily: 'PixeloidSans_400Regular',
       fontSize: 7,
       color: focused ? '#FF4D00' : '#8C857B', // Orange when active, grey when inactive.
       marginTop: 4,
@@ -45,14 +45,14 @@ export default function TabsLayout() {
 
         // Font styling for the tab labels (used by the default label renderer).
         tabBarLabelStyle: {
-          fontFamily: 'PressStart2P_400Regular',
+          fontFamily: 'PixeloidSans_400Regular',
           fontSize: 7,
         },
       }}
     >
       {/* Each Tabs.Screen registers one tab. The "name" must match the filename in (tabs)/. */}
       <Tabs.Screen name="index"    options={{ title: 'TODAY'    }} />
-      <Tabs.Screen name="gym"      options={{ title: 'GYM'      }} />
+      <Tabs.Screen name="gym"      options={{ title: 'BODY'     }} />
       <Tabs.Screen name="tree"     options={{ title: 'TREE'     }} />
       <Tabs.Screen name="progress" options={{ title: 'PROGRESS' }} />
       <Tabs.Screen name="profile"  options={{ title: 'PROFILE'  }} />

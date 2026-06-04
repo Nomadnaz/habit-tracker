@@ -1,5 +1,13 @@
+import 'react-native-gesture-handler';
 // useEffect runs code after the screen renders. useState stores values that can change.
 import { useEffect, useState } from 'react';
+import { Platform, UIManager } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Stack is the navigation container. useRouter lets us redirect the user to a different screen.
 // useSegments tells us which part of the app the user is currently on (e.g. auth or tabs).
@@ -11,10 +19,8 @@ import { StatusBar } from 'expo-status-bar';
 // The TypeScript type for a Supabase login session — used to tell TypeScript what shape the data is.
 import { Session } from '@supabase/supabase-js';
 
-// Our custom fonts. PressStart2P is the pixel/retro font used for titles.
-// SpaceMono is the monospace font used for labels and body text.
-import { PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
-import { useFonts, SpaceMono_400Regular, SpaceMono_700Bold } from '@expo-google-fonts/space-mono';
+// Our custom fonts. Pixeloid Sans is a pixel font used throughout the app.
+import { useFonts } from 'expo-font';
 
 // SplashScreen is the loading screen shown while the app starts up.
 // We control it manually so we can keep it visible until fonts are ready.
@@ -22,6 +28,9 @@ import * as SplashScreen from 'expo-splash-screen';
 
 // Our Supabase client — the connection to our backend/database.
 import { supabase } from '@/lib/supabase';
+
+// Lets us lock the app to portrait by default (the focus timer unlocks it for landscape).
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 // Keep the splash screen visible immediately on launch.
 // Without this, it would disappear too early before fonts are loaded.
@@ -48,15 +57,20 @@ export default function RootLayout() {
   // Load our custom fonts. fontsLoaded becomes true once they're downloaded and ready.
   // Until then, we don't render anything (to avoid text flashing with the wrong font).
   const [fontsLoaded] = useFonts({
-    PressStart2P_400Regular,
-    SpaceMono_400Regular,
-    SpaceMono_700Bold,
+    PixeloidSans_400Regular: require('@/assets/fonts/PixeloidSans.ttf'),
+    PixeloidSans_700Bold: require('@/assets/fonts/PixeloidSans-Bold.ttf'),
   });
 
   // Once fonts are ready, hide the splash screen and show the app.
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync();
   }, [fontsLoaded]);
+
+  // Lock the whole app to portrait by default. The focus timer screen unlocks this
+  // for landscape while it's open, then re-locks portrait when you leave it.
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  }, []);
 
   // On first load, check if the user already has a saved login session on their device.
   // Also subscribe to future login/logout events so we react to them in real time.
@@ -99,7 +113,7 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       {/* Dark icons/text in the status bar (time, battery) to contrast with our light background. */}
       <StatusBar style="dark" />
 
@@ -109,7 +123,11 @@ export default function RootLayout() {
         {/* Register the two main sections of the app as navigable destinations. */}
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="day" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="workouts" />
+        <Stack.Screen name="workout-detail" />
       </Stack>
-    </>
+    </GestureHandlerRootView>
   );
 }

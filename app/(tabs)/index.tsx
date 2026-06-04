@@ -1,11 +1,10 @@
 // useState stores values that can change and re-renders the screen when they do.
 // useEffect runs code at specific moments — like when the screen first loads.
 // useRef holds a value that survives re-renders without causing one (we use it for the scroll wheel).
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
-// useFocusEffect runs each time this screen comes into focus (e.g. switching back to this tab).
-// useRouter lets us navigate to the focus timer screen.
-import { useFocusEffect, useRouter } from 'expo-router';
+// useFocusEffect runs when this tab gains focus (e.g. switching back from GYM).
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 
 // expo-haptics triggers the phone's vibration motor — used for the tactile "click" as dates scroll.
 import * as Haptics from 'expo-haptics';
@@ -19,21 +18,75 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Our Supabase client — used to back up tasks to the cloud database.
 import { supabase } from '@/lib/supabase';
+import {
+  formatSessionRemainingLabel,
+  getEffectiveSecsLeft,
+  loadActiveFocusSession,
+  patchPersistedSessionFocusName,
+  type PersistedFocusSession,
+} from '@/lib/focus-session';
+import {
+  DEFAULT_BREAK_MINS,
+  DEFAULT_WORK_MINS,
+  FOCUS_BLOCKS,
+  FOCUS_SETTINGS_KEY,
+  focusBlockDisplayLabel,
+  parseFocusSettings,
+  readFocusSettingsFromSupabase,
+  readFocusSettingsLocal,
+  saveFocusSettings,
+  writeFocusSettingsLocal,
+} from '@/lib/focus-settings';
 
 import {
-  View,             // A box/container for grouping elements.
-  Text,             // Displays text.
-  ScrollView,       // A container that can be scrolled if the content is taller than the screen.
-  StyleSheet,       // Used at the bottom to define all visual styles in one place.
-  TouchableOpacity, // A pressable element (button) that responds to taps.
-  TextInput,        // A field the user can type into.
-  Keyboard,         // Lets us manually dismiss (hide) the on-screen keyboard.
-  Animated,         // Lets us drive animations directly from the scroll position (for the wheel mask).
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Keyboard,
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
+import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
+import { TaskRow, InsertionGhost } from '@/components/TaskRow';
+import { DragTaskFloatingChip } from '@/components/DragTaskFloatingChip';
+import { useTaskDragFloat } from '@/lib/task-drag-float';
+import {
+  TASK_ROW_SLOT_PX,
+  AUTO_SCROLL_EDGE_PX,
+  AUTO_SCROLL_STEP_PX,
+  DELETE_ZONE_X,
+  COMPLETE_HOLD_MS,
+  COMPLETE_FADE_MS,
+  LIST_MOVE_SPRING_MS,
+  listMoveSpring,
+  listMoveSpringDown,
+  smoothListAnim,
+  sortActiveTasks,
+  completedTaskSinkIndex,
+  insertNewActiveTask,
+  buildTaskList,
+  type Priority,
+  type Task,
+  type TaskMap,
+} from '@/lib/tasks-core';
+
+// Enable LayoutAnimation on Android (iOS enables it automatically).
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // SafeAreaView automatically adds padding so content isn't hidden behind the camera notch
 // or the home bar at the bottom of the phone.
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // A library of icons. We use it for the step, clock, fire, and mountain icons in the tracker bar.
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -89,16 +142,16 @@ const TODAY_INDEX = PAST_DAYS;
 // The actual row height is measured at runtime so 3 big dates fill the whole column —
 // see the `itemH` state and the wheel's onLayout handler below.
 const VISIBLE = 3;
-
-// TypeScript type definitions — these describe the shape of our data.
-// A Task has an id (unique string), a label (the task name), and a done flag (checked or not).
-// archived: when true, the task is hidden from the active list but kept forever
-// (both on the device and in the cloud) so it can be shown in a history screen later.
-type Task = { id: string; label: string; done: boolean; archived?: boolean };
-
-// TaskMap is a dictionary where each key is a date string and the value is an array of tasks for that date.
-// Example: { "2026-5-1": [{ id: "...", label: "Drink water", done: false }] }
-type TaskMap = Record<string, Task[]>;
+function normalizeTaskMap(map: TaskMap): TaskMap {
+  const out: TaskMap = {};
+  for (const key of Object.keys(map)) {
+    const dayTasks = map[key] ?? [];
+    const active = dayTasks.filter(t => !t.archived);
+    const archived = dayTasks.filter(t => t.archived);
+    out[key] = [...sortActiveTasks(active), ...archived];
+  }
+  return out;
+}
 
 // Generates a random UUID (universally unique ID) in the standard format.
 // We use this as the task's ID — it's the same ID stored both locally and in Supabase,
@@ -110,13 +163,15 @@ function generateId() {
   });
 }
 
-// Available focus block durations and their corresponding break lengths.
-const FOCUS_BLOCKS = [
-  { minutes: 25,  label: '25 MIN BLOCK',  breakMins: 5  },
-  { minutes: 45,  label: '45 MIN BLOCK',  breakMins: 10 },
-  { minutes: 60,  label: '60 MIN BLOCK',  breakMins: 15 },
-  { minutes: 90,  label: '90 MIN BLOCK',  breakMins: 20 },
-];
+// Format a date number with its ordinal suffix (1st, 2nd, 3rd, 21st, etc.)
+function formatOrdinal(day: number): string {
+  if (day >= 11 && day <= 13) return `${day}TH`;
+  const lastDigit = day % 10;
+  if (lastDigit === 1) return `${day}ST`;
+  if (lastDigit === 2) return `${day}ND`;
+  if (lastDigit === 3) return `${day}RD`;
+  return `${day}TH`;
+}
 
 // Static data for the tracker bar at the bottom of the screen.
 // These are placeholder values — real step/calorie data would come from the phone's health APIs.
@@ -139,20 +194,232 @@ export default function TodayScreen() {
   const [taskMap, setTaskMap] = useState<TaskMap>({});
 
   // ── Focus block state ─────────────────────────────────────────────
-  const [focusName, setFocusName]   = useState('');
-  const [focusBlockIdx, setFocusBlockIdx] = useState(3); // Default: 90 MIN BLOCK
-  const [editingFocus, setEditingFocus]   = useState(false);
+  const [focusName, setFocusName]         = useState('');
+  const [focusBlockIdx, setFocusBlockIdx] = useState(3);
+  const [focusWorkMins, setFocusWorkMins] = useState(DEFAULT_WORK_MINS);
+  const [focusBreakMins, setFocusBreakMins] = useState(DEFAULT_BREAK_MINS);
+  const [hasSavedSession, setHasSavedSession] = useState(false);
+  const [activeSessionLabel, setActiveSessionLabel] = useState<string | null>(null);
+  const [activeSessionRunning, setActiveSessionRunning] = useState(false);
+  const activeSessionRef = useRef<PersistedFocusSession | null>(null);
+  const FOCUS_SESSION_TICK_MS = 100;
+  const FOCUS_SESSION_SYNC_MS = 2000;
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  // Drag refs — stable handlers for RNGH pan gestures (long-press then drag).
+  const draggingTaskIdRef  = useRef<string | null>(null);   // mirrors draggingTaskId state
+  const { floatTop, floatLeft, startFloat, moveFloat, syncColumnLeft, setOverlayOrigin } =
+    useTaskDragFloat();
+  const overDeleteRef      = useRef(false);
+  const [overDelete, setOverDelete] = useState(false);
+  // taskMapRef / selectedKeyRef / userIdRef — stable copies so the PanResponder's
+  // closures never go stale when state changes during a drag.
+  const taskMapRef     = useRef<TaskMap>({});
+  const selectedKeyRef2 = useRef('');
+  const userIdRef2     = useRef<string | null>(null);
+  // Y coordinate of the top of the first task row, measured via onLayout.
+  const taskListTopRef   = useRef(0);
+  const firstTaskWindowYRef = useRef(0);
+  const dragStartIdxRef  = useRef(0);
+  const handleDragMoveRef = useRef((_x: number, _y: number) => {});
+  const handleDragEndRef  = useRef((_taskId: string) => {});
+  const beginTaskDragRef  = useRef((_id: string, _idx: number, _x: number, _y: number, _rowY: number) => {});
+  const toggleTaskRef     = useRef((_id: string) => {});
+  const [completingIds, setCompletingIds] = useState<Set<string>>(() => new Set());
+  const [completingPins, setCompletingPins] = useState<Map<string, number>>(() => new Map());
+  const completingIdsRef = useRef(completingIds);
+  const completeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // The slot index where the task would land right now — drives the insertion line.
+  const [dragTargetIdx, setDragTargetIdx] = useState<number | null>(null);
+  const dragTargetIdxRef = useRef<number | null>(null);
+  // Width and left-edge X of the tasks column — floating chip snaps to column, not finger.
+  const [taskColWidth, setTaskColWidth] = useState(200);
+  const taskColLeftRef = useRef(153); // absolute screen X; measured in onLayout
+  const tasksScrollRef = useRef<GHScrollView>(null);
+  const tasksScrollYRef = useRef(0);
+  const tasksScrollWindowRef = useRef({ top: 0, bottom: 0 });
+  const autoScrollRafRef = useRef<number | null>(null);
+  const autoScrollDirRef = useRef<'up' | 'down' | null>(null);
+  const updateAutoScrollRef = useRef((_fingerY: number) => {});
+  const stopAutoScrollRef = useRef(() => {});
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  // The text the user is currently typing into the "add task" input field.
-  const [newTaskText, setNewTaskText] = useState('');
+  // ── Bottom sheet (shared by "Set focus" and "Add task") ───────────
+  // sheetMode is null when closed, 'focus' when setting the focus name, 'task' when adding a task.
+  const [sheetMode,     setSheetMode]     = useState<'focus' | 'task' | null>(null);
+  const [sheetText,     setSheetText]     = useState('');
+  const [sheetPriority, setSheetPriority] = useState<Priority>('MEDIUM');
+  const sheetAnim = useRef(new Animated.Value(0)).current; // 0 = hidden, 1 = visible
 
-  // Whether the "add task" input row is currently visible or hidden.
-  const [adding, setAdding] = useState(false);
+  const sheetEaseOut = Easing.bezier(0.22, 1, 0.36, 1);
+  const sheetEaseIn = Easing.bezier(0.4, 0, 0.2, 1);
+
+  function openSheet(mode: 'focus' | 'task') {
+    setSheetText(mode === 'focus' ? focusName : '');
+    setSheetPriority('MEDIUM');
+    setSheetMode(mode);
+    sheetAnim.setValue(0);
+    Animated.timing(sheetAnim, {
+      toValue: 1,
+      duration: 280,
+      easing: sheetEaseOut,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  function closeSheet() {
+    Keyboard.dismiss();
+    Animated.timing(sheetAnim, {
+      toValue: 0,
+      duration: 220,
+      easing: sheetEaseIn,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setSheetMode(null);
+    });
+  }
+
+  const sheetBackdropOpacity = sheetAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const tickActiveSessionLabel = useCallback(() => {
+    const session = activeSessionRef.current;
+    if (!session) return;
+    setActiveSessionLabel(
+      formatSessionRemainingLabel(getEffectiveSecsLeft(session), session.phase),
+    );
+  }, []);
+
+  const refreshFocusSessionPreview = useCallback(async () => {
+    const settings = await readFocusSettingsLocal();
+    if (settings) {
+      setFocusWorkMins(settings.workMins);
+      setFocusBreakMins(settings.breakMins);
+      setFocusBlockIdx(settings.blockIdx);
+    }
+
+    const session = await loadActiveFocusSession();
+    activeSessionRef.current = session;
+    if (!session) {
+      setHasSavedSession(false);
+      setActiveSessionLabel(null);
+      setActiveSessionRunning(false);
+      return;
+    }
+    setHasSavedSession(true);
+    setActiveSessionRunning(session.running);
+    setFocusWorkMins(Math.round(session.workSecs / 60));
+    setFocusBreakMins(Math.round(session.breakSecs / 60));
+    tickActiveSessionLabel();
+  }, [tickActiveSessionLabel]);
+
+  function applyFocusSettings(name: string, blockIdx: number) {
+    const block = FOCUS_BLOCKS[blockIdx] ?? FOCUS_BLOCKS[3];
+    setFocusName(name);
+    setFocusBlockIdx(blockIdx);
+    setFocusWorkMins(block.minutes);
+    setFocusBreakMins(block.breakMins);
+    saveFocusSettings(
+      { name, blockIdx, workMins: block.minutes, breakMins: block.breakMins },
+      userId,
+    );
+    if (name.trim()) {
+      patchPersistedSessionFocusName(name);
+    }
+  }
+
+  function clearFocusSettings() {
+    applyFocusSettings('', focusBlockIdx);
+  }
+
+  function confirmSheet() {
+    const text = sheetText.trim();
+    if (sheetMode === 'focus') {
+      if (!text) clearFocusSettings();
+      else applyFocusSettings(text, focusBlockIdx);
+      closeSheet();
+      return;
+    }
+    if (!text) { closeSheet(); return; }
+    if (sheetMode === 'task') addTask(text, sheetPriority);
+    closeSheet();
+  }
 
   // The Supabase user ID of the logged-in user.
   // Needed when inserting tasks into Supabase so we know who they belong to.
   const [userId, setUserId] = useState<string | null>(null);
+
+  // Keep drag refs in sync with their corresponding state/values so the stable
+  // PanResponder can read current values without stale closures.
+  useEffect(() => { draggingTaskIdRef.current = draggingTaskId; }, [draggingTaskId]);
+  useEffect(() => { taskMapRef.current        = taskMap;        }, [taskMap]);
+  useEffect(() => { selectedKeyRef2.current   = selectedKey;   }, [selectedKey]);
+  useEffect(() => {
+    completingIdsRef.current = completingIds;
+  }, [completingIds]);
+
+  useEffect(() => {
+    completeTimersRef.current.forEach(t => clearTimeout(t));
+    completeTimersRef.current.clear();
+    setCompletingIds(new Set());
+    setCompletingPins(new Map());
+  }, [selectedKey]);
+
+  useEffect(() => () => {
+    completeTimersRef.current.forEach(t => clearTimeout(t));
+    completeTimersRef.current.clear();
+  }, []);
+  useEffect(() => { userIdRef2.current        = userId;        }, [userId]);
+
+  const measureTasksScroll = useCallback(() => {
+    tasksScrollRef.current?.measureInWindow((_x, y, _w, h) => {
+      tasksScrollWindowRef.current = { top: y, bottom: y + h };
+    });
+  }, []);
+
+  useEffect(() => {
+    stopAutoScrollRef.current = () => {
+      if (autoScrollRafRef.current != null) {
+        cancelAnimationFrame(autoScrollRafRef.current);
+        autoScrollRafRef.current = null;
+      }
+      autoScrollDirRef.current = null;
+    };
+
+    const startAutoScroll = (dir: 'up' | 'down') => {
+      if (autoScrollDirRef.current === dir) return;
+      stopAutoScrollRef.current();
+      autoScrollDirRef.current = dir;
+      const tick = () => {
+        if (!draggingTaskIdRef.current || autoScrollDirRef.current !== dir) return;
+        const step = dir === 'down' ? AUTO_SCROLL_STEP_PX : -AUTO_SCROLL_STEP_PX;
+        const next = Math.max(0, tasksScrollYRef.current + step);
+        tasksScrollYRef.current = next;
+        tasksScrollRef.current?.scrollTo({ y: next, animated: false });
+        autoScrollRafRef.current = requestAnimationFrame(tick);
+      };
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    };
+
+    updateAutoScrollRef.current = (fingerY: number) => {
+      if (!draggingTaskIdRef.current) {
+        stopAutoScrollRef.current();
+        return;
+      }
+      const { top, bottom } = tasksScrollWindowRef.current;
+      if (bottom <= top) return;
+      if (fingerY > bottom - AUTO_SCROLL_EDGE_PX) startAutoScroll('down');
+      else if (fingerY < top + AUTO_SCROLL_EDGE_PX) startAutoScroll('up');
+      else stopAutoScrollRef.current();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (draggingTaskId) measureTasksScroll();
+    else stopAutoScrollRef.current();
+  }, [draggingTaskId, measureTasksScroll]);
 
   // A direct reference to the scroll wheel, so we can programmatically scroll it
   // (e.g. when the user taps a date instead of dragging).
@@ -175,42 +442,82 @@ export default function TodayScreen() {
   // exactly 3 big dates fill the column. Starts at 0 (unknown) until the column is measured.
   // The wheel itself isn't rendered until this is known, so it can start parked on today.
   const [itemH, setItemH] = useState(0);
+  // Top offset of the orange band — centered in the column (avoids drift from floor division).
+  const [wheelBandTop, setWheelBandTop] = useState(0);
 
-  // The wheel stays invisible until it has been positioned on today, so the user never sees it
-  // settle into place — it just appears already parked on the current date.
+  // The wheel stays invisible until first layout, then appears on the selected date.
   const [wheelReady, setWheelReady] = useState(false);
+  const wheelInitializedRef = useRef(false);
+  const itemHRef = useRef(itemH);
+  itemHRef.current = itemH;
+  const selectedKeyRef = useRef(selectedKey);
+  selectedKeyRef.current = selectedKey;
 
   // The blank padding above the first / below the last date, so they can reach the centre slot.
-  const spacer = itemH * Math.floor(VISIBLE / 2);
+  const spacer = wheelBandTop;
 
   // The index of the currently centred date (used to colour past vs upcoming dates differently).
   const selectedIndex = DATES.findIndex(d => d.key === selectedKey);
+  const todayDateKey = DATES[TODAY_INDEX].key;
+  const showTodayLabel = selectedKey === todayDateKey;
 
-  // Jumps the wheel so TODAY sits dead-centre (no animation, no haptic — it's not a user scroll).
-  function centerOnToday() {
-    if (itemH > 0) {
-      userScrollingRef.current = false;
-      wheelRef.current?.scrollTo({ y: TODAY_INDEX * itemH, animated: false });
-    }
+  // Sync wheel + overlay to a date index without animation (not a user scroll).
+  function centerOnIndex(index: number) {
+    const h = itemHRef.current;
+    if (h <= 0) return;
+    const safe = Math.max(0, Math.min(DATES.length - 1, index));
+    const y = safe * h;
+    userScrollingRef.current = false;
+    scrollY.setValue(y);
+    lastIndexRef.current = safe;
+    wheelRef.current?.scrollTo({ y, animated: false });
   }
 
-  // Every time this screen comes into focus (first open, or switching back to this tab),
-  // reset the selection to today and re-centre the wheel on it.
+  // Reset to today when leaving this tab and coming back — not on layout remeasure while staying here.
+  // If the calendar passed a date key, jump to it; otherwise reset to today.
+  const { selectDate } = useLocalSearchParams<{ selectDate?: string }>();
+
   useFocusEffect(
     useCallback(() => {
-      setSelectedKey(DATES[TODAY_INDEX].key);
-      lastIndexRef.current = TODAY_INDEX;
-      // Only position + reveal once the row height is known (this callback re-runs when itemH
-      // is measured). Two frames: the first centres on today, the second reveals the wheel —
-      // so the positioning happens while it's still invisible.
-      if (itemH > 0) {
-        requestAnimationFrame(() => {
-          centerOnToday();
-          requestAnimationFrame(() => setWheelReady(true));
-        });
+      let targetIndex = TODAY_INDEX;
+      if (selectDate) {
+        const found = DATES.findIndex(d => d.key === selectDate);
+        if (found >= 0) targetIndex = found;
       }
-    }, [itemH])
+      const targetKey = DATES[targetIndex].key;
+      setSelectedKey(targetKey);
+      selectedKeyRef.current = targetKey;
+      lastIndexRef.current = targetIndex;
+      if (itemHRef.current > 0) {
+        centerOnIndex(targetIndex);
+      }
+
+      refreshFocusSessionPreview();
+    }, [selectDate, refreshFocusSessionPreview])
   );
+
+  useEffect(() => {
+    if (!hasSavedSession) return;
+    const id = setInterval(tickActiveSessionLabel, FOCUS_SESSION_TICK_MS);
+    return () => clearInterval(id);
+  }, [hasSavedSession, tickActiveSessionLabel]);
+
+  useEffect(() => {
+    if (!hasSavedSession) return;
+    const id = setInterval(() => {
+      void refreshFocusSessionPreview();
+    }, FOCUS_SESSION_SYNC_MS);
+    return () => clearInterval(id);
+  }, [hasSavedSession, refreshFocusSessionPreview]);
+
+  // One-time bootstrap after row height is measured — opens on today on first launch.
+  useEffect(() => {
+    if (itemH > 0 && !wheelInitializedRef.current) {
+      wheelInitializedRef.current = true;
+      centerOnIndex(TODAY_INDEX);
+      setWheelReady(true);
+    }
+  }, [itemH]);
 
   // Runs as the wheel scrolls. Works out which date is currently in the centre slot,
   // and if it's a new one, selects it (task list updates live) and fires a haptic tick.
@@ -245,18 +552,36 @@ export default function TodayScreen() {
   useEffect(() => {
     const init = async () => {
       // Run both lookups at the same time to save time (Promise.all runs them in parallel).
-      const [raw, { data: { session } }] = await Promise.all([
-        AsyncStorage.getItem('@tasks'),      // Check if tasks are saved on the device.
-        supabase.auth.getSession(),          // Get the current logged-in user's session.
+      const [raw, focusRaw, { data: { session } }] = await Promise.all([
+        AsyncStorage.getItem('@tasks'),
+        AsyncStorage.getItem(FOCUS_SETTINGS_KEY),
+        supabase.auth.getSession(),
       ]);
 
-      const uid = session?.user?.id ?? null; // Extract the user ID (or null if not logged in).
+      const uid = session?.user?.id ?? null;
       setUserId(uid);
+
+      const localFocus = parseFocusSettings(focusRaw);
+      if (localFocus) {
+        setFocusName(localFocus.name);
+        setFocusBlockIdx(localFocus.blockIdx);
+        setFocusWorkMins(localFocus.workMins);
+        setFocusBreakMins(localFocus.breakMins);
+      } else if (uid) {
+        const remote = await readFocusSettingsFromSupabase(uid);
+        if (remote) {
+          setFocusName(remote.name);
+          setFocusBlockIdx(remote.blockIdx);
+          setFocusWorkMins(remote.workMins);
+          setFocusBreakMins(remote.breakMins);
+          await writeFocusSettingsLocal(remote);
+        }
+      }
 
       if (raw) {
         // Tasks exist in AsyncStorage — parse the JSON string back into an object and use it.
         // This is the fast path: no network request needed.
-        setTaskMap(JSON.parse(raw));
+        setTaskMap(normalizeTaskMap(JSON.parse(raw)));
         return;
       }
 
@@ -279,9 +604,10 @@ export default function TodayScreen() {
           if (!seeded[row.date]) seeded[row.date] = []; // Create the array for this date if needed.
           seeded[row.date].push({ id: row.id, label: row.label, done: row.done, archived: row.archived });
         }
-        setTaskMap(seeded);
+        const normalized = normalizeTaskMap(seeded);
+        setTaskMap(normalized);
         // Save to AsyncStorage so next launch is instant.
-        AsyncStorage.setItem('@tasks', JSON.stringify(seeded));
+        AsyncStorage.setItem('@tasks', JSON.stringify(normalized));
       }
     };
     init();
@@ -291,8 +617,16 @@ export default function TodayScreen() {
   // We use this version when SAVING changes, so archived tasks aren't accidentally lost.
   const allTasks = taskMap[selectedKey] ?? [];
 
-  // Only the VISIBLE tasks (not archived) — this is what we actually show in the list.
-  const tasks = allTasks.filter(t => !t.archived);
+  const activeTasks = allTasks.filter(t => !t.archived);
+
+  // Incomplete always above done; completing tasks stay pinned until the slide finishes.
+  const tasks = useMemo(() => {
+    const active = (taskMap[selectedKey] ?? []).filter(t => !t.archived);
+    return buildTaskList(active, completingIds, completingPins);
+  }, [taskMap, selectedKey, completingIds, completingPins]);
+
+  // The task currently being dragged (used to label the floating box). null when not dragging.
+  const draggingTask = tasks.find(t => t.id === draggingTaskId) ?? null;
 
   // Saves a new version of the task map both in memory (instant UI update)
   // and to AsyncStorage (so it survives app restarts).
@@ -301,46 +635,80 @@ export default function TodayScreen() {
     AsyncStorage.setItem('@tasks', JSON.stringify(newMap));    // Save to the device in the background.
   }
 
-  // Flips a task between done and not done.
+  function removeCompletingState(id: string) {
+    setCompletingIds(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setCompletingPins(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  // Flips a task between done and not done. Completing: hold → fade label → slide to bottom.
   function toggleTask(id: string) {
-    const task = allTasks.find(t => t.id === id); // Find the task by its ID.
-    if (!task) return;                          // Safety check — do nothing if not found.
-    const newDone = !task.done;                // Flip the done state.
+    const task = allTasks.find(t => t.id === id);
+    if (!task || task.archived || completingIds.has(id)) return;
+    const newDone = !task.done;
 
-    // Build a new task map with this task updated.
-    const newMap = {
-      ...taskMap,                              // Copy all other dates unchanged.
-      [selectedKey]: allTasks.map(t =>
-        t.id === id ? { ...t, done: newDone } : t // Update only the matching task.
-      ),
-    };
-    persist(newMap); // Save locally.
+    const archivedTasks = allTasks.filter(t => t.archived);
+    const updatedActive = activeTasks.map(t =>
+      t.id === id ? { ...t, done: newDone } : t,
+    );
 
-    // Also update Supabase in the background. .then(() => {}) is required to actually
-    // trigger the network request — without it, Supabase won't send anything.
+    if (newDone) {
+      const pinIdx = tasks.findIndex(t => t.id === id);
+      const newMap = {
+        ...taskMap,
+        [selectedKey]: [...updatedActive, ...archivedTasks],
+      };
+      persist(newMap);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      setCompletingIds(prev => new Set(prev).add(id));
+      setCompletingPins(prev => new Map(prev).set(id, pinIdx >= 0 ? pinIdx : updatedActive.length));
+      clearCompletionTimer(id);
+      const timer = setTimeout(
+        () => finishTaskCompletion(id),
+        COMPLETE_HOLD_MS + COMPLETE_FADE_MS,
+      );
+      completeTimersRef.current.set(id, timer);
+    } else {
+      clearCompletionTimer(id);
+      removeCompletingState(id);
+      LayoutAnimation.configureNext(listMoveSpring);
+      const reordered = sortActiveTasks(updatedActive);
+      const newMap = {
+        ...taskMap,
+        [selectedKey]: [...reordered, ...archivedTasks],
+      };
+      persist(newMap);
+    }
+
     supabase.from('tasks').update({ done: newDone }).eq('id', id).then(() => {});
   }
 
   // Creates a new task for the currently selected date.
-  function addTask() {
-    const label = newTaskText.trim(); // Remove leading/trailing spaces from the input.
-    if (!label) return;               // Don't create a blank task.
-
+  function addTask(label: string, priority: Priority) {
     const id = generateId();          // Create a unique ID for this task.
 
-    // Build a new task map with the new task appended to the current date's list.
+    const archivedTasks = allTasks.filter(t => t.archived);
+    const active = allTasks.filter(t => !t.archived);
     const newMap = {
       ...taskMap,
-      [selectedKey]: [...allTasks, { id, label, done: false, archived: false }],
+      [selectedKey]: [
+        ...insertNewActiveTask(active, { id, label, done: false, archived: false, priority }),
+        ...archivedTasks,
+      ],
     };
-    persist(newMap);      // Save locally.
-    setNewTaskText('');   // Clear the input field.
-    setAdding(false);     // Hide the input row.
-    Keyboard.dismiss();   // Hide the on-screen keyboard.
+    persist(newMap);
 
-    // Also insert into Supabase in the background.
-    // We only do this if we have a userId — without it we can't set the user_id column.
-    if (userId) supabase.from('tasks').insert({ id, user_id: userId, date: selectedKey, label, done: false }).then(() => {});
+    if (userId) supabase.from('tasks').insert({ id, user_id: userId, date: selectedKey, label, done: false, priority }).then(() => {});
   }
 
   // Archives a task: hides it from the active list but keeps it forever
@@ -362,6 +730,177 @@ export default function TodayScreen() {
     });
   }
 
+  // Moves an active (not archived) task to a specific index in today's order.
+  function moveTaskToIndex(id: string, targetIndex: number) {
+    const activeTasks = allTasks.filter(t => !t.archived);
+    const archivedTasks = allTasks.filter(t => t.archived);
+    const from = activeTasks.findIndex(t => t.id === id);
+    if (from < 0) return;
+    if (targetIndex < 0 || targetIndex >= activeTasks.length) return;
+    if (from === targetIndex) return;
+    const reordered = [...activeTasks];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    const sorted = sortActiveTasks(reordered);
+    const newMap = {
+      ...taskMap,
+      [selectedKey]: [...sorted, ...archivedTasks],
+    };
+    persist(newMap);
+  }
+
+  function clearCompletionTimer(id: string) {
+    const t = completeTimersRef.current.get(id);
+    if (t) clearTimeout(t);
+    completeTimersRef.current.delete(id);
+  }
+
+  function finishTaskCompletion(id: string) {
+    clearCompletionTimer(id);
+
+    const key = selectedKeyRef2.current;
+    const all = taskMapRef.current[key] ?? [];
+    const archivedTasks = all.filter(t => t.archived);
+    const active = all.filter(t => !t.archived);
+    const sinkIndex = completedTaskSinkIndex(active);
+
+    LayoutAnimation.configureNext(listMoveSpringDown);
+    setCompletingPins(prev => new Map(prev).set(id, sinkIndex));
+
+    completeTimersRef.current.set(
+      id,
+      setTimeout(() => {
+        LayoutAnimation.configureNext(listMoveSpring);
+        removeCompletingState(id);
+        persist({
+          ...taskMapRef.current,
+          [key]: [...sortActiveTasks(active), ...archivedTasks],
+        });
+        completeTimersRef.current.delete(id);
+      }, LIST_MOVE_SPRING_MS),
+    );
+  }
+
+  function computeDropIndexFromFinger(fingerPageY: number, activeCount: number) {
+    const firstY = firstTaskWindowYRef.current;
+    if (firstY <= 0) return dragStartIdxRef.current;
+    const rel = fingerPageY - firstY + tasksScrollYRef.current;
+    const slot = Math.floor((rel + TASK_ROW_SLOT_PX / 2) / TASK_ROW_SLOT_PX);
+    return Math.max(0, Math.min(activeCount, slot));
+  }
+
+  function beginTaskDrag(
+    taskId: string,
+    taskIndex: number,
+    _pageX: number,
+    pageY: number,
+    rowWinY: number,
+  ) {
+    if (draggingTaskIdRef.current) return;
+    draggingTaskIdRef.current = taskId;
+    dragStartIdxRef.current = taskIndex;
+    dragTargetIdxRef.current = taskIndex;
+    setDragTargetIdx(taskIndex);
+    startFloat(rowWinY, taskColLeftRef.current, pageY);
+    setDraggingTaskId(taskId);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }
+
+  // Stable endDrag — reads from refs so drag handlers can call it safely.
+  const endDragRef = useRef((taskId: string) => {
+    stopAutoScrollRef.current();
+    if (overDeleteRef.current) {
+      const currentMap = taskMapRef.current;
+      const key = selectedKeyRef2.current;
+      const all = currentMap[key] ?? [];
+      const newMap = { ...currentMap, [key]: all.map(t => t.id === taskId ? { ...t, archived: true } : t) };
+      setTaskMap(newMap);
+      AsyncStorage.setItem('@tasks', JSON.stringify(newMap));
+      const uid = userIdRef2.current;
+      if (uid) supabase.from('tasks').update({ archived: true }).eq('id', taskId).then(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      const target = dragTargetIdxRef.current;
+      if (target !== null) {
+        const key = selectedKeyRef2.current;
+        const active = (taskMapRef.current[key] ?? []).filter(t => !t.archived);
+        const from = active.findIndex(t => t.id === taskId);
+        const to =
+          target >= active.length ? active.length - 1 : Math.min(target, active.length - 1);
+        if (from >= 0 && from !== to) {
+          LayoutAnimation.configureNext(smoothListAnim);
+          moveTaskRef.current(taskId, to);
+        }
+      }
+    }
+    overDeleteRef.current = false;
+    dragTargetIdxRef.current = null;
+    setOverDelete(false);
+    setDragTargetIdx(null);
+    draggingTaskIdRef.current = null;
+    setDraggingTaskId(null);
+  });
+
+  useEffect(() => {
+    beginTaskDragRef.current = beginTaskDrag;
+    toggleTaskRef.current = toggleTask;
+
+    handleDragMoveRef.current = (pageX: number, pageY: number) => {
+      const taskId = draggingTaskIdRef.current;
+      if (!taskId) return;
+
+      moveFloat(pageY);
+      syncColumnLeft(taskColLeftRef.current);
+      updateAutoScrollRef.current(pageY);
+
+      const inDelete = pageX < DELETE_ZONE_X;
+      if (inDelete !== overDeleteRef.current) {
+        overDeleteRef.current = inDelete;
+        setOverDelete(inDelete);
+        Haptics.impactAsync(
+          inDelete ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light,
+        );
+      }
+
+      if (!inDelete) {
+        const key = selectedKeyRef2.current;
+        const active = (taskMapRef.current[key] ?? []).filter(t => !t.archived);
+        const target = computeDropIndexFromFinger(pageY, active.length);
+        if (target !== dragTargetIdxRef.current) {
+          dragTargetIdxRef.current = target;
+          setDragTargetIdx(target);
+        }
+      } else if (dragTargetIdxRef.current !== null) {
+        dragTargetIdxRef.current = null;
+        setDragTargetIdx(null);
+      }
+    };
+
+    handleDragEndRef.current = (taskId: string) => {
+      if (draggingTaskIdRef.current === taskId) endDragRef.current(taskId);
+    };
+  });
+
+  // Stable moveTaskToIndex — also reads from refs.
+  const moveTaskRef = useRef((taskId: string, targetIndex: number) => {
+    const currentMap = taskMapRef.current;
+    const key = selectedKeyRef2.current;
+    const all = currentMap[key] ?? [];
+    const active = all.filter(t => !t.archived);
+    const archived = all.filter(t => t.archived);
+    const from = active.findIndex(t => t.id === taskId);
+    // Clamp: dragTargetIdx can be activeCount (for the "after last" line), cap it to activeCount-1.
+    const clampedTarget = Math.min(targetIndex, active.length - 1);
+    if (from < 0 || clampedTarget < 0 || clampedTarget >= active.length || from === clampedTarget) return;
+    const reordered = [...active];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(clampedTarget, 0, moved);
+    const newMap = { ...currentMap, [key]: [...sortActiveTasks(reordered), ...archived] };
+    setTaskMap(newMap);
+    AsyncStorage.setItem('@tasks', JSON.stringify(newMap));
+  });
+
   return (
     // SafeAreaView adds padding at the top so content isn't hidden behind the camera notch.
     // edges={['top']} means we only apply this padding at the top (not the bottom — the tab bar handles that).
@@ -373,6 +912,12 @@ export default function TodayScreen() {
         <View style={styles.titleWrap}>
           <View style={[styles.corner, styles.cornerTL]} />{/* Top-left orange corner line. */}
           <Text style={styles.title}>TODAY</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/calendar')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="calendar-month-outline" size={18} color="#FF4D00" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={async () => {
               await supabase.auth.signOut();
@@ -391,24 +936,44 @@ export default function TodayScreen() {
       {/* This row takes up all remaining space (flex: 1) between the header and tracker bar. */}
       <View style={styles.row}>
 
-        {/* Left column: an iOS-style date wheel. Drag to spin it; whichever date is locked
-            in the centre orange band is the selected one, and the task list updates to match.
-            onLayout measures the column so 3 big dates fill its full height. */}
+        {/* Left column — same fixed-width slot always. Contents swap based on drag state. */}
         <View
-          style={[styles.wheelWrap, { opacity: wheelReady ? 1 : 0 }]}
+          style={[styles.wheelWrap, draggingTaskId ? styles.deleteBinCol : { opacity: wheelReady ? 1 : 0 }]}
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
             const next = Math.floor(h / VISIBLE);
-            if (next > 0 && next !== itemH) {
+            const bandTop = Math.round((h - next) / 2);
+            if (next > 0 && (next !== itemH || bandTop !== wheelBandTop)) {
+              const index = DATES.findIndex(d => d.key === selectedKeyRef.current);
+              const safe = index >= 0 ? index : TODAY_INDEX;
               setItemH(next);
-              // Park the overlay on today straight away so the white text lines up from frame one.
-              scrollY.setValue(TODAY_INDEX * next);
+              setWheelBandTop(bandTop);
+              scrollY.setValue(safe * next);
+              if (wheelInitializedRef.current) {
+                requestAnimationFrame(() => {
+                  wheelRef.current?.scrollTo({ y: safe * next, animated: false });
+                });
+              }
             }
           }}
         >
+          {/* While dragging, show the delete bin instead of the date wheel. */}
+          {draggingTaskId ? (
+            <>
+              <MaterialCommunityIcons
+                name={overDelete ? 'trash-can' : 'trash-can-outline'}
+                size={48}
+                color={overDelete ? '#FCFBF9' : '#FF4D00'}
+              />
+              <Text style={[styles.deleteBinLabel, overDelete && styles.deleteBinLabelActive]}>
+                {overDelete ? 'RELEASE\nTO\nDELETE' : 'DRAG\nHERE\nTO\nDELETE'}
+              </Text>
+            </>
+          ) : null}
+
           {/* Only render the wheel once we know the row height, so it can start already parked
               on today (via contentOffset) instead of visibly scrolling there after launch. */}
-          {itemH > 0 && (
+          {!draggingTaskId && itemH > 0 && (
             <>
           {/* LAYER 1 (bottom): the scrollable list of dates in their DARK appearance.
               This is the real scroll view — it owns the scrolling, snapping and tap targets. */}
@@ -426,11 +991,10 @@ export default function TodayScreen() {
             contentContainerStyle={{ paddingVertical: spacer }}
           >
             {DATES.map((d, i) => {
-              const isPast = i < selectedIndex;          // Dates we've already scrolled past (above).
-              // Faded grey once passed; solid black for upcoming dates. (The white version lives
-              // in the overlay layer below, clipped to the orange square.)
-              const color = isPast ? '#C7C1B8' : '#1A1714';
-              const pending = (taskMap[d.key] ?? []).filter(t => !t.done).length;
+              // All dates are black (solid text on both past and upcoming).
+              // (The white version lives in the overlay layer below, clipped to the orange square.)
+              const color = '#1A1714';
+              const pending = (taskMap[d.key] ?? []).filter(t => !t.done && !t.archived).length;
 
               return (
                 <TouchableOpacity
@@ -439,6 +1003,9 @@ export default function TodayScreen() {
                   activeOpacity={0.8}
                   onPress={() => wheelRef.current?.scrollTo({ y: i * itemH, animated: true })}
                 >
+                  {showTodayLabel && d.key === todayDateKey && (
+                    <Text style={[styles.wheelTodayLabel, { color }]}>TODAY</Text>
+                  )}
                   <Text style={[styles.wheelDay, { color }]}>{d.day}</Text>
                   <Text style={[styles.wheelNum, { color }]}>{d.date}</Text>
                   {pending > 0 && (
@@ -455,16 +1022,18 @@ export default function TodayScreen() {
               and holds a second copy of the dates in WHITE. We slide that copy by -scrollY so it
               lines up exactly with the layer below — so only the part of a number that's actually
               over the orange square appears white. pointerEvents none lets touches reach layer 1. */}
-          <View style={[styles.bandClip, { top: spacer, height: itemH }]} pointerEvents="none">
+          <View style={[styles.bandClip, { top: wheelBandTop, height: itemH }]} pointerEvents="none">
             <Animated.View style={{ transform: [{ translateY: Animated.multiply(scrollY, -1) }] }}>
               {DATES.map((d, i) => {
-                const pending = (taskMap[d.key] ?? []).filter(t => !t.done).length;
+                const pending = (taskMap[d.key] ?? []).filter(t => !t.done && !t.archived).length;
                 return (
                   <View key={d.key} style={[styles.wheelItem, { height: itemH }]}>
+                    {showTodayLabel && d.key === todayDateKey && (
+                      <Text style={styles.wheelTodayLabel}>TODAY</Text>
+                    )}
                     <Text style={[styles.wheelDay, { color: '#FCFBF9' }]}>{d.day}</Text>
                     <Text style={[styles.wheelNum, { color: '#FCFBF9' }]}>{d.date}</Text>
-                    {/* Month sits at the bottom of the orange square. Absolutely positioned so it
-                        doesn't push the number off-centre (keeping it aligned with the layer below). */}
+                    {/* Month only in overlay — absolute so day/number stay aligned with layer below. */}
                     <Text style={styles.wheelMonth}>{d.month}</Text>
                     {pending > 0 && (
                       <View style={[styles.badge, { backgroundColor: '#FCFBF9' }]}>
@@ -486,140 +1055,134 @@ export default function TodayScreen() {
         {/* Right column: scrollable task list for the selected date. */}
         {/* keyboardShouldPersistTaps="handled" means tapping the ADD button while the
             keyboard is open still registers the tap (instead of just closing the keyboard). */}
-        <ScrollView
+        <GHScrollView
+          ref={tasksScrollRef}
           style={styles.tasksCol}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={draggingTaskId === null}
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            tasksScrollYRef.current = e.nativeEvent.contentOffset.y;
+          }}
+          onLayout={(e) => {
+            taskListTopRef.current = e.nativeEvent.layout.y + insets.top;
+            setTaskColWidth(e.nativeEvent.layout.width);
+            measureTasksScroll();
+            // Capture absolute left edge so the floating chip can pin to this column.
+            (tasksScrollRef.current as any)?.measureInWindow?.((x: number) => {
+              taskColLeftRef.current = x;
+            });
+          }}
         >
           {/* ── TODAY'S FOCUS card ────────────────────────── */}
           <Text style={styles.focusSection}>TODAY'S FOCUS</Text>
 
-          {/* Tapping the name switches it to an editable input. */}
-          {editingFocus ? (
-            <TextInput
-              style={styles.focusNameInput}
-              value={focusName}
-              onChangeText={setFocusName}
-              placeholder="E.G. DEEP WORK"
-              placeholderTextColor="#C7C1B8"
-              autoFocus
-              autoCapitalize="characters"
-              returnKeyType="done"
-              onSubmitEditing={() => setEditingFocus(false)}
-              onBlur={() => setEditingFocus(false)}
-            />
+          {/* Tapping the name opens the bottom sheet to edit it. */}
+          <TouchableOpacity onPress={() => openSheet('focus')} activeOpacity={0.7}>
+            <Text style={[styles.focusName, !focusName && styles.focusNamePlaceholder]}>
+              {focusName || 'TAP TO SET FOCUS'}
+            </Text>
+          </TouchableOpacity>
+
+          {hasSavedSession && activeSessionLabel ? (
+            <Text style={styles.focusSessionRemaining}>{activeSessionLabel}</Text>
           ) : (
-            <TouchableOpacity onPress={() => setEditingFocus(true)} activeOpacity={0.7}>
-              <Text style={[styles.focusName, !focusName && styles.focusNamePlaceholder]}>
-                {focusName || 'TAP TO SET FOCUS'}
+            <TouchableOpacity
+              style={styles.focusBlockBtn}
+              onPress={() => {
+                const next = (focusBlockIdx + 1) % FOCUS_BLOCKS.length;
+                applyFocusSettings(focusName, next);
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons name="clock-outline" size={13} color="#8C857B" />
+              <Text style={styles.focusBlockLabel}>
+                {focusBlockDisplayLabel(focusWorkMins, focusBreakMins, focusBlockIdx)}
               </Text>
             </TouchableOpacity>
           )}
 
-          {/* Tapping the block label cycles through 25/45/60/90 min options. */}
-          <TouchableOpacity
-            style={styles.focusBlockBtn}
-            onPress={() => setFocusBlockIdx(i => (i + 1) % FOCUS_BLOCKS.length)}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="clock-outline" size={13} color="#8C857B" />
-            <Text style={styles.focusBlockLabel}>{FOCUS_BLOCKS[focusBlockIdx].label}</Text>
-          </TouchableOpacity>
-
-          {/* START FOCUS button — navigates to the timer screen. */}
+          {/* START/RESUME FOCUS button — navigates to the timer screen.
+              If there's a saved session, shows "RESUME FOCUS" and the timer will restore its state. */}
           <TouchableOpacity
             style={styles.startFocusBtn}
             activeOpacity={0.85}
             onPress={() => {
-              if (!focusName.trim()) {
-                setEditingFocus(true);
-                return;
+              if (hasSavedSession) {
+                // Resume: go to timer with no params, it'll load the saved session.
+                router.push('/focus-timer');
+              } else {
+                // Start new: need focus name and block settings.
+                if (!focusName.trim()) {
+                  openSheet('focus');
+                  return;
+                }
+                router.push({
+                  pathname: '/focus-timer',
+                  params: {
+                    name:       focusName.trim(),
+                    workMins:   String(focusWorkMins),
+                    breakMins:  String(focusBreakMins),
+                  },
+                });
               }
-              router.push({
-                pathname: '/focus-timer',
-                params: {
-                  name:       focusName.trim(),
-                  workMins:   FOCUS_BLOCKS[focusBlockIdx].minutes,
-                  breakMins:  FOCUS_BLOCKS[focusBlockIdx].breakMins,
-                },
-              });
             }}
           >
-            <Text style={styles.startFocusBtnText}>START FOCUS</Text>
-            <MaterialCommunityIcons name="chevron-right" size={16} color="#1A1714" />
+            <Text style={styles.startFocusBtnText}>
+              {hasSavedSession ? 'RESUME FOCUS' : 'START FOCUS'}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.focusDivider} />
 
-          <Text style={styles.cardLabel}>TODAY'S TASKS</Text>
+          <Text style={styles.cardLabel}>
+            {(() => {
+              const selectedDate = DATES[selectedIndex];
+              return `${selectedDate.month} ${formatOrdinal(parseInt(selectedDate.date, 10))} TASKS`;
+            })()}
+          </Text>
 
-          {/* Show a placeholder message if there are no tasks and the input isn't open. */}
-          {tasks.length === 0 && !adding && (
-            <View style={styles.emptyWrap}>
+          {/* Show a placeholder message if there are no tasks. */}
+          {tasks.length === 0 && (
+            <TouchableOpacity
+              style={styles.emptyWrap}
+              onPress={() => openSheet('task')}
+              activeOpacity={0.7}
+            >
               <Text style={styles.emptyTitle}>NOTHING PLANNED</Text>
-              <Text style={styles.emptyHint}>Tap + below to add your first task.</Text>
-            </View>
+              <Text style={styles.emptyHint}>Tap here to add your first task.</Text>
+            </TouchableOpacity>
           )}
 
           {/* Render one row per task for the selected date. */}
-          {tasks.map((task) => (
-            // taskRowDone makes the whole row semi-transparent when the task is completed.
-            <View key={task.id} style={[styles.taskRow, task.done && styles.taskRowDone]}>
-
-              {/* The whole checkbox + label area is tappable to toggle done/not-done.
-                  This gives a comfortable ~44px touch target instead of just the tiny box. */}
-              <TouchableOpacity
-                style={styles.taskMain}
-                onPress={() => toggleTask(task.id)}
-                activeOpacity={0.6}
-              >
-                <View style={[styles.checkbox, task.done && styles.checkboxDone]}>
-                  {/* Show a tick inside the checkbox only when the task is done. */}
-                  {task.done && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-                {/* The task name. Gets a strikethrough style when done. */}
-                <Text style={[styles.taskLabel, task.done && styles.taskLabelDone]}>
-                  {task.label}
-                </Text>
-              </TouchableOpacity>
-
-              {/* The × archive button — hides the task from the list but keeps it for history.
-                  hitSlop makes the tap area larger than the visible button, so it's easier to tap. */}
-              <TouchableOpacity
-                style={styles.removeBtn}
-                onPress={() => archiveTask(task.id)}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={styles.removeText}>×</Text>
-              </TouchableOpacity>
-            </View>
+          {tasks.map((task, taskIndex) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              taskIndex={taskIndex}
+              isDragged={draggingTaskId === task.id}
+              isCompleting={completingIds.has(task.id)}
+              showGhostHere={!!(draggingTaskId && dragTargetIdx === taskIndex)}
+              draggingTaskIdRef={draggingTaskIdRef}
+              completingIdsRef={completingIdsRef}
+              beginDragRef={beginTaskDragRef}
+              dragMoveRef={handleDragMoveRef}
+              dragEndRef={handleDragEndRef}
+              toggleTaskRef={toggleTaskRef}
+              onFirstRowLayout={y => {
+                firstTaskWindowYRef.current = y;
+              }}
+            />
           ))}
-
-          {/* The input row for typing a new task — only shown when adding is true. */}
-          {adding && (
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.input}
-                placeholder="TASK NAME..."
-                placeholderTextColor="#B3ABA0"
-                value={newTaskText}
-                onChangeText={setNewTaskText} // Updates state on every keystroke.
-                autoFocus                     // Opens the keyboard automatically when this appears.
-                onSubmitEditing={addTask}     // Pressing "done" on the keyboard triggers addTask.
-                returnKeyType="done"          // Labels the keyboard's return key as "Done".
-              />
-              <TouchableOpacity style={styles.confirmBtn} onPress={addTask} activeOpacity={0.85}>
-                <Text style={styles.confirmText}>ADD</Text>
-              </TouchableOpacity>
-            </View>
+          {draggingTaskId && dragTargetIdx === tasks.length && (
+            <InsertionGhost key="insertion-end" />
           )}
-
-          {/* The "+ ADD A NEW TASK..." button. Toggles the input row open/closed.
-              When open, it changes to "× CANCEL" so the user can dismiss it. */}
-          <TouchableOpacity style={styles.addRow} onPress={() => setAdding(a => !a)} activeOpacity={0.7}>
-            <Text style={styles.addText}>{adding ? '× CANCEL' : '+ ADD A NEW TASK...'}</Text>
+          {/* Opens the bottom sheet to add a new task. */}
+          <TouchableOpacity style={styles.addRow} onPress={() => openSheet('task')} activeOpacity={0.7}>
+            <Text style={styles.addText}>+ ADD A NEW TASK...</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </GHScrollView>
 
       </View>
 
@@ -637,6 +1200,114 @@ export default function TodayScreen() {
           </View>
         ))}
       </View>
+
+      <DragTaskFloatingChip
+        visible={!!draggingTask}
+        label={draggingTask?.label ?? ''}
+        width={taskColWidth}
+        top={floatTop}
+        left={floatLeft}
+        danger={overDelete}
+        onOverlayOrigin={setOverlayOrigin}
+      />
+
+      {/* ── Input modal ──────────────────────────────────── */}
+      {/* Centered white card that floats above the keyboard. */}
+      <Modal visible={sheetMode !== null} transparent animationType="none" onRequestClose={closeSheet}>
+        {/* KAV pushes the card up so it's never hidden behind the keyboard. */}
+        <KeyboardAvoidingView
+          style={styles.sheetKAV}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          {/* Backdrop — tap outside the card to dismiss. */}
+          <Pressable style={styles.sheetBackdrop} onPress={closeSheet}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.sheetBackdropDim, { opacity: sheetBackdropOpacity }]}
+            />
+            <Pressable style={styles.sheetGroup} onPress={() => {}}>
+              <Animated.View style={[styles.sheetAnimatedWrap, { opacity: sheetAnim }]}>
+                <View style={[styles.sheetCard, sheetMode === 'task' && styles.sheetCardTask]}>
+
+                  <Text style={styles.sheetLabel}>
+                    {sheetMode === 'focus' ? 'SET FOCUS' : 'NEW TASK'}
+                  </Text>
+
+                  <TextInput
+                    style={[styles.sheetInput, sheetMode === 'task' && styles.sheetInputTask]}
+                    value={sheetText}
+                    onChangeText={setSheetText}
+                    placeholder={sheetMode === 'focus' ? 'E.G. DEEP WORK' : 'TASK NAME...'}
+                    placeholderTextColor="#C7C1B8"
+                    autoFocus
+                    autoCapitalize="characters"
+                    returnKeyType="done"
+                    onSubmitEditing={confirmSheet}
+                  />
+
+                  {sheetMode === 'focus' && (
+                    <>
+                      <TouchableOpacity style={styles.sheetConfirm} onPress={confirmSheet} activeOpacity={0.85}>
+                        <Text style={styles.sheetConfirmText}>SET FOCUS</Text>
+                      </TouchableOpacity>
+                      {(focusName.length > 0 || sheetText.trim().length > 0) && (
+                        <TouchableOpacity
+                          style={styles.sheetClearFocus}
+                          onPress={() => { clearFocusSettings(); closeSheet(); }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.sheetClearFocusText}>CLEAR FOCUS</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+
+                  {sheetMode === 'task' && (
+                    <>
+                      <View style={styles.sheetCardSpacer} />
+                      <View style={styles.sheetCardFooter}>
+                        <View style={styles.sheetCardDivider} />
+                        <View style={styles.priorityRow}>
+                          {(['LOW', 'MEDIUM', 'HIGH'] as Priority[]).map(p => (
+                            <TouchableOpacity
+                              key={p}
+                              style={[
+                                styles.priorityBtn,
+                                styles[`priorityBtn_${p}`],
+                                sheetPriority === p && styles.priorityBtnSelected,
+                              ]}
+                              onPress={() => setSheetPriority(p)}
+                              activeOpacity={0.7}
+                            >
+                              <Text
+                                style={[
+                                  styles.priorityBtnText,
+                                  styles.priorityBtnTextOnColor,
+                                  sheetPriority === p && styles.priorityBtnTextSelected,
+                                ]}
+                              >
+                                {p.toUpperCase()}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.sheetConfirm, styles.sheetConfirmBottom]}
+                          onPress={confirmSheet}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.sheetConfirmText}>ADD TASK</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+
+                </View>
+              </Animated.View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
 
     </SafeAreaView>
   );
@@ -665,7 +1336,7 @@ const styles = StyleSheet.create({
   },
   // "TODAY" in the large pixel font.
   title: {
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 28,
     color: '#1A1714',
   },
@@ -684,7 +1355,7 @@ const styles = StyleSheet.create({
   cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
   // "TRACK. GROW. THRIVE." tagline below the title.
   tagline: {
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 11,
     color: '#FF4D00',
     letterSpacing: 1,
@@ -718,33 +1389,46 @@ const styles = StyleSheet.create({
   wheel: {
     flex: 1,
   },
-  // One date row in the wheel. Height is set inline from itemH; content centred.
+  // One date row in the wheel. Height is set inline from itemH.
   wheelItem: {
+    position: 'relative',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // "TODAY" above the weekday when the selected date is the current day.
+  wheelTodayLabel: {
+    position: 'absolute',
+    top: 4,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontFamily: 'PixeloidSans_700Bold',
+    fontSize: 8,
+    letterSpacing: 1,
+    color: '#FCFBF9',
+  },
   // Day name (e.g. "MONDAY") above the number.
   wheelDay: {
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 12,
     marginBottom: 8,
     letterSpacing: 1,
   },
   // The big bold date number.
   wheelNum: {
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 52,
     lineHeight: 58,
   },
-  // Month label at the bottom of the orange square (overlay copy only). Absolute so it doesn't
-  // affect the vertical centring of the day + number above it.
+  // Month label at the bottom of the orange square (overlay only — does not affect row layout).
   wheelMonth: {
     position: 'absolute',
-    bottom: 14,
+    bottom: 10,
     left: 0,
     right: 0,
     textAlign: 'center',
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 11,
     letterSpacing: 1,
     color: '#FCFBF9',
@@ -761,7 +1445,7 @@ const styles = StyleSheet.create({
   },
   // "TODAY'S TASKS" label at the top of the task list.
   cardLabel: {
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 13,
     color: '#FF4D00',
     marginBottom: 24,
@@ -774,14 +1458,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyTitle: {
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 13,
     color: '#8C857B',
     letterSpacing: 1,
     marginBottom: 8,
   },
   emptyHint: {
-    fontFamily: 'SpaceMono_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 13,
     lineHeight: 19,
     color: '#C7C1B8',
@@ -825,51 +1509,70 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   // The task name label — flex: 1 makes it take all available width between the checkbox and delete button.
-  taskLabel: {
-    fontFamily: 'SpaceMono_400Regular',
-    fontSize: 15,
-    color: '#000000',
+  taskLabelWrap: {
     flex: 1,
+  },
+  taskLabel: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 10,
+    color: '#000000',
+    lineHeight: 16,
   },
   // Strikethrough and grey text when the task is done.
   taskLabelDone: {
     textDecorationLine: 'line-through',
     color: '#8C857B',
   },
-  // The × delete button — small touch area, padded to make it easier to tap.
-  removeBtn: { paddingLeft: 8 },
-  removeText: { fontSize: 20, color: '#C7C1B8', lineHeight: 22 },
-  // The row containing the text input and ADD button — shown when adding a new task.
-  inputRow: {
-    flexDirection: 'row',
+  // The original row turns into a faint dashed placeholder while its task is lifted out.
+  taskRowDragging: {},
+  // Dashed imprint — matches task row height (taskMain padding + checkbox).
+  insertionGhost: {
+    height: TASK_ROW_SLOT_PX - 6,
+    marginBottom: 6,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#FF4D00',
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 77, 0, 0.06)',
+  },
+  // Invisible spacer at the dragged item's old index while the gap is elsewhere.
+  dragRowSpacer: {
+    height: 0,
+    marginBottom: 0,
+  },
+  // Position number beside each task — no box, just the coloured numeral.
+  priorityIndexWrap: {
+    marginLeft: 8,
+    minWidth: 22,
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 8, // Space between the text input and the ADD button.
+    justifyContent: 'center',
   },
-  // The text input field where the user types the new task name.
-  input: {
-    flex: 1,
-    fontFamily: 'SpaceMono_400Regular',
-    backgroundColor: '#FCFBF9',
-    borderWidth: 1,
-    borderColor: '#E5E1DA',
-    borderRadius: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+  priorityIndexText: {
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 13,
-    color: '#1A1714',
+    lineHeight: 16,
   },
-  // The orange "ADD" button next to the text input.
-  confirmBtn: {
-    backgroundColor: '#FF4D00',
-    borderRadius: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  // Full-height left column shown instead of the date wheel while dragging.
+  deleteBinCol: {
+    backgroundColor: '#FFF1F0',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    borderWidth: 2,
+    borderColor: '#FF4D00',
+    borderStyle: 'dashed',
   },
-  confirmText: {
-    fontFamily: 'SpaceMono_700Bold',
-    fontSize: 11,
-    color: '#FCFBF9',
+  deleteBinLabel: {
+    fontFamily: 'PixeloidSans_700Bold',
+    fontSize: 10,
+    color: '#FF4D00',
+    textAlign: 'center',
+    letterSpacing: 1,
+    lineHeight: 16,
+  },
+  deleteBinLabelActive: {
+    color: '#E03030',
   },
   // The "+ ADD A NEW TASK..." / "× CANCEL" row at the bottom of the task list.
   addRow: {
@@ -880,7 +1583,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   addText: {
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 13,
     color: '#FF4D00',
     letterSpacing: 0.5,
@@ -909,7 +1612,7 @@ const styles = StyleSheet.create({
   trackerItemFirst: { borderLeftWidth: 0 },
   // The small label above each tracker icon (e.g. "TODAY'S STEPS").
   trackerTop: {
-    fontFamily: 'SpaceMono_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 6,
     color: '#8C857B',
     letterSpacing: 0.5,
@@ -918,14 +1621,14 @@ const styles = StyleSheet.create({
   trackerIcon: { marginBottom: 8 },
   // The large value number (e.g. "16,842").
   trackerValue: {
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 15,
     color: '#FF4D00',
     marginBottom: 4,
   },
   // The unit label below the value (e.g. "STEPS").
   trackerUnit: {
-    fontFamily: 'SpaceMono_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 7,
     color: '#8C857B',
     letterSpacing: 1,
@@ -946,20 +1649,20 @@ const styles = StyleSheet.create({
   },
   // The number inside the badge.
   badgeText: {
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 10,
   },
 
   // ── Today's Focus card ───────────────────────────────────────────
   focusSection: {
-    fontFamily: 'SpaceMono_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 11,
     color: '#FF4D00',
-    letterSpacing: 2,
-    marginBottom: 8,
+    letterSpacing: 1,
+    marginBottom: 12,
   },
   focusName: {
-    fontFamily: 'SpaceMono_700Bold',
+    fontFamily: 'PixeloidSans_700Bold',
     fontSize: 30,
     color: '#1A1714',
     lineHeight: 36,
@@ -970,15 +1673,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
   },
-  focusNameInput: {
-    fontFamily: 'SpaceMono_700Bold',
-    fontSize: 26,
-    color: '#1A1714',
-    borderBottomWidth: 2,
-    borderBottomColor: '#FF4D00',
-    paddingVertical: 4,
-    marginBottom: 8,
-  },
   focusBlockBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -986,24 +1680,30 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   focusBlockLabel: {
-    fontFamily: 'SpaceMono_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 12,
     color: '#8C857B',
   },
+  focusSessionRemaining: {
+    fontFamily: 'PixeloidSans_700Bold',
+    fontSize: 12,
+    color: '#FF4D00',
+    letterSpacing: 0.5,
+    marginBottom: 14,
+  },
   startFocusBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 2,
+    justifyContent: 'center',
+    borderWidth: 1.5,
     borderColor: '#1A1714',
-    borderRadius: 50,
-    paddingHorizontal: 20,
+    borderRadius: 100,       // Full pill shape.
+    paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 4,
   },
   startFocusBtnText: {
-    fontFamily: 'SpaceMono_700Bold',
-    fontSize: 12,
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 9,
     color: '#1A1714',
     letterSpacing: 1,
   },
@@ -1011,5 +1711,153 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#E5E1DA',
     marginVertical: 20,
+  },
+
+  // ── Priority tags on task rows ───────────────────────────────────
+  priorityTag: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 7,
+    marginTop: 4,
+    letterSpacing: 1,
+  },
+  priority_HIGH:   { color: '#E03030' },
+  priority_MEDIUM: { color: '#8C857B' },
+  priority_LOW:    { color: '#4A9B6F' },
+
+  // ── Input modal ───────────────────────────────────────────────────
+  // KAV fills the screen so the card can move upward above the keyboard.
+  sheetKAV: {
+    flex: 1,
+  },
+  // Backdrop — card sits lower on screen (above tab bar / keyboard).
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 56,
+  },
+  sheetBackdropDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  sheetGroup: {
+    width: '100%',
+  },
+  sheetAnimatedWrap: {
+    width: '100%',
+  },
+  // The white card itself.
+  sheetCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  sheetCardTask: {
+    minHeight: 292,
+    paddingVertical: 20,
+    flexDirection: 'column',
+  },
+  sheetCardSpacer: {
+    flexGrow: 1,
+    minHeight: 4,
+  },
+  sheetCardFooter: {
+    width: '100%',
+  },
+  sheetCardDivider: {
+    height: 1,
+    backgroundColor: '#E5E1DA',
+    marginBottom: 14,
+  },
+  sheetLabel: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 9,
+    color: '#FF4D00',
+    letterSpacing: 1,
+    marginBottom: 16,
+  },
+  sheetInput: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 13,
+    color: '#1A1714',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E5E1DA',
+    paddingVertical: 10,
+    marginBottom: 20,
+  },
+  sheetInputTask: {
+    marginBottom: 18,
+  },
+  priorityRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  priorityBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderRadius: 100,
+  },
+  priorityBtn_LOW: {
+    backgroundColor: '#4A9B6F',
+    borderColor: '#4A9B6F',
+  },
+  priorityBtn_MEDIUM: {
+    backgroundColor: '#FF4D00',
+    borderColor: '#FF4D00',
+  },
+  priorityBtn_HIGH: {
+    backgroundColor: '#E03030',
+    borderColor: '#E03030',
+  },
+  priorityBtnSelected: {
+    borderColor: '#1A1714',
+    transform: [{ scale: 1.04 }],
+  },
+  priorityBtnText: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 7,
+    letterSpacing: 1,
+  },
+  priorityBtnTextOnColor: {
+    color: '#FCFBF9',
+  },
+  priorityBtnTextSelected: {
+    fontFamily: 'PixeloidSans_700Bold',
+  },
+  sheetConfirm: {
+    backgroundColor: '#FF4D00',
+    borderRadius: 100,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  sheetConfirmBottom: {
+    marginTop: 0,
+  },
+  sheetConfirmText: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 10,
+    color: '#FCFBF9',
+    letterSpacing: 1,
+  },
+  sheetClearFocus: {
+    marginTop: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  sheetClearFocusText: {
+    fontFamily: 'PixeloidSans_700Bold',
+    fontSize: 11,
+    color: '#8C857B',
+    letterSpacing: 1,
   },
 });

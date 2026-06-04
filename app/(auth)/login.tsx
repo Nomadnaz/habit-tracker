@@ -159,14 +159,14 @@ const styles = StyleSheet.create({
   },
   // The orange [ and ] brackets around the title.
   bracket: {
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 28,
     color: '#FF4D00',
     marginTop: 4,
   },
   // "HABIT TREE" in the pixel font, split across two lines with \n.
   title: {
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 28,
     color: '#000',
     lineHeight: 42,
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   },
   // The small orange tagline below the title.
   tagline: {
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 8,
     color: '#FF4D00',
     letterSpacing: 2,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
   // "SIGN IN" / "CREATE ACCOUNT" label inside the card.
   cardLabel: {
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 9,
     color: '#FF4D00',
     marginBottom: 20,
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
     fontSize: 13,
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     color: '#000',
     marginBottom: 12,
   },
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   },
   // White text inside the button.
   buttonText: {
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     color: '#fff',
     fontSize: 10,
     letterSpacing: 1,
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   switchText: {
-    fontFamily: 'PressStart2P_400Regular',
+    fontFamily: 'PixeloidSans_400Regular',
     fontSize: 8,
     color: '#FF4D00',
     letterSpacing: 1,
