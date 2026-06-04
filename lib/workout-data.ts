@@ -158,6 +158,112 @@ export async function getTemplateExercises(templateId: string): Promise<Exercise
     .filter(Boolean);
 }
 
+// ── BODY page workout preview (real templates + exercise counts) ───────────
+
+export type BodyMovement = 'push' | 'pull' | 'legs' | 'upper' | 'lower';
+
+export type BodyExercisePreview = {
+  id: string;
+  name: string;
+  icon: string;
+  weightKg: number;
+  reps: string;
+  pbMaxKg: number | null;
+  pbDeltaKg: number | null;
+};
+
+export type BodyWorkoutPreview = {
+  templateId: string | null;
+  templateName: string;
+  totalCount: number;
+  previewExercises: BodyExercisePreview[];
+  extraCount: number;
+};
+
+const BODY_PREVIEW_COUNT = 3;
+
+const MOVEMENT_NAME_HINTS: Record<BodyMovement, string[]> = {
+  pull: ['PULL'],
+  push: ['PUSH'],
+  legs: ['LEG', 'LEGS'],
+  upper: ['UPPER'],
+  lower: ['LOWER'],
+};
+
+export function resolveTemplateForMovement(
+  templates: WorkoutTemplate[],
+  movement: BodyMovement,
+): WorkoutTemplate | undefined {
+  const hints = MOVEMENT_NAME_HINTS[movement];
+  const active = templates.filter(t => !t.isArchived);
+  return active.find(t => {
+    const name = t.name.toUpperCase();
+    return hints.some(h => name.includes(h));
+  });
+}
+
+export function exercisePreviewIcon(name: string, movementType: MovementType): string {
+  const n = name.toUpperCase();
+  if (n.includes('ROW')) return 'rowing';
+  if (n.includes('CURL') || n.includes('RAISE')) return 'arm-flex';
+  if (n.includes('PULL') || n.includes('LAT') || n.includes('PRESS') || n.includes('BENCH')) return 'weight-lifter';
+  if (n.includes('SQUAT') || n.includes('LEG')) return 'human-handsdown';
+  if (n.includes('DEAD')) return 'weight';
+  if (movementType === 'cardio') return 'run';
+  return 'dumbbell';
+}
+
+function pbPreviewFor(exerciseId: string, weightKg: number, pbLog: PBEntry[]): Pick<BodyExercisePreview, 'pbMaxKg' | 'pbDeltaKg'> {
+  const history = pbLog.filter(e => e.exerciseId === exerciseId);
+  if (history.length === 0) return { pbMaxKg: null, pbDeltaKg: null };
+  const pbMaxKg = Math.max(...history.map(e => e.weightKg));
+  const pbDeltaKg = weightKg > pbMaxKg ? weightKg - pbMaxKg : null;
+  return { pbMaxKg, pbDeltaKg };
+}
+
+export async function getBodyWorkoutPreview(movement: BodyMovement): Promise<BodyWorkoutPreview> {
+  await ensureSeeded();
+  const [templates, pbLog] = await Promise.all([
+    getTemplates(),
+    getPBLog(),
+  ]);
+  const activeTemplates = templates.filter(t => !t.isArchived);
+  const template = resolveTemplateForMovement(activeTemplates, movement);
+
+  if (!template) {
+    const label = `${movement.toUpperCase()} DAY`;
+    return {
+      templateId: null,
+      templateName: label,
+      totalCount: 0,
+      previewExercises: [],
+      extraCount: 0,
+    };
+  }
+
+  const all = await getTemplateExercises(template.id);
+  const preview = all.slice(0, BODY_PREVIEW_COUNT);
+  const extraCount = Math.max(0, all.length - preview.length);
+
+  return {
+    templateId: template.id,
+    templateName: template.name,
+    totalCount: all.length,
+    previewExercises: preview.map(ex => {
+      const pb = pbPreviewFor(ex.id, ex.weightKg, pbLog);
+      return {
+        id: ex.id,
+        name: ex.name,
+        icon: exercisePreviewIcon(ex.name, ex.movementType),
+        weightKg: ex.weightKg,
+        reps: ex.reps,
+        ...pb,
+      };
+    }),
+    extraCount,
+  };
+}
+
 // Was this template done today?
 export async function isDoneToday(templateId: string): Promise<boolean> {
   const log = await getDoneLog();
@@ -228,7 +334,21 @@ export async function addExerciseToTemplate(templateId: string, exerciseId: stri
   bg(async () => {
     const userId = await uid();
     if (!userId) return;
-    await supabase.from('workout_exercises').upsert({ id: j.id, user_id: userId, workout_template_id: templateId, exercise_id: exerciseId, order_index: count });
+    // Upsert the exercise first — seeded exercises only exist in AsyncStorage,
+    // so the junction insert would fail the FK constraint without this.
+    const exercises = await getExercises();
+    const ex = exercises.find(e => e.id === exerciseId);
+    if (ex) {
+      await supabase.from('exercises').upsert({
+        id: ex.id, user_id: userId, name: ex.name,
+        muscle_groups: ex.muscleGroups ?? [], movement_type: ex.movementType,
+        sets: ex.sets, reps: ex.reps, weight_kg: ex.weightKg ?? 0,
+      });
+    }
+    await supabase.from('workout_exercises').upsert({
+      id: j.id, user_id: userId,
+      workout_template_id: templateId, exercise_id: exerciseId, order_index: count,
+    });
   });
 }
 

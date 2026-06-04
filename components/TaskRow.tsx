@@ -12,6 +12,8 @@ import {
   type Task,
   taskIndexColor,
 } from '@/lib/tasks-core';
+import { getTaskMetaParts } from '@/lib/task-schedule';
+import { PixelLocationPin } from '@/components/PixelLocationPin';
 
 export function InsertionGhost() {
   return <View style={styles.insertionGhost} />;
@@ -32,6 +34,7 @@ type TaskRowProps = {
   onFirstRowLayout?: (y: number) => void;
   editMode?: boolean;
   onRemove?: (id: string) => void;
+  onEditPress?: (task: Task) => void;
 };
 
 export function TaskRow({
@@ -49,6 +52,7 @@ export function TaskRow({
   onFirstRowLayout,
   editMode = false,
   onRemove,
+  onEditPress,
 }: TaskRowProps) {
   const rowRef = useRef<View>(null);
   const completeTint = useRef(new Animated.Value(task.done ? 1 : 0)).current;
@@ -110,13 +114,10 @@ export function TaskRow({
         if (draggingTaskIdRef.current === task.id) dragEndRef.current(task.id);
       });
 
-    const tap = Gesture.Tap().maxDuration(220).onEnd(() => {
-      if (draggingTaskIdRef.current || completingIdsRef.current.has(task.id)) return;
-      toggleTaskRef.current(task.id);
-    });
+    return pan;
+  }, [editMode, task.id, taskIndex, beginDragRef, dragMoveRef, dragEndRef, draggingTaskIdRef, completingIdsRef]);
 
-    return Gesture.Exclusive(pan, tap);
-  }, [editMode, task.id, taskIndex, beginDragRef, dragMoveRef, dragEndRef, draggingTaskIdRef, completingIdsRef, toggleTaskRef]);
+  const meta = getTaskMetaParts(task);
 
   const rowBody = (
     <Animated.View
@@ -126,9 +127,17 @@ export function TaskRow({
       ]}
     >
       <View style={styles.taskMain}>
-        <View style={[styles.checkbox, task.done && styles.checkboxDone, editMode && styles.checkboxMuted]}>
+        <TouchableOpacity
+          style={[styles.checkbox, task.done && styles.checkboxDone, editMode && styles.checkboxMuted]}
+          onPress={() => {
+            if (editMode || completingIdsRef.current.has(task.id)) return;
+            toggleTaskRef.current(task.id);
+          }}
+          activeOpacity={0.7}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
           {task.done && <Text style={styles.checkmark}>✓</Text>}
-        </View>
+        </TouchableOpacity>
         <View style={styles.taskLabelWrap}>
           <Animated.Text
             style={[
@@ -136,9 +145,29 @@ export function TaskRow({
               { color: labelColor },
               task.done && styles.taskLabelDone,
             ]}
+            numberOfLines={2}
           >
             {task.label}
           </Animated.Text>
+          <View style={styles.metaRow}>
+            <Text style={[styles.taskMeta, task.done && styles.taskMetaDone]} numberOfLines={1}>
+              {meta.timeAndDuration}
+            </Text>
+            {meta.location ? (
+              <View style={styles.locationSegment}>
+                <Text style={[styles.taskMeta, styles.taskMetaSep, task.done && styles.taskMetaDone]}>
+                  {' · '}
+                </Text>
+                <PixelLocationPin color={task.done ? '#B8B5B0' : '#FF4D00'} />
+                <Text
+                  style={[styles.taskMeta, styles.taskMetaLocation, task.done && styles.taskMetaDone]}
+                  numberOfLines={1}
+                >
+                  {meta.location}
+                </Text>
+              </View>
+            ) : null}
+          </View>
           {task.priority && !task.done && !editMode && (
             <Text style={[styles.priorityTag, styles[`priority_${task.priority}`]]}>
               {task.priority}
@@ -147,14 +176,22 @@ export function TaskRow({
         </View>
       </View>
       {editMode ? (
-        <TouchableOpacity
-          style={styles.removeBtn}
-          onPress={() => onRemove?.(task.id)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons name="minus-circle" size={26} color="#E03030" />
-        </TouchableOpacity>
+        <>
+          <MaterialCommunityIcons
+            name="pencil-outline"
+            size={12}
+            color="#FF4D00"
+            style={styles.editModePencil}
+          />
+          <TouchableOpacity
+            style={styles.removeBtn}
+            onPress={() => onRemove?.(task.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="minus-circle" size={26} color="#E03030" />
+          </TouchableOpacity>
+        </>
       ) : (
         <View style={styles.priorityIndexWrap}>
           <Text style={[styles.priorityIndexText, { color: taskIndexColor(taskIndex) }]}>
@@ -164,6 +201,19 @@ export function TaskRow({
       )}
     </Animated.View>
   );
+
+  const wrappedBody =
+    editMode && onEditPress ? (
+      <TouchableOpacity
+        onPress={() => onEditPress(task)}
+        activeOpacity={0.7}
+        disabled={isCompleting}
+      >
+        {rowBody}
+      </TouchableOpacity>
+    ) : (
+      rowBody
+    );
 
   return (
     <View
@@ -175,11 +225,11 @@ export function TaskRow({
     >
       {!editMode && !isDragged && showGhostHere && <InsertionGhost />}
       {editMode ? (
-        rowBody
+        wrappedBody
       ) : (
         <GestureDetector gesture={gesture}>
           <View collapsable={false}>
-            {isDragged ? <View style={styles.dragRowSpacer} /> : rowBody}
+            {isDragged ? <View style={styles.dragRowSpacer} /> : wrappedBody}
           </View>
         </GestureDetector>
       )}
@@ -205,12 +255,13 @@ const styles = StyleSheet.create({
   taskMain: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
+    alignItems: 'flex-start',
+    paddingVertical: 8,
   },
   checkbox: {
     width: 24,
     height: 24,
+    marginTop: 2,
     borderWidth: 2,
     borderColor: '#1A1714',
     marginRight: 14,
@@ -233,7 +284,39 @@ const styles = StyleSheet.create({
     fontFamily: 'PixeloidSans_400Regular',
     fontSize: 12,
     color: '#000000',
-    lineHeight: 18,
+    lineHeight: 16,
+  },
+  taskMeta: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 9,
+    color: '#8C857B',
+    marginTop: 3,
+    letterSpacing: 0.5,
+  },
+  taskMetaDone: {
+    opacity: 0.55,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  locationSegment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    maxWidth: '70%',
+  },
+  taskMetaSep: {
+    marginTop: 0,
+  },
+  taskMetaLocation: {
+    flexShrink: 1,
+  },
+  editModePencil: {
+    marginLeft: 4,
+    marginRight: 2,
   },
   taskLabelDone: {
     textDecorationLine: 'line-through',

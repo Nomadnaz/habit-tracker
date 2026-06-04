@@ -124,9 +124,10 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="day" options={{ presentation: 'modal' }} />
         <Stack.Screen name="workouts" />
         <Stack.Screen name="workout-detail" />
+        <Stack.Screen name="steps" />
+        <Stack.Screen name="focus-timer" />
       </Stack>
     </GestureHandlerRootView>
   );

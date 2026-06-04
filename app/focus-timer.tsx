@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, memo, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,7 @@ import {
   Animated,
   Platform,
   useWindowDimensions,
-  type ViewStyle,
 } from 'react-native';
-import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -30,6 +28,7 @@ import {
   readFocusSettingsLocal,
 } from '@/lib/focus-settings';
 import { supabase } from '@/lib/supabase';
+import { MinuteWheelPicker } from '@/components/WheelPicker';
 
 // Leaving twice (whether running OR paused) = failed session.
 const STRIKE_LIMIT = 2;
@@ -80,97 +79,13 @@ const MAX_FOCUS_MIN = 180;
 const MIN_BREAK_MIN = 1;
 const MAX_BREAK_MIN = 60;
 
-const WHEEL_ITEM_H = 40;
-const WHEEL_VISIBLE = 5;
-const WHEEL_PAD_SLOTS = Math.floor(WHEEL_VISIBLE / 2);
-const WHEEL_FRAME_H = WHEEL_ITEM_H * WHEEL_VISIBLE;
-const WHEEL_PERSPECTIVE = 900;
-/** Higher = longer coast per flick; keep below ~0.995 so it stays controllable. */
-const WHEEL_DECELERATION = Platform.select({
-  ios: 0.993,
-  android: 0.972,
-  default: 0.985,
-});
-const WHEEL_PERSIST_DEBOUNCE_MS = 500;
-const PIXEL_BORDER = 2;
-const PIXEL_CORNER_STEPS = 4;
-const PIXEL_BORDER_INSET = PIXEL_CORNER_STEPS * PIXEL_BORDER;
+const WHEEL_PERSIST_DEBOUNCE_MS = 80;
 
 function clampMins(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
 type TimerPalette = (typeof PALETTE)['dark'];
-
-function PixelCornerSteps({ color, corner }: { color: string; corner: 'tl' | 'tr' | 'bl' | 'br' }) {
-  return (
-    <>
-      {Array.from({ length: PIXEL_CORNER_STEPS }, (_, i) => {
-        const w = (PIXEL_CORNER_STEPS - i) * PIXEL_BORDER * 2;
-        const base: ViewStyle = {
-          position: 'absolute',
-          width: w,
-          height: PIXEL_BORDER,
-          backgroundColor: color,
-        };
-        const step = i * PIXEL_BORDER;
-        if (corner === 'tl') return <View key={`${corner}-${i}`} style={{ ...base, top: step, left: 0 }} />;
-        if (corner === 'tr') return <View key={`${corner}-${i}`} style={{ ...base, top: step, right: 0 }} />;
-        if (corner === 'bl') return <View key={`${corner}-${i}`} style={{ ...base, bottom: step, left: 0 }} />;
-        return <View key={`${corner}-${i}`} style={{ ...base, bottom: step, right: 0 }} />;
-      })}
-    </>
-  );
-}
-
-function PixelBorderBox({
-  children,
-  borderColor,
-  backgroundColor,
-}: {
-  children: ReactNode;
-  borderColor: string;
-  backgroundColor: string;
-}) {
-  const inset = PIXEL_BORDER_INSET;
-  return (
-    <View style={styles.pixelBorderWrap}>
-      <View pointerEvents="none" style={styles.pixelBorderOutline}>
-        <PixelCornerSteps color={borderColor} corner="tl" />
-        <PixelCornerSteps color={borderColor} corner="tr" />
-        <PixelCornerSteps color={borderColor} corner="bl" />
-        <PixelCornerSteps color={borderColor} corner="br" />
-        <View
-          style={[
-            styles.pixelEdgeH,
-            { top: 0, left: inset, right: inset, backgroundColor: borderColor },
-          ]}
-        />
-        <View
-          style={[
-            styles.pixelEdgeH,
-            { bottom: 0, left: inset, right: inset, backgroundColor: borderColor },
-          ]}
-        />
-        <View
-          style={[
-            styles.pixelEdgeV,
-            { left: 0, top: inset, bottom: inset, backgroundColor: borderColor },
-          ]}
-        />
-        <View
-          style={[
-            styles.pixelEdgeV,
-            { right: 0, top: inset, bottom: inset, backgroundColor: borderColor },
-          ]}
-        />
-      </View>
-      <View style={[styles.pixelBorderContent, { margin: inset, backgroundColor }]}>
-        {children}
-      </View>
-    </View>
-  );
-}
 
 type DurationSettingsPanelProps = {
   palette: TimerPalette;
@@ -193,274 +108,29 @@ function DurationSettingsPanel({
 }: DurationSettingsPanelProps) {
   return (
     <View style={styles.settingsWrap}>
-      <PixelBorderBox borderColor={palette.trackBorder} backgroundColor={palette.bg}>
-        <View style={styles.settingsWheelsRow}>
-          <MinuteWheelPicker
-            label="FOCUS"
-            min={MIN_FOCUS_MIN}
-            max={MAX_FOCUS_MIN}
-            value={workMins}
-            palette={palette}
-            onPreview={onPreviewWork}
-            onCommit={onCommitWork}
-          />
-          <MinuteWheelPicker
-            label="BREAK"
-            min={MIN_BREAK_MIN}
-            max={MAX_BREAK_MIN}
-            value={breakMins}
-            palette={palette}
-            onPreview={onPreviewBreak}
-            onCommit={onCommitBreak}
-          />
-        </View>
-      </PixelBorderBox>
-    </View>
-  );
-}
-
-function WheelEdgeFade({ palette, edge }: { palette: TimerPalette; edge: 'top' | 'bottom' }) {
-  const steps = [0.95, 0.7, 0.4, 0.15, 0];
-  return (
-    <View
-      pointerEvents="none"
-      style={[styles.wheelEdgeFade, edge === 'top' ? styles.wheelEdgeFadeTop : styles.wheelEdgeFadeBottom]}
-    >
-      {steps.map((op, i) => (
-        <View
-          key={`${edge}-${i}`}
-          style={{ flex: 1, backgroundColor: palette.bg, opacity: op }}
+      <View style={styles.settingsWheelsRow}>
+        <MinuteWheelPicker
+          label="FOCUS"
+          min={MIN_FOCUS_MIN}
+          max={MAX_FOCUS_MIN}
+          value={workMins}
+          palette={palette}
+          onPreview={onPreviewWork}
+          onCommit={onCommitWork}
         />
-      ))}
-    </View>
-  );
-}
-
-const WheelPickerRow = memo(function WheelPickerRow({
-  index,
-  minute,
-  scrollY,
-  palette,
-}: {
-  index: number;
-  minute: number;
-  scrollY: Animated.Value;
-  palette: TimerPalette;
-}) {
-  const center = index * WHEEL_ITEM_H;
-  const curve = [
-    center - 2 * WHEEL_ITEM_H,
-    center - WHEEL_ITEM_H,
-    center,
-    center + WHEEL_ITEM_H,
-    center + 2 * WHEEL_ITEM_H,
-  ];
-
-  const opacity = scrollY.interpolate({
-    inputRange: curve,
-    outputRange: [0.06, 0.22, 1, 0.22, 0.06],
-    extrapolate: 'clamp',
-  });
-  const scale = scrollY.interpolate({
-    inputRange: curve,
-    outputRange: [0.62, 0.8, 1, 0.8, 0.62],
-    extrapolate: 'clamp',
-  });
-  const rotateX = scrollY.interpolate({
-    inputRange: curve,
-    outputRange: ['36deg', '18deg', '0deg', '-18deg', '-36deg'],
-    extrapolate: 'clamp',
-  });
-  return (
-    <Animated.View
-      style={[
-        styles.wheelPickerItem,
-        { height: WHEEL_ITEM_H, opacity, transform: [{ rotateX }, { scale }] },
-      ]}
-    >
-      <Animated.Text
-        style={[
-          styles.wheelPickerItemText,
-          { color: palette.timer },
-        ]}
-      >
-        {minute} min
-      </Animated.Text>
-    </Animated.View>
-  );
-});
-
-const MinuteWheelPicker = memo(function MinuteWheelPicker({
-  label,
-  min,
-  max,
-  value,
-  palette,
-  onPreview,
-  onCommit,
-}: {
-  label: string;
-  min: number;
-  max: number;
-  value: number;
-  palette: TimerPalette;
-  onPreview: (mins: number) => void;
-  onCommit: (mins: number) => void;
-}) {
-  const scrollRef = useRef<Animated.ScrollView>(null);
-  const lastIndexRef = useRef(clampMins(value, min, max) - min);
-  const lastPreviewIndexRef = useRef(lastIndexRef.current);
-  const lastHapticIndexRef = useRef(lastIndexRef.current);
-  const lastHapticAtRef = useRef(0);
-  const userScrollingRef = useRef(false);
-  const previewRafRef = useRef<number | null>(null);
-  const pendingPreviewYRef = useRef(0);
-  const pendingPreviewHapticRef = useRef(false);
-  const values = useMemo(() => {
-    const arr: number[] = [];
-    for (let m = min; m <= max; m++) arr.push(m);
-    return arr;
-  }, [min, max]);
-
-  const padY = WHEEL_PAD_SLOTS * WHEEL_ITEM_H;
-  const initialY = (clampMins(value, min, max) - min) * WHEEL_ITEM_H;
-  const scrollY = useRef(new Animated.Value(initialY)).current;
-
-  useLayoutEffect(() => {
-    if (userScrollingRef.current) return;
-    const idx = clampMins(value, min, max) - min;
-    const y = idx * WHEEL_ITEM_H;
-    lastIndexRef.current = idx;
-    lastPreviewIndexRef.current = idx;
-    lastHapticIndexRef.current = idx;
-    scrollY.setValue(y);
-    scrollRef.current?.scrollTo({ y, animated: false });
-  }, [value, min, max, scrollY]);
-
-  function centredIndex(y: number) {
-    let index = Math.round(y / WHEEL_ITEM_H);
-    if (index < 0) index = 0;
-    if (index > values.length - 1) index = values.length - 1;
-    return index;
-  }
-
-  function previewAtOffset(y: number, fireHaptic: boolean) {
-    const index = centredIndex(y);
-    if (fireHaptic && index !== lastHapticIndexRef.current) {
-      const now = Date.now();
-      if (now - lastHapticAtRef.current > 70) {
-        lastHapticAtRef.current = now;
-        Haptics.selectionAsync();
-      }
-      lastHapticIndexRef.current = index;
-    }
-    if (index === lastPreviewIndexRef.current) return;
-    lastPreviewIndexRef.current = index;
-    onPreview(values[index]);
-  }
-
-  function schedulePreview(y: number, fireHaptic: boolean) {
-    pendingPreviewYRef.current = y;
-    pendingPreviewHapticRef.current = fireHaptic;
-    if (previewRafRef.current != null) return;
-    previewRafRef.current = requestAnimationFrame(() => {
-      previewRafRef.current = null;
-      previewAtOffset(pendingPreviewYRef.current, pendingPreviewHapticRef.current);
-    });
-  }
-
-  useEffect(() => () => {
-    if (previewRafRef.current != null) {
-      cancelAnimationFrame(previewRafRef.current);
-    }
-  }, []);
-
-  function commitSelection(y: number) {
-    const index = centredIndex(y);
-    lastIndexRef.current = index;
-    lastPreviewIndexRef.current = index;
-    onCommit(values[index]);
-  }
-
-  function finishScroll(e: NativeSyntheticEvent<NativeScrollEvent>, fireHaptic: boolean) {
-    userScrollingRef.current = false;
-    const y = e.nativeEvent.contentOffset.y;
-    if (previewRafRef.current != null) {
-      cancelAnimationFrame(previewRafRef.current);
-      previewRafRef.current = null;
-    }
-    previewAtOffset(y, fireHaptic);
-    commitSelection(y);
-  }
-
-  const onScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: true,
-      listener: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-        schedulePreview(e.nativeEvent.contentOffset.y, userScrollingRef.current);
-      },
-    },
-  );
-
-  const selTop = WHEEL_PAD_SLOTS * WHEEL_ITEM_H;
-
-  return (
-    <View style={styles.wheelPickerCol}>
-      <Text style={[styles.wheelPickerLabel, { color: palette.label }]}>{label}</Text>
-      <View style={styles.wheelPickerFrame}>
-        <WheelEdgeFade palette={palette} edge="top" />
-        <WheelEdgeFade palette={palette} edge="bottom" />
-        <View style={styles.wheelPickerInner} pointerEvents="box-none">
-          <View style={styles.wheelPickerSelLines} pointerEvents="none">
-            <View
-              style={[
-                styles.wheelPickerSelLine,
-                { top: selTop - 1, backgroundColor: palette.trackBorder },
-              ]}
-            />
-            <View
-              style={[
-                styles.wheelPickerSelLine,
-                { top: selTop + WHEEL_ITEM_H, backgroundColor: palette.trackBorder },
-              ]}
-            />
-          </View>
-          <Animated.ScrollView
-          style={styles.wheelPickerScroll}
-          ref={scrollRef}
-          contentOffset={{ x: 0, y: initialY }}
-          nestedScrollEnabled
-          showsVerticalScrollIndicator={false}
-          snapToInterval={WHEEL_ITEM_H}
-          snapToAlignment="start"
-          decelerationRate={WHEEL_DECELERATION}
-          disableIntervalMomentum={false}
-          bounces={false}
-          overScrollMode="never"
-          contentContainerStyle={{ paddingVertical: padY }}
-          scrollEventThrottle={16}
-          onScroll={onScroll}
-          onScrollBeginDrag={() => {
-            userScrollingRef.current = true;
-          }}
-          onScrollEndDrag={e => {
-            const vy = e.nativeEvent.velocity?.y ?? 0;
-            if (Math.abs(vy) < 0.12) {
-              finishScroll(e, true);
-            }
-          }}
-          onMomentumScrollEnd={e => finishScroll(e, true)}
-        >
-          {values.map((m, i) => (
-            <WheelPickerRow key={m} index={i} minute={m} scrollY={scrollY} palette={palette} />
-          ))}
-        </Animated.ScrollView>
-        </View>
+        <MinuteWheelPicker
+          label="BREAK"
+          min={MIN_BREAK_MIN}
+          max={MAX_BREAK_MIN}
+          value={breakMins}
+          palette={palette}
+          onPreview={onPreviewBreak}
+          onCommit={onCommitBreak}
+        />
       </View>
     </View>
   );
-});
+}
 
 export default function FocusTimerScreen() {
   const router = useRouter();
@@ -1567,85 +1237,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'lowercase',
   },
-  pixelBorderWrap: {
-    position: 'relative',
-    width: '100%',
-  },
-  pixelBorderOutline: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  pixelEdgeH: {
-    position: 'absolute',
-    height: PIXEL_BORDER,
-  },
-  pixelEdgeV: {
-    position: 'absolute',
-    width: PIXEL_BORDER,
-  },
-  pixelBorderContent: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
   settingsWheelsRow: {
     flexDirection: 'row',
     gap: 12,
-  },
-  wheelPickerCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  wheelPickerLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 8,
-    letterSpacing: 1.5,
-    marginBottom: 8,
-  },
-  wheelPickerFrame: {
-    width: '100%',
-    height: WHEEL_FRAME_H,
-    overflow: 'hidden',
-  },
-  wheelPickerInner: {
-    height: WHEEL_FRAME_H,
-    transform: [{ perspective: WHEEL_PERSPECTIVE }],
-  },
-  wheelPickerScroll: {
-    height: WHEEL_FRAME_H,
-  },
-  wheelPickerSelLines: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 4,
-  },
-  wheelPickerSelLine: {
-    position: 'absolute',
-    left: 8,
-    right: 8,
-    height: StyleSheet.hairlineWidth * 2,
-    opacity: 0.85,
-  },
-  wheelEdgeFade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: WHEEL_ITEM_H * 1.6,
-    zIndex: 3,
-    flexDirection: 'column',
-  },
-  wheelEdgeFadeTop: {
-    top: 0,
-  },
-  wheelEdgeFadeBottom: {
-    bottom: 0,
-    flexDirection: 'column-reverse',
-  },
-  wheelPickerItem: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  wheelPickerItemText: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 15,
-    letterSpacing: 0.5,
   },
   settingsBtn: {
     width: '100%',

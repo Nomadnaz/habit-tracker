@@ -27,6 +27,11 @@ import {
   type Task,
   type TaskMap,
 } from '@/lib/tasks-core';
+import {
+  mergeAppleIdsIntoTaskMap,
+  syncTaskDoneToApple,
+  syncTaskRemovedFromApple,
+} from '@/lib/apple-sync';
 import { TaskRow } from '@/components/TaskRow';
 import { DragTaskFloatingChip } from '@/components/DragTaskFloatingChip';
 import { useTaskDragFloat } from '@/lib/task-drag-float';
@@ -38,6 +43,7 @@ type DateTaskListProps = {
   userId: string | null;
   listHeader: ReactNode;
   onAddPress: () => void;
+  onEditTask: (task: Task) => void;
   editMode: boolean;
 };
 
@@ -48,6 +54,7 @@ export function DateTaskList({
   userId,
   listHeader,
   onAddPress,
+  onEditTask,
   editMode,
 }: DateTaskListProps) {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
@@ -199,17 +206,30 @@ export function DateTaskList({
       });
     }
     void supabase.from('tasks').update({ done: newDone }).eq('id', id);
+    void syncTaskDoneToApple(task, newDone, {
+      dateKey: key,
+      hour: task.hour,
+      minute: task.minute,
+    }).then(newReminderId => {
+      if (!newReminderId || newReminderId === task.appleReminderId) return;
+      const next = mergeAppleIdsIntoTaskMap(taskMapRef.current, key, id, {
+        appleReminderId: newReminderId,
+      });
+      persist(next);
+    });
   }
 
   function archiveTask(taskId: string) {
     const key = dateKeyRef.current;
     const all = taskMapRef.current[key] ?? [];
+    const task = all.find(t => t.id === taskId);
     const newMap = {
       ...taskMapRef.current,
       [key]: all.map(t => (t.id === taskId ? { ...t, archived: true } : t)),
     };
     persist(newMap);
     void supabase.from('tasks').update({ archived: true }).eq('id', taskId);
+    if (task) void syncTaskRemovedFromApple(task);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
@@ -397,6 +417,7 @@ export function DateTaskList({
               onFirstRowLayout={y => {
                 firstTaskWindowYRef.current = y;
               }}
+              onEditPress={editMode ? onEditTask : undefined}
             />
           ))
         )}

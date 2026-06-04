@@ -2,13 +2,31 @@ import { Platform } from 'react-native';
 import { LayoutAnimation } from 'react-native';
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
-export type Task = { id: string; label: string; done: boolean; archived?: boolean; priority?: Priority };
+export type Task = {
+  id: string;
+  label: string;
+  done: boolean;
+  archived?: boolean;
+  priority?: Priority;
+  /** Scheduled start (local); omit for anytime tasks */
+  hour?: number;
+  minute?: number;
+  /** Event length in minutes (calendar / timed blocks) */
+  durationMins?: number;
+  location?: string;
+  /** iOS Reminders id when synced from the app */
+  appleReminderId?: string;
+  /** iOS Calendar event id when added from calendar day flow */
+  appleEventId?: string;
+};
 export type TaskMap = Record<string, Task[]>;
 
-export const TASK_ROW_SLOT_PX = 50;
+export const TASK_ROW_SLOT_PX = 62;
 export const AUTO_SCROLL_EDGE_PX = 80;
 export const AUTO_SCROLL_STEP_PX = 10;
-export const DELETE_ZONE_X = 92;
+// Full width of the left bin column: row paddingLeft (16) + wheelWrap width (136) = 152.
+// Finger anywhere inside the column triggers the bin zones.
+export const DELETE_ZONE_X = 152;
 export const COMPLETE_HOLD_MS = 450;
 export const COMPLETE_FADE_MS = 400;
 export const TASK_LABEL_COLOR_ACTIVE = '#000000';

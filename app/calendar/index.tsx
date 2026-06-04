@@ -1,5 +1,14 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  useWindowDimensions,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
+} from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,6 +31,8 @@ const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 const MONTHS_BACK = 6;
 const MONTHS_FORWARD = 18;
+const SCROLL_HORIZONTAL_PAD = 16;
+const YEAR_STICKY_OFFSET = 72;
 
 function buildMonthBlocks(anchor: Date): MonthBlock[] {
   const start = new Date(anchor.getFullYear(), anchor.getMonth() - MONTHS_BACK, 1);
@@ -50,6 +61,10 @@ function buildMonthCells(year: number, month: number): (number | null)[] {
 
 export default function CalendarScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const cellWidth = Math.floor((screenWidth - SCROLL_HORIZONTAL_PAD * 2) / 7);
+  const cellHeight = Math.max(56, Math.floor(cellWidth * 1.05));
+
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -60,6 +75,7 @@ export default function CalendarScreen() {
   const todayMonthKey = `${today.getFullYear()}-${today.getMonth()}`;
 
   const [taskMap, setTaskMap] = useState<TaskMap>({});
+  const [visibleYear, setVisibleYear] = useState(today.getFullYear());
   const scrollRef = useRef<ScrollView>(null);
   const sectionOffsetsRef = useRef<Record<string, number>>({});
   const didScrollToTodayRef = useRef(false);
@@ -78,6 +94,7 @@ export default function CalendarScreen() {
     if (y == null) return;
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: false });
     didScrollToTodayRef.current = true;
+    setVisibleYear(today.getFullYear());
   }
 
   function recordSectionOffset(key: string, y: number) {
@@ -85,6 +102,35 @@ export default function CalendarScreen() {
     if (!didScrollToTodayRef.current && key === todayMonthKey) {
       requestAnimationFrame(scrollToTodayMonth);
     }
+  }
+
+  const updateVisibleYear = useCallback(
+    (scrollY: number) => {
+      let year = monthBlocks[0]?.year ?? today.getFullYear();
+      for (const block of monthBlocks) {
+        const offset = sectionOffsetsRef.current[block.key];
+        if (offset != null && offset <= scrollY + YEAR_STICKY_OFFSET) {
+          year = block.year;
+        }
+      }
+      setVisibleYear(prev => (prev === year ? prev : year));
+    },
+    [monthBlocks, today],
+  );
+
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      updateVisibleYear(e.nativeEvent.contentOffset.y);
+    },
+    [updateVisibleYear],
+  );
+
+  function openDay(year: number, month: number, day: number) {
+    const key = dateKey(year, month, day);
+    router.push({
+      pathname: '/calendar/day',
+      params: { date: key },
+    });
   }
 
   const taskCountFor = (year: number, month: number, day: number): number => {
@@ -108,6 +154,7 @@ export default function CalendarScreen() {
           onPress={() => router.back()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={styles.backBtn}
+          activeOpacity={0.7}
         >
           <MaterialCommunityIcons name="arrow-left" size={20} color="#FF4D00" />
           <Text style={styles.backLabel}>TODAY</Text>
@@ -120,21 +167,27 @@ export default function CalendarScreen() {
         </View>
       </View>
 
+      <View style={styles.yearBar}>
+        <Text style={styles.yearText}>{visibleYear}</Text>
+      </View>
+
       <View style={styles.dowRow}>
         {DAY_LABELS.map(d => (
-          <Text key={d} style={styles.dowLabel}>{d}</Text>
+          <Text key={d} style={[styles.dowLabel, { width: cellWidth }]}>{d}</Text>
         ))}
       </View>
 
       <ScrollView
         ref={scrollRef}
+        style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={32}
+        keyboardShouldPersistTaps="always"
       >
         {monthBlocks.map(({ year, month, key }, blockIndex) => {
           const cells = buildMonthCells(year, month);
-          const showYear =
-            blockIndex === 0 || monthBlocks[blockIndex - 1].year !== year;
 
           return (
             <View
@@ -143,45 +196,60 @@ export default function CalendarScreen() {
             >
               <Text style={[styles.monthHeading, blockIndex === 0 && styles.monthHeadingFirst]}>
                 {MONTH_NAMES[month]}
-                {showYear ? ` ${year}` : ''}
               </Text>
 
-              <View style={styles.monthContainer}>
-                <View style={styles.grid}>
-                  {cells.map((day, idx) => {
-                    if (day === null) {
-                      return <View key={`blank-${key}-${idx}`} style={styles.cell} />;
-                    }
-
-                    const count = taskCountFor(year, month, day);
-                    const done = doneCountFor(year, month, day);
-                    const allDone = count > 0 && done === count;
-                    const todayDay = isToday(year, month, day);
-
+              <View style={styles.grid}>
+                {cells.map((day, idx) => {
+                  if (day === null) {
                     return (
-                      <TouchableOpacity
-                        key={`${key}-${day}`}
-                        style={[styles.cell, todayDay && styles.cellToday]}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/day',
-                            params: { date: dateKey(year, month, day) },
-                          })
-                        }
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.dayNum, todayDay && styles.dayNumToday]}>
-                          {String(day).padStart(2, '0')}
-                        </Text>
-                        {count > 0 && (
-                          <View style={[styles.taskBadge, allDone && styles.taskBadgeDone]}>
-                            <Text style={styles.taskBadgeText}>{count}</Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
+                      <View
+                        key={`blank-${key}-${idx}`}
+                        style={{ width: cellWidth, height: cellHeight }}
+                      />
                     );
-                  })}
-                </View>
+                  }
+
+                  const count = taskCountFor(year, month, day);
+                  const done = doneCountFor(year, month, day);
+                  const allDone = count > 0 && done === count;
+                  const todayDay = isToday(year, month, day);
+
+                  return (
+                    <TouchableOpacity
+                      key={`${key}-${day}`}
+                      style={[
+                        styles.cell,
+                        { width: cellWidth, height: cellHeight },
+                        todayDay && styles.cellToday,
+                      ]}
+                      onPress={() => openDay(year, month, day)}
+                      activeOpacity={0.65}
+                      delayPressIn={0}
+                    >
+                      <Text style={[styles.dayNum, todayDay && styles.dayNumToday]}>
+                        {day}
+                      </Text>
+                      {count > 0 && (
+                        <View
+                          style={[
+                            styles.taskBadge,
+                            allDone && styles.taskBadgeDone,
+                            todayDay && styles.taskBadgeToday,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.taskBadgeText,
+                              todayDay && styles.taskBadgeTextToday,
+                            ]}
+                          >
+                            {count}
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           );
@@ -200,7 +268,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 14,
+    paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -243,87 +311,107 @@ const styles = StyleSheet.create({
     color: '#1A1714',
     letterSpacing: 2,
   },
-  dowRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 8,
+  yearBar: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E1DA',
+  },
+  yearText: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 36,
+    color: '#FF4D00',
+    letterSpacing: 2,
+  },
+  dowRow: {
+    flexDirection: 'row',
+    paddingHorizontal: SCROLL_HORIZONTAL_PAD,
+    marginBottom: 8,
+    paddingTop: 10,
     paddingBottom: 8,
   },
   dowLabel: {
-    flex: 1,
     textAlign: 'center',
     fontFamily: 'PixeloidSans_700Bold',
     fontSize: 9,
     color: '#C7C1B8',
     letterSpacing: 1,
   },
+  scroll: {
+    flex: 1,
+  },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SCROLL_HORIZONTAL_PAD,
     paddingBottom: 40,
   },
   monthHeading: {
     fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 15,
+    fontSize: 24,
     color: '#1A1714',
     letterSpacing: 2,
-    marginTop: 22,
-    marginBottom: 10,
-    paddingHorizontal: 4,
+    marginTop: 28,
+    marginBottom: 12,
+    paddingHorizontal: 2,
   },
   monthHeadingFirst: {
-    marginTop: 4,
-  },
-  monthContainer: {
-    backgroundColor: '#FCFBF9',
-    borderWidth: 1,
-    borderColor: '#E5E1DA',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    marginBottom: 4,
+    marginTop: 8,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   cell: {
-    width: `${100 / 7}%` as any,
-    aspectRatio: 0.9,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
     borderRadius: 8,
+    overflow: 'visible',
   },
   cellToday: {
     backgroundColor: '#FF4D00',
-    borderRadius: 8,
   },
   dayNum: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 13,
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 22,
     color: '#1A1714',
+    letterSpacing: 1,
+    lineHeight: 22,
+    textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   dayNumToday: {
     color: '#FCFBF9',
   },
   taskBadge: {
-    marginTop: 3,
+    position: 'absolute',
+    top: 3,
+    right: 3,
     backgroundColor: '#FF4D00',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
+    borderRadius: 8,
+    minWidth: 14,
+    height: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
+    zIndex: 1,
   },
   taskBadgeDone: {
     backgroundColor: '#4CAF50',
   },
+  taskBadgeToday: {
+    backgroundColor: '#FCFBF9',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 77, 0, 0.35)',
+  },
   taskBadgeText: {
     fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 9,
+    fontSize: 7,
     color: '#FCFBF9',
+    lineHeight: 9,
+    includeFontPadding: false,
+  },
+  taskBadgeTextToday: {
+    color: '#FF4D00',
   },
 });

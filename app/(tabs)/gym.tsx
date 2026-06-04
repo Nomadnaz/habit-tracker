@@ -4,10 +4,10 @@
 // (a local AsyncStorage store). Water + weight are fully interactive.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Modal, Pressable, TextInput, KeyboardAvoidingView, Platform,
+  Modal, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -19,15 +19,23 @@ import {
   loadBodyData, addWater, logWeight,
   todaySteps, todayWaterMl, latestWeight, weightHistory,
   buildDayGrid, stepsSquareState, trainingDayType,
-  goalStatus, formatSleep,
-  type BodyData, type Movement,
+  goalStatus, formatSleep, refreshAppleHealthIfConnected,
+  type BodyData,
 } from '@/lib/body-data';
-import { ensureSeeded } from '@/lib/workout-data';
+import {
+  connectAndSyncAppleHealth,
+  isAppleHealthSupported,
+} from '@/lib/apple-health';
+import {
+  ensureSeeded,
+  getBodyWorkoutPreview,
+  type BodyWorkoutPreview,
+  type BodyMovement,
+} from '@/lib/workout-data';
 import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
 
 // ── Design tokens (match the rest of the app) ──────────────────────────────
 const ORANGE = '#FF4D00';
-const PALE   = '#FF9A6B';
 const INK     = '#1A1714';
 const MUTED   = '#8C857B';
 const FAINT    = '#C7C1B8';
@@ -38,7 +46,7 @@ const GREEN    = '#4CAF50';
 /** Same face as Today tab date wheel numbers (wheelNum). */
 const NUM_FONT = 'PixeloidSans_400Regular';
 
-const MOVEMENTS: Movement[] = ['push', 'pull', 'legs', 'upper', 'lower'];
+const MOVEMENTS: BodyMovement[] = ['push', 'pull', 'legs', 'upper', 'lower'];
 
 // ── Small line chart used for every sparkline / strength graph ──────────────
 function Spark({
@@ -158,14 +166,35 @@ export default function BodyScreen() {
   const router = useRouter();
   const { unitSystem } = useUnitPreference();
   const [data, setData] = useState<BodyData | null>(null);
-  const [activeMovement, setActiveMovement] = useState<Movement>('pull');
+  const [activeMovement, setActiveMovement] = useState<BodyMovement>('pull');
+  const [workoutPreview, setWorkoutPreview] = useState<BodyWorkoutPreview | null>(null);
   const [waterOpen, setWaterOpen]   = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightInput, setWeightInput] = useState('');
+  const [healthSyncing, setHealthSyncing] = useState(false);
+  const refreshWorkoutPreview = useCallback(async (movement: BodyMovement) => {
+    await ensureSeeded();
+    setWorkoutPreview(await getBodyWorkoutPreview(movement));
+  }, []);
+
   useFocusEffect(useCallback(() => {
-    loadBodyData().then(d => { setData(d); setActiveMovement(d.activeMovement); });
+    loadBodyData().then(d => {
+      const movement = d.activeMovement as BodyMovement;
+      setData(d);
+      setActiveMovement(movement);
+      void refreshWorkoutPreview(movement);
+      if (d.appleHealthConnected) {
+        void refreshAppleHealthIfConnected().then(updated => {
+          if (updated) setData(updated);
+        });
+      }
+    });
     ensureSeeded();
-  }, []));
+  }, [refreshWorkoutPreview]));
+
+  useEffect(() => {
+    void refreshWorkoutPreview(activeMovement);
+  }, [activeMovement, refreshWorkoutPreview]);
 
   if (!data) {
     return <SafeAreaView style={styles.container} edges={['top']} />;
@@ -180,7 +209,15 @@ export default function BodyScreen() {
   const proteinPct = data.proteinTodayG / data.proteinGoalG;
   const sleepPct   = data.sleepMins / (8 * 60);
 
-  const activeTemplate = data.templates.find(t => t.movement === activeMovement);
+  const preview = workoutPreview;
+
+  function openWorkoutDetail() {
+    if (preview?.templateId) {
+      router.push({ pathname: '/workout-detail', params: { templateId: preview.templateId } });
+      return;
+    }
+    router.push('/workouts');
+  }
 
   // Progress-bar squares (≈84% filled at 16,842 / 20,000).
   const BAR_SQUARES = 16;
@@ -190,6 +227,23 @@ export default function BodyScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const d = await addWater(ml);
     setData({ ...d });
+  }
+
+  async function handleAppleHealth() {
+    if (healthSyncing) return;
+    setHealthSyncing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = await connectAndSyncAppleHealth(56);
+    setHealthSyncing(false);
+    if (result.ok && result.data) {
+      setData(result.data);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
+    Alert.alert(
+      'Apple Health',
+      result.error ?? 'Could not connect to Apple Health.',
+    );
   }
 
   async function saveWeight() {
@@ -246,8 +300,15 @@ export default function BodyScreen() {
         {/* ── Today's steps + heatmap ────────────────────── */}
         <View style={styles.sectionRow}>
           <View style={styles.stepsLeft}>
-            <Text style={styles.sectionLabel}>TODAY'S STEPS</Text>
-            <Text style={styles.bigNumber}>{steps.toLocaleString()}</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/steps')}>
+              <Text style={styles.sectionLabel}>TODAY'S STEPS</Text>
+              <Text style={styles.bigNumber}>{steps.toLocaleString()}</Text>
+            </TouchableOpacity>
+            {data.appleHealthConnected && data.activityToday && data.activityToday.distanceM > 0 && (
+              <Text style={styles.walkDistance}>
+                {(data.activityToday.distanceM / 1000).toFixed(2)} KM WALKED TODAY
+              </Text>
+            )}
             <View style={styles.goalRow}>
               <Text style={styles.goalText}>GOAL: {data.stepsGoal.toLocaleString()} STEPS</Text>
               <Text style={styles.goalPct}>{Math.round(stepsPct * 100)}%</Text>
@@ -257,6 +318,33 @@ export default function BodyScreen() {
                 <View key={i} style={[styles.progressSquare, i < filledSquares && styles.progressSquareFilled]} />
               ))}
             </View>
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={styles.healthConnectBtn}
+                onPress={handleAppleHealth}
+                activeOpacity={0.85}
+                disabled={healthSyncing}
+              >
+                {healthSyncing ? (
+                  <ActivityIndicator size="small" color={ORANGE} />
+                ) : (
+                  <MaterialCommunityIcons name="heart-pulse" size={14} color={ORANGE} />
+                )}
+                <Text style={styles.healthConnectText}>
+                  {data.appleHealthConnected ? 'SYNC APPLE HEALTH' : 'CONNECT APPLE HEALTH'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {Platform.OS === 'ios' && !isAppleHealthSupported() && (
+              <Text style={styles.healthHint}>
+                Rebuild the iOS app (npx expo run:ios) to enable HealthKit — not available in Expo Go.
+              </Text>
+            )}
+            {data.appleHealthLastSync && (
+              <Text style={styles.healthSynced}>
+                Last sync {new Date(data.appleHealthLastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            )}
           </View>
 
           <View style={styles.heatRight}>
@@ -266,8 +354,8 @@ export default function BodyScreen() {
               { kind: 'partial', label: 'PARTIAL' },
               { kind: 'missed', label: 'MISSED' },
             ]} />
-            <TouchableOpacity style={styles.viewLink}>
-              <Text style={styles.viewLinkText}>VIEW YEAR ›</Text>
+            <TouchableOpacity style={styles.viewLink} onPress={() => router.push('/steps')}>
+              <Text style={styles.viewLinkText}>VIEW STEPS ›</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -310,7 +398,11 @@ export default function BodyScreen() {
             <TouchableOpacity
               key={m}
               style={[styles.pill, activeMovement === m && styles.pillActive]}
-              onPress={() => { setActiveMovement(m); Haptics.selectionAsync(); }}
+              onPress={() => {
+                setActiveMovement(m);
+                Haptics.selectionAsync();
+                void refreshWorkoutPreview(m);
+              }}
               activeOpacity={0.8}
             >
               <Text style={[styles.pillText, activeMovement === m && styles.pillTextActive]}>
@@ -323,46 +415,62 @@ export default function BodyScreen() {
         {/* ── Active workout (exercise list) ─────────────── */}
         <View style={styles.workoutCard}>
           <View style={styles.workoutHeader}>
-            <Text style={styles.workoutTitle}>{activeTemplate?.name ?? 'NO TEMPLATE'}</Text>
-            <TouchableOpacity><Text style={styles.viewLinkText}>VIEW LOG ›</Text></TouchableOpacity>
+            <Text style={styles.workoutTitle}>{preview?.templateName ?? 'NO TEMPLATE'}</Text>
+            <TouchableOpacity onPress={openWorkoutDetail} activeOpacity={0.8}>
+              <Text style={styles.viewLinkText}>VIEW LOG ›</Text>
+            </TouchableOpacity>
           </View>
 
-          {activeTemplate && activeTemplate.exercises.length > 0 ? (
+          {preview && preview.totalCount > 0 ? (
             <>
-              <Text style={styles.exerciseCount}>{activeTemplate.exercises.length + activeTemplate.extraCount} EXERCISES</Text>
-              {activeTemplate.exercises.map((ex, idx) => {
-                const maxWeight = Math.max(...ex.sets.map(s => s.weightKg));
+              <Text style={styles.exerciseCount}>{preview.totalCount} EXERCISES</Text>
+              {preview.previewExercises.map((ex, idx) => {
+                const atOrAbovePb = ex.pbMaxKg != null && ex.weightKg >= ex.pbMaxKg;
                 return (
-                  <View key={ex.name} style={[styles.exerciseRow, idx > 0 && styles.exerciseRowBorder]}>
+                  <TouchableOpacity
+                    key={ex.id}
+                    style={[styles.exerciseRow, idx > 0 && styles.exerciseRowBorder]}
+                    activeOpacity={0.85}
+                    onPress={openWorkoutDetail}
+                  >
                     <MaterialCommunityIcons name={ex.icon as any} size={26} color={INK} style={styles.exerciseIcon} />
                     <Text style={styles.exerciseName}>{ex.name}</Text>
-                    <View style={styles.setList}>
-                      {ex.sets.map((s, i) => (
-                        <Text
-                          key={i}
-                          style={[styles.setText, s.weightKg === maxWeight && styles.setTextPb]}
-                        >
-                          {formatWeightWithUnit(s.weightKg, unitSystem)} × {s.reps}
+                    <View style={styles.exerciseMeta}>
+                      <Text style={[styles.setText, atOrAbovePb && styles.setTextPb]}>
+                        {formatWeightWithUnit(ex.weightKg, unitSystem)} × {ex.reps}
+                      </Text>
+                      {ex.pbDeltaKg != null && ex.pbDeltaKg > 0 ? (
+                        <View style={styles.pbBadge}>
+                          <Text style={styles.pbBadgeText}>
+                            PB +{formatWeightWithUnit(ex.pbDeltaKg, unitSystem)}
+                          </Text>
+                        </View>
+                      ) : ex.pbMaxKg != null ? (
+                        <Text style={styles.pbMetaText}>
+                          PB {formatWeightWithUnit(ex.pbMaxKg, unitSystem)}
                         </Text>
-                      ))}
+                      ) : null}
                     </View>
-                    {ex.pbDeltaKg ? (
-                      <View style={styles.pbBadge}>
-                        <Text style={styles.pbBadgeText}>PB +{formatWeightWithUnit(ex.pbDeltaKg, unitSystem)}</Text>
-                      </View>
-                    ) : null}
                     <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
-              {activeTemplate.extraCount > 0 && (
-                <TouchableOpacity style={styles.moreRow}>
-                  <Text style={styles.moreText}>+ {activeTemplate.extraCount} MORE EXERCISES</Text>
+              {preview.extraCount > 0 && (
+                <TouchableOpacity style={styles.moreRow} activeOpacity={0.85} onPress={openWorkoutDetail}>
+                  <Text style={styles.moreText}>
+                    + {preview.extraCount} MORE EXERCISE{preview.extraCount === 1 ? '' : 'S'}
+                  </Text>
                 </TouchableOpacity>
               )}
             </>
           ) : (
-            <Text style={styles.emptyTemplate}>No exercises yet — tap to build this workout.</Text>
+            <TouchableOpacity activeOpacity={0.85} onPress={openWorkoutDetail}>
+              <Text style={styles.emptyTemplate}>
+                {preview?.templateId
+                  ? 'No exercises yet — tap to build this workout.'
+                  : `No ${activeMovement.toUpperCase()} workout yet — tap to create one.`}
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -380,7 +488,7 @@ export default function BodyScreen() {
               <Text style={styles.liftValue}>{lift.oneRmKg}<Text style={styles.liftUnit}>KG</Text></Text>
               <Text style={styles.lift1rm}>1RM</Text>
               <Spark points={lift.history} dots width={86} height={26} />
-              <Text style={styles.liftDelta}>+{lift.deltaKg}KG vs last month</Text>
+              <Text style={styles.liftDelta} numberOfLines={1}>+{lift.deltaKg}KG vs last month</Text>
             </View>
           ))}
         </View>
@@ -414,7 +522,7 @@ export default function BodyScreen() {
 
         {/* ── Recovery ───────────────────────────────────── */}
         <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>RECOVERY</Text>
-        <View style={styles.recoveryRow}>
+        <View style={styles.recoveryCard}>
           <Recovery icon="moon-waning-crescent" label="SLEEP" value={formatSleep(data.sleepMins)} status={goalStatus(sleepPct)} />
           <View style={styles.statDivider} />
           <TouchableOpacity style={styles.recoveryItem} activeOpacity={0.85} onPress={() => setWaterOpen(true)}>
@@ -524,7 +632,7 @@ const hm = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F2ED' },
-  scroll: { paddingBottom: 28 },
+  scroll: { paddingBottom: 48 },
 
   // Header
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
@@ -553,12 +661,51 @@ const styles = StyleSheet.create({
 
   stepsLeft: { flex: 1, paddingRight: 14 },
   bigNumber: { fontFamily: NUM_FONT, fontSize: 38, color: ORANGE, marginTop: 6 },
+  walkDistance: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 8,
+    color: MUTED,
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
   goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   goalText: { fontFamily: 'PixeloidSans_400Regular', fontSize: 8, color: MUTED },
   goalPct: { fontFamily: NUM_FONT, fontSize: 10, color: INK },
   progressBar: { flexDirection: 'row', marginTop: 8, gap: 2 },
   progressSquare: { flex: 1, height: 12, borderWidth: 1, borderColor: '#D8D2C8', borderRadius: 0 },
   progressSquareFilled: { backgroundColor: ORANGE, borderColor: ORANGE },
+  healthConnectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: ORANGE,
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  healthConnectText: {
+    fontFamily: 'PixeloidSans_700Bold',
+    fontSize: 8,
+    color: ORANGE,
+    letterSpacing: 0.5,
+  },
+  healthHint: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 7,
+    color: MUTED,
+    marginTop: 6,
+    lineHeight: 11,
+    maxWidth: 200,
+  },
+  healthSynced: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 7,
+    color: FAINT,
+    marginTop: 4,
+  },
 
   heatRight: { alignItems: 'flex-start' },
   viewLink: { marginTop: 6 },
@@ -596,10 +743,11 @@ const styles = StyleSheet.create({
   exerciseRowBorder: { borderTopWidth: 1, borderTopColor: BORDER },
   exerciseIcon: { marginRight: 12, width: 30 },
   exerciseName: { fontFamily: 'PixeloidSans_700Bold', fontSize: 10, color: INK, flex: 1 },
-  setList: { marginRight: 10 },
+  exerciseMeta: { marginRight: 10, alignItems: 'flex-end', gap: 4 },
   setText: { fontFamily: 'PixeloidSans_400Regular', fontSize: 9, color: INK, lineHeight: 15, textAlign: 'right' },
   setTextPb: { color: ORANGE },
-  pbBadge: { backgroundColor: ORANGE, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 4, marginRight: 8 },
+  pbMetaText: { fontFamily: 'PixeloidSans_400Regular', fontSize: 8, color: MUTED, textAlign: 'right', letterSpacing: 0.5 },
+  pbBadge: { backgroundColor: ORANGE, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3, alignSelf: 'flex-end' },
   pbBadgeText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 8, color: '#FFFFFF' },
   moreRow: { borderTopWidth: 1, borderTopColor: BORDER, paddingTop: 12, marginTop: 2, alignItems: 'center' },
   moreText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 9, color: ORANGE, letterSpacing: 1 },
@@ -611,18 +759,18 @@ const styles = StyleSheet.create({
   liftCard: { flex: 1, backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 10 },
   liftName: { fontFamily: 'PixeloidSans_400Regular', fontSize: 7, color: MUTED, marginTop: 6, letterSpacing: 1 },
   liftValue: { fontFamily: NUM_FONT, fontSize: 20, color: ORANGE, marginTop: 4 },
-  liftUnit: { fontFamily: NUM_FONT, fontSize: 10 },
+  liftUnit: { fontFamily: 'PixeloidSans_700Bold', fontSize: 10 },
   lift1rm: { fontFamily: 'PixeloidSans_400Regular', fontSize: 7, color: MUTED, marginBottom: 6 },
   liftDelta: { fontFamily: 'PixeloidSans_400Regular', fontSize: 7, color: MUTED, marginTop: 6 },
 
-  metricCard: { flex: 1, backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 10 },
+  metricCard: { flex: 1, backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 10, minHeight: 120 },
   metricLabel: { fontFamily: 'PixeloidSans_400Regular', fontSize: 7, color: MUTED, marginTop: 6, letterSpacing: 1 },
   metricValue: { fontFamily: NUM_FONT, fontSize: 15, color: INK, marginTop: 4, marginBottom: 4 },
   metricSub: { fontFamily: NUM_FONT, fontSize: 12, color: ORANGE },
   metricSubTiny: { fontFamily: 'PixeloidSans_400Regular', fontSize: 7, color: MUTED, marginTop: 4 },
 
-  // Recovery
-  recoveryRow: { flexDirection: 'row', marginHorizontal: 16, paddingVertical: 6, alignItems: 'center' },
+  // Recovery — wrapped in a card like every other section
+  recoveryCard: { flexDirection: 'row', marginHorizontal: 16, paddingVertical: 16, paddingHorizontal: 8, alignItems: 'center', backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER },
   recoveryItem: { flex: 1, alignItems: 'center', gap: 6 },
   recoveryValue: { fontFamily: NUM_FONT, fontSize: 16, color: ORANGE },
   recoveryStatus: { fontFamily: 'PixeloidSans_400Regular', fontSize: 8, color: MUTED, letterSpacing: 1 },
