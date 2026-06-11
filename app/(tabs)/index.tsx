@@ -37,6 +37,11 @@ import {
   saveFocusSettings,
   writeFocusSettingsLocal,
 } from '@/lib/focus-settings';
+import {
+  loadBodyData,
+  getTrackerBarItems,
+  refreshAppleHealthIfConnected,
+} from '@/lib/body-data';
 
 import {
   View,
@@ -78,6 +83,19 @@ import {
   type Task,
   type TaskMap,
 } from '@/lib/tasks-core';
+import {
+  mergeAppleIdsIntoTaskMap,
+  syncNewTaskToApple,
+  syncTaskDoneToApple,
+  syncTaskRemovedFromApple,
+  syncTaskScheduleToApple,
+} from '@/lib/apple-sync';
+import { defaultReminderTime } from '@/lib/reminder-time';
+import { useAppleReminderSync } from '@/lib/use-apple-reminder-sync';
+import { TaskModalFields } from '@/components/TaskModalFields';
+import { WHEEL_DECELERATION } from '@/components/WheelPicker';
+import { buildDateOptions, findTaskDateKey, moveTaskInMap } from '@/lib/task-schedule';
+import { TASK_SELECT_COLUMNS, taskFromDbRow, taskToDbRow } from '@/lib/task-supabase';
 
 // Enable LayoutAnimation on Android (iOS enables it automatically).
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -173,14 +191,26 @@ function formatOrdinal(day: number): string {
   return `${day}TH`;
 }
 
-// Static data for the tracker bar at the bottom of the screen.
-// These are placeholder values — real step/calorie data would come from the phone's health APIs.
-const TRACKERS = [
-  { icon: 'shoe-print',       top: "TODAY'S STEPS", value: '16,842', unit: 'STEPS' },
-  { icon: 'clock-outline',    top: 'ACTIVE TIME',   value: '2:14',   unit: 'HRS'   },
-  { icon: 'fire',             top: 'CALORIES',       value: '1,126',  unit: 'KCAL'  },
-  { icon: 'image-filter-hdr', top: 'ELEVATION',      value: '612',    unit: 'M'     },
-] as const;
+const DEFAULT_TRACKERS = getTrackerBarItems({
+  workoutsTotal: 0,
+  stepsThisYear: 0,
+  streak: 0,
+  stepsGoal: 20000,
+  stepsHistory: {},
+  nextSession: { name: '', when: '', time: '' },
+  trainingHistory: {},
+  activeMovement: 'pull',
+  templates: [],
+  headlineLifts: [],
+  weightLogs: [],
+  weakestMuscle: { name: '', pct: 0 },
+  strengthTrend: { pct: 0, history: [] },
+  sleepMins: 0,
+  waterLogs: [],
+  waterGoalMl: 3000,
+  proteinTodayG: 0,
+  proteinGoalG: 160,
+});
 
 // The main screen component for the TODAY tab.
 export default function TodayScreen() {
@@ -204,6 +234,7 @@ export default function TodayScreen() {
   const activeSessionRef = useRef<PersistedFocusSession | null>(null);
   const FOCUS_SESSION_TICK_MS = 100;
   const FOCUS_SESSION_SYNC_MS = 2000;
+  const [trackers, setTrackers] = useState(DEFAULT_TRACKERS);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   // Drag refs — stable handlers for RNGH pan gestures (long-press then drag).
   const draggingTaskIdRef  = useRef<string | null>(null);   // mirrors draggingTaskId state
@@ -211,6 +242,10 @@ export default function TodayScreen() {
     useTaskDragFloat();
   const overDeleteRef      = useRef(false);
   const [overDelete, setOverDelete] = useState(false);
+  const overEditRef        = useRef(false);
+  const [overEdit, setOverEdit]     = useState(false);
+  // Measured screen-Y of the midpoint of the left bin column — splits delete (top) from edit (bottom).
+  const binMidYRef         = useRef(0);
   // taskMapRef / selectedKeyRef / userIdRef — stable copies so the PanResponder's
   // closures never go stale when state changes during a drag.
   const taskMapRef     = useRef<TaskMap>({});
@@ -244,12 +279,52 @@ export default function TodayScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  // ── Bottom sheet (shared by "Set focus" and "Add task") ───────────
-  // sheetMode is null when closed, 'focus' when setting the focus name, 'task' when adding a task.
+  // ── Edit mode (pencil icon on task list header) ────────────────────
+  const [editMode,     setEditMode]     = useState(false);
+  const editModeRef = useRef(editMode);
+
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+
+  // ── Bottom sheet (focus slides up; task modal fades in centred) ──
   const [sheetMode,     setSheetMode]     = useState<'focus' | 'task' | null>(null);
   const [sheetText,     setSheetText]     = useState('');
   const [sheetPriority, setSheetPriority] = useState<Priority>('MEDIUM');
+  const [sheetHour, setSheetHour] = useState(() => defaultReminderTime().hour);
+  const [sheetMinute, setSheetMinute] = useState(() => defaultReminderTime().minute);
+  const [sheetDateIndex, setSheetDateIndex] = useState(0);
+  const [sheetLocation, setSheetLocation] = useState('');
+  const dateOptions = useMemo(() => buildDateOptions(new Date()), []);
   const sheetAnim = useRef(new Animated.Value(0)).current; // 0 = hidden, 1 = visible
+  const sheetHourRef = useRef(sheetHour);
+  const sheetMinuteRef = useRef(sheetMinute);
+  const sheetDateIndexRef = useRef(sheetDateIndex);
+  const sheetModeRef = useRef(sheetMode);
+  sheetHourRef.current = sheetHour;
+  sheetMinuteRef.current = sheetMinute;
+  sheetDateIndexRef.current = sheetDateIndex;
+  sheetModeRef.current = sheetMode;
+
+  const onSheetDatePreview = useCallback((i: number) => {
+    sheetDateIndexRef.current = i;
+  }, []);
+  const onSheetDateCommit = useCallback((i: number) => {
+    sheetDateIndexRef.current = i;
+    setSheetDateIndex(i);
+  }, []);
+  const onSheetHourPreview = useCallback((h: number) => {
+    sheetHourRef.current = h;
+  }, []);
+  const onSheetHourCommit = useCallback((h: number) => {
+    sheetHourRef.current = h;
+    setSheetHour(h);
+  }, []);
+  const onSheetMinutePreview = useCallback((m: number) => {
+    sheetMinuteRef.current = m;
+  }, []);
+  const onSheetMinuteCommit = useCallback((m: number) => {
+    sheetMinuteRef.current = m;
+    setSheetMinute(m);
+  }, []);
 
   const sheetEaseOut = Easing.bezier(0.22, 1, 0.36, 1);
   const sheetEaseIn = Easing.bezier(0.4, 0, 0.2, 1);
@@ -257,7 +332,20 @@ export default function TodayScreen() {
   function openSheet(mode: 'focus' | 'task') {
     setSheetText(mode === 'focus' ? focusName : '');
     setSheetPriority('MEDIUM');
+    if (mode === 'task') {
+      const t = defaultReminderTime();
+      setSheetHour(t.hour);
+      setSheetMinute(t.minute);
+      setSheetLocation('');
+      setEditingTaskId(null);
+      const idx = dateOptions.findIndex(d => d.key === selectedKey);
+      setSheetDateIndex(idx >= 0 ? idx : 0);
+    }
     setSheetMode(mode);
+    if (mode === 'task') {
+      sheetAnim.setValue(1);
+      return;
+    }
     sheetAnim.setValue(0);
     Animated.timing(sheetAnim, {
       toValue: 1,
@@ -269,6 +357,12 @@ export default function TodayScreen() {
 
   function closeSheet() {
     Keyboard.dismiss();
+    setEditingTaskId(null);
+    if (sheetMode === 'task') {
+      setSheetMode(null);
+      sheetAnim.setValue(0);
+      return;
+    }
     Animated.timing(sheetAnim, {
       toValue: 0,
       duration: 220,
@@ -342,9 +436,103 @@ export default function TodayScreen() {
       closeSheet();
       return;
     }
-    if (!text) { closeSheet(); return; }
-    if (sheetMode === 'task') addTask(text, sheetPriority);
-    closeSheet();
+    if (sheetMode === 'task') {
+      if (!text) {
+        closeSheet();
+        return;
+      }
+      const label = text.toUpperCase();
+      const dateKey = dateOptions[sheetDateIndexRef.current]?.key ?? selectedKey;
+      const location = sheetLocation.trim().toUpperCase() || undefined;
+      const saveHour = sheetHourRef.current;
+      const saveMinute = sheetMinuteRef.current;
+
+      if (editingTaskId) {
+        const fromKey = findTaskDateKey(taskMap, editingTaskId) ?? selectedKey;
+        const existing = (taskMap[fromKey] ?? []).find(t => t.id === editingTaskId);
+        const newMap = moveTaskInMap(
+          taskMap,
+          fromKey,
+          dateKey,
+          editingTaskId,
+          {
+            label,
+            priority: sheetPriority,
+            hour: saveHour,
+            minute: saveMinute,
+            location,
+            durationMins: existing?.durationMins,
+          },
+          sortActiveTasks,
+        );
+        persist(newMap);
+        const updated = (newMap[dateKey] ?? []).find(t => t.id === editingTaskId);
+        if (userId && updated) {
+          void supabase.from('tasks').update(taskToDbRow(updated, dateKey, userId)).eq('id', editingTaskId);
+        }
+        if (updated) void syncTaskScheduleToApple(updated, { dateKey });
+      } else {
+        const id = generateId();
+        const dayList = taskMap[dateKey] ?? [];
+        const dayActive = dayList.filter(t => !t.archived);
+        const dayArchived = dayList.filter(t => t.archived);
+        const newTask: Task = {
+          id,
+          label,
+          done: false,
+          archived: false,
+          priority: sheetPriority,
+          hour: saveHour,
+          minute: saveMinute,
+          location,
+        };
+        const newMap = {
+          ...taskMap,
+          [dateKey]: [...insertNewActiveTask(dayActive, newTask), ...dayArchived],
+        };
+        persist(newMap);
+        if (userId) {
+          void supabase.from('tasks').insert(taskToDbRow(newTask, dateKey, userId));
+        }
+        void syncNewTaskToApple({
+          label,
+          dateKey,
+          mode: 'reminders-only',
+          hour: saveHour,
+          minute: saveMinute,
+          location,
+          priority: sheetPriority,
+        }).then(ids => {
+          if (!ids.appleReminderId && !ids.appleEventId) return;
+          setTaskMap(prev => {
+            const next = mergeAppleIdsIntoTaskMap(prev, dateKey, id, ids);
+            AsyncStorage.setItem('@tasks', JSON.stringify(next));
+            return next;
+          });
+        });
+      }
+      closeSheet();
+    }
+  }
+
+  function openEditTask(task: Task) {
+    setEditingTaskId(task.id);
+    setSheetText(task.label);
+    setSheetPriority(task.priority ?? 'MEDIUM');
+    setSheetLocation(task.location ?? '');
+    const fromKey = findTaskDateKey(taskMap, task.id) ?? selectedKey;
+    const idx = dateOptions.findIndex(d => d.key === fromKey);
+    setSheetDateIndex(idx >= 0 ? idx : 0);
+    if (task.hour != null && task.minute != null) {
+      setSheetHour(task.hour);
+      setSheetMinute(task.minute);
+    } else {
+      const t = defaultReminderTime();
+      setSheetHour(t.hour);
+      setSheetMinute(t.minute);
+    }
+    setSheetMode('task');
+    sheetAnim.setValue(1);
   }
 
   // The Supabase user ID of the logged-in user.
@@ -372,6 +560,7 @@ export default function TodayScreen() {
     completeTimersRef.current.clear();
   }, []);
   useEffect(() => { userIdRef2.current        = userId;        }, [userId]);
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
 
   const measureTasksScroll = useCallback(() => {
     tasksScrollRef.current?.measureInWindow((_x, y, _w, h) => {
@@ -493,6 +682,15 @@ export default function TodayScreen() {
       }
 
       refreshFocusSessionPreview();
+
+      void (async () => {
+        let body = await loadBodyData();
+        if (body.appleHealthConnected) {
+          const updated = await refreshAppleHealthIfConnected();
+          if (updated) body = updated;
+        }
+        setTrackers(getTrackerBarItems(body));
+      })();
     }, [selectDate, refreshFocusSessionPreview])
   );
 
@@ -533,9 +731,8 @@ export default function TodayScreen() {
       setSelectedKey(DATES[index].key);               // Update selection → task list updates instantly.
 
       // Only tick for real finger scrolls — not for the programmatic jump-to-today on launch.
-      // selectionAsync is the exact haptic Apple uses for its pickers — a crisp, light tick
-      // that's designed to fire in rapid succession without being dropped, even on fast spins.
-      if (userScrollingRef.current) Haptics.selectionAsync();
+      // impactAsync(Light) fires immediately and isn't dropped under load (unlike selectionAsync).
+      if (userScrollingRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }
 
@@ -592,17 +789,16 @@ export default function TodayScreen() {
 
       const { data } = await supabase
         .from('tasks')
-        .select('id, label, done, date, archived')  // Fetch these columns (including archived) from the tasks table.
-        .eq('user_id', uid)               // Only fetch tasks belonging to this user.
-        .order('created_at', { ascending: true }); // Oldest tasks first.
+        .select(TASK_SELECT_COLUMNS)
+        .eq('user_id', uid)
+        .order('created_at', { ascending: true });
 
       if (data && data.length > 0) {
-        // Group the flat list of tasks by their date key, building a TaskMap.
-        // We keep archived tasks here too — they're filtered out of the visible list below.
         const seeded: TaskMap = {};
         for (const row of data) {
-          if (!seeded[row.date]) seeded[row.date] = []; // Create the array for this date if needed.
-          seeded[row.date].push({ id: row.id, label: row.label, done: row.done, archived: row.archived });
+          const dateKey = String(row.date);
+          if (!seeded[dateKey]) seeded[dateKey] = [];
+          seeded[dateKey].push(taskFromDbRow(row as Record<string, unknown>));
         }
         const normalized = normalizeTaskMap(seeded);
         setTaskMap(normalized);
@@ -612,6 +808,22 @@ export default function TodayScreen() {
     };
     init();
   }, []); // The empty array [] means: only run this once, when the component first mounts.
+
+  useAppleReminderSync(
+    taskMap,
+    setTaskMap,
+    userId,
+    changes => {
+      if (changes.some(c => c.done)) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    },
+    imports => {
+      if (imports.length > 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    },
+  );
 
   // ALL tasks stored for the selected date — including archived ones.
   // We use this version when SAVING changes, so archived tasks aren't accidentally lost.
@@ -691,29 +903,26 @@ export default function TodayScreen() {
     }
 
     supabase.from('tasks').update({ done: newDone }).eq('id', id).then(() => {});
-  }
-
-  // Creates a new task for the currently selected date.
-  function addTask(label: string, priority: Priority) {
-    const id = generateId();          // Create a unique ID for this task.
-
-    const archivedTasks = allTasks.filter(t => t.archived);
-    const active = allTasks.filter(t => !t.archived);
-    const newMap = {
-      ...taskMap,
-      [selectedKey]: [
-        ...insertNewActiveTask(active, { id, label, done: false, archived: false, priority }),
-        ...archivedTasks,
-      ],
-    };
-    persist(newMap);
-
-    if (userId) supabase.from('tasks').insert({ id, user_id: userId, date: selectedKey, label, done: false, priority }).then(() => {});
+    void syncTaskDoneToApple(task, newDone, {
+      dateKey: selectedKey,
+      hour: task.hour,
+      minute: task.minute,
+    }).then(newReminderId => {
+      if (!newReminderId || newReminderId === task.appleReminderId) return;
+      setTaskMap(prev => {
+        const next = mergeAppleIdsIntoTaskMap(prev, selectedKey, id, {
+          appleReminderId: newReminderId,
+        });
+        AsyncStorage.setItem('@tasks', JSON.stringify(next));
+        return next;
+      });
+    });
   }
 
   // Archives a task: hides it from the active list but keeps it forever
   // (on the device AND in the cloud) so it can be shown in a history screen later.
   function archiveTask(id: string) {
+    const task = allTasks.find(t => t.id === id);
     // Build a new task map where the matching task is marked archived (not removed).
     const newMap = {
       ...taskMap,
@@ -722,6 +931,8 @@ export default function TodayScreen() {
       ),
     };
     persist(newMap); // Save locally.
+
+    if (task) void syncTaskRemovedFromApple(task);
 
     // Also mark it archived in Supabase in the background — we UPDATE the row, never delete it.
     // If Supabase blocks or fails the update, we log a warning to the terminal.
@@ -807,10 +1018,23 @@ export default function TodayScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }
 
+  // Called from endDrag when task dropped on edit zone. Ref so it's always current.
+  const openEditFromDragRef = useRef((_taskId: string) => {});
+  useEffect(() => {
+    openEditFromDragRef.current = (taskId: string) => {
+      const key = selectedKeyRef2.current;
+      const task = (taskMapRef.current[key] ?? []).find(t => t.id === taskId);
+      if (task) openEditTask(task);
+    };
+  });
+
   // Stable endDrag — reads from refs so drag handlers can call it safely.
   const endDragRef = useRef((taskId: string) => {
     stopAutoScrollRef.current();
-    if (overDeleteRef.current) {
+    if (overEditRef.current) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setTimeout(() => openEditFromDragRef.current(taskId), 80);
+    } else if (overDeleteRef.current) {
       const currentMap = taskMapRef.current;
       const key = selectedKeyRef2.current;
       const all = currentMap[key] ?? [];
@@ -835,8 +1059,10 @@ export default function TodayScreen() {
       }
     }
     overDeleteRef.current = false;
+    overEditRef.current   = false;
     dragTargetIdxRef.current = null;
     setOverDelete(false);
+    setOverEdit(false);
     setDragTargetIdx(null);
     draggingTaskIdRef.current = null;
     setDraggingTaskId(null);
@@ -854,16 +1080,25 @@ export default function TodayScreen() {
       syncColumnLeft(taskColLeftRef.current);
       updateAutoScrollRef.current(pageY);
 
-      const inDelete = pageX < DELETE_ZONE_X;
+      const inBin    = pageX < DELETE_ZONE_X;
+      const inDelete = inBin && pageY < binMidYRef.current;
+      const inEdit   = inBin && pageY >= binMidYRef.current;
+
       if (inDelete !== overDeleteRef.current) {
         overDeleteRef.current = inDelete;
         setOverDelete(inDelete);
-        Haptics.impactAsync(
-          inDelete ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light,
-        );
+        if (inDelete) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
+      if (inEdit !== overEditRef.current) {
+        overEditRef.current = inEdit;
+        setOverEdit(inEdit);
+        if (inEdit) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      // Clear delete when hovering edit zone and vice-versa.
+      if (!inDelete && overDeleteRef.current) { overDeleteRef.current = false; setOverDelete(false); }
+      if (!inEdit   && overEditRef.current)   { overEditRef.current   = false; setOverEdit(false);   }
 
-      if (!inDelete) {
+      if (!inBin) {
         const key = selectedKeyRef2.current;
         const active = (taskMapRef.current[key] ?? []).filter(t => !t.archived);
         const target = computeDropIndexFromFinger(pageY, active.length);
@@ -878,6 +1113,8 @@ export default function TodayScreen() {
     };
 
     handleDragEndRef.current = (taskId: string) => {
+      // Capture the edit flag before endDrag clears it.
+      const wasEdit = overEditRef.current;
       if (draggingTaskIdRef.current === taskId) endDragRef.current(taskId);
     };
   });
@@ -941,13 +1178,18 @@ export default function TodayScreen() {
           style={[styles.wheelWrap, draggingTaskId ? styles.deleteBinCol : { opacity: wheelReady ? 1 : 0 }]}
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
+            // Record the screen-Y midpoint so we can split the bin into delete (top) / edit (bottom).
+            const { y } = e.nativeEvent.layout;
+            binMidYRef.current = insets.top + y + h / 2;
             const next = Math.floor(h / VISIBLE);
             const bandTop = Math.round((h - next) / 2);
             if (next > 0 && (next !== itemH || bandTop !== wheelBandTop)) {
-              const index = DATES.findIndex(d => d.key === selectedKeyRef.current);
-              const safe = index >= 0 ? index : TODAY_INDEX;
               setItemH(next);
               setWheelBandTop(bandTop);
+              // Don't re-seat the wheel during task modal / active finger scroll (breaks sync).
+              if (sheetModeRef.current === 'task' || userScrollingRef.current) return;
+              const index = DATES.findIndex(d => d.key === selectedKeyRef.current);
+              const safe = index >= 0 ? index : TODAY_INDEX;
               scrollY.setValue(safe * next);
               if (wheelInitializedRef.current) {
                 requestAnimationFrame(() => {
@@ -957,17 +1199,30 @@ export default function TodayScreen() {
             }
           }}
         >
-          {/* While dragging, show the delete bin instead of the date wheel. */}
+          {/* While dragging: two zones — delete (top) and edit (bottom). Always split. */}
           {draggingTaskId ? (
             <>
-              <MaterialCommunityIcons
-                name={overDelete ? 'trash-can' : 'trash-can-outline'}
-                size={48}
-                color={overDelete ? '#FCFBF9' : '#FF4D00'}
-              />
-              <Text style={[styles.deleteBinLabel, overDelete && styles.deleteBinLabelActive]}>
-                {overDelete ? 'RELEASE\nTO\nDELETE' : 'DRAG\nHERE\nTO\nDELETE'}
-              </Text>
+              <View style={[styles.binHalf, overDelete && styles.binHalfDeleteActive]}>
+                <MaterialCommunityIcons
+                  name={overDelete ? 'trash-can' : 'trash-can-outline'}
+                  size={28}
+                  color={overDelete ? '#FCFBF9' : '#FF4D00'}
+                />
+                <Text style={[styles.binHalfLabel, overDelete && styles.binHalfLabelActive]}>
+                  {overDelete ? 'RELEASE' : 'DELETE'}
+                </Text>
+              </View>
+              <View style={styles.binDivider} />
+              <View style={[styles.binHalf, overEdit && styles.binHalfEditActive]}>
+                <MaterialCommunityIcons
+                  name={overEdit ? 'pencil' : 'pencil-outline'}
+                  size={28}
+                  color={overEdit ? '#FCFBF9' : '#FF4D00'}
+                />
+                <Text style={[styles.binHalfLabel, overEdit && styles.binHalfLabelActive]}>
+                  {overEdit ? 'RELEASE' : 'EDIT'}
+                </Text>
+              </View>
             </>
           ) : null}
 
@@ -982,11 +1237,15 @@ export default function TodayScreen() {
             style={styles.wheel}
             showsVerticalScrollIndicator={false}
             snapToInterval={itemH}            // Snaps so a date always lands dead-centre.
-            decelerationRate="normal"         // Long, glassy momentum — a fling keeps rolling.
-            scrollEventThrottle={1}           // Fire on (almost) every frame so no tick is missed.
-            onScroll={onScrollEvent}          // Drives the overlay (native) + selection/haptic (JS).
-            onScrollBeginDrag={() => { userScrollingRef.current = true; }}    // Real finger scroll → allow ticks.
-            onMomentumScrollEnd={() => { userScrollingRef.current = false; }} // Settled → stop ticking.
+            decelerationRate={WHEEL_DECELERATION}
+            scrollEventThrottle={1}
+            onScroll={onScrollEvent}
+            onScrollBeginDrag={() => { userScrollingRef.current = true; }}
+            onScrollEndDrag={(e) => {
+              const vy = e.nativeEvent.velocity?.y ?? 0;
+              if (Math.abs(vy) < 0.12) userScrollingRef.current = false;
+            }}
+            onMomentumScrollEnd={() => { userScrollingRef.current = false; }}
             contentOffset={{ x: 0, y: TODAY_INDEX * itemH }}                  // Start parked on today.
             contentContainerStyle={{ paddingVertical: spacer }}
           >
@@ -1136,12 +1395,27 @@ export default function TodayScreen() {
 
           <View style={styles.focusDivider} />
 
-          <Text style={styles.cardLabel}>
-            {(() => {
-              const selectedDate = DATES[selectedIndex];
-              return `${selectedDate.month} ${formatOrdinal(parseInt(selectedDate.date, 10))} TASKS`;
-            })()}
-          </Text>
+          <View style={styles.cardLabelRow}>
+            <View style={styles.cardLabelCol}>
+              <Text style={styles.cardLabelDate}>
+                {(() => {
+                  const selectedDate = DATES[selectedIndex];
+                  return `${selectedDate.month} ${formatOrdinal(parseInt(selectedDate.date, 10))}`;
+                })()}
+              </Text>
+              <Text style={styles.cardLabel}>TASKS</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setEditMode(m => !m)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={[styles.editHeaderBtn, editMode && styles.editModeActive]}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.editHeaderBtnText, editMode && styles.editHeaderBtnTextActive]}>
+                {editMode ? 'DONE' : 'EDIT'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Show a placeholder message if there are no tasks. */}
           {tasks.length === 0 && (
@@ -1156,6 +1430,9 @@ export default function TodayScreen() {
           )}
 
           {/* Render one row per task for the selected date. */}
+          {editMode && tasks.length > 0 && (
+            <Text style={styles.editHint}>TAP A TASK TO EDIT · TAP − TO REMOVE</Text>
+          )}
           {tasks.map((task, taskIndex) => (
             <TaskRow
               key={task.id}
@@ -1170,6 +1447,9 @@ export default function TodayScreen() {
               dragMoveRef={handleDragMoveRef}
               dragEndRef={handleDragEndRef}
               toggleTaskRef={toggleTaskRef}
+              editMode={editMode}
+              onRemove={archiveTask}
+              onEditPress={editMode ? openEditTask : undefined}
               onFirstRowLayout={y => {
                 firstTaskWindowYRef.current = y;
               }}
@@ -1187,10 +1467,9 @@ export default function TodayScreen() {
       </View>
 
       {/* ── Tracker bar ────────────────────────────────── */}
-      {/* A row of four stat cards at the bottom: steps, active time, calories, elevation.
-          Currently shows placeholder/hardcoded values. */}
+      {/* Tracker bar — steps, activity, calories, elevation (Apple Health when connected). */}
       <View style={styles.trackerBar}>
-        {TRACKERS.map((t, i) => (
+        {trackers.map((t, i) => (
           // trackerItemFirst removes the left border from the first item (no double border at the edge).
           <View key={t.unit} style={[styles.trackerItem, i === 0 && styles.trackerItemFirst]}>
             <Text style={styles.trackerTop} numberOfLines={1}>{t.top}</Text>
@@ -1213,100 +1492,100 @@ export default function TodayScreen() {
 
       {/* ── Input modal ──────────────────────────────────── */}
       {/* Centered white card that floats above the keyboard. */}
-      <Modal visible={sheetMode !== null} transparent animationType="none" onRequestClose={closeSheet}>
-        {/* KAV pushes the card up so it's never hidden behind the keyboard. */}
-        <KeyboardAvoidingView
-          style={styles.sheetKAV}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          {/* Backdrop — tap outside the card to dismiss. */}
+      {/* ── Focus sheet (slides from bottom, existing behaviour) ─────── */}
+      <Modal
+        visible={sheetMode === 'focus'}
+        transparent
+        animationType="none"
+        onRequestClose={closeSheet}
+      >
+        <KeyboardAvoidingView style={styles.sheetKAV} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Pressable style={styles.sheetBackdrop} onPress={closeSheet}>
-            <Animated.View
-              pointerEvents="none"
-              style={[styles.sheetBackdropDim, { opacity: sheetBackdropOpacity }]}
-            />
-            <Pressable style={styles.sheetGroup} onPress={() => {}}>
+            <Animated.View pointerEvents="none" style={[styles.sheetBackdropDim, { opacity: sheetBackdropOpacity }]} />
+            <Pressable style={styles.sheetGroup} onPress={e => e.stopPropagation()}>
               <Animated.View style={[styles.sheetAnimatedWrap, { opacity: sheetAnim }]}>
-                <View style={[styles.sheetCard, sheetMode === 'task' && styles.sheetCardTask]}>
-
-                  <Text style={styles.sheetLabel}>
-                    {sheetMode === 'focus' ? 'SET FOCUS' : 'NEW TASK'}
-                  </Text>
-
+                <View style={styles.sheetCard}>
+                  <Text style={styles.sheetLabel}>SET FOCUS</Text>
                   <TextInput
-                    style={[styles.sheetInput, sheetMode === 'task' && styles.sheetInputTask]}
+                    style={styles.sheetInput}
                     value={sheetText}
                     onChangeText={setSheetText}
-                    placeholder={sheetMode === 'focus' ? 'E.G. DEEP WORK' : 'TASK NAME...'}
+                    placeholder="E.G. DEEP WORK"
                     placeholderTextColor="#C7C1B8"
                     autoFocus
                     autoCapitalize="characters"
                     returnKeyType="done"
                     onSubmitEditing={confirmSheet}
                   />
-
-                  {sheetMode === 'focus' && (
-                    <>
-                      <TouchableOpacity style={styles.sheetConfirm} onPress={confirmSheet} activeOpacity={0.85}>
-                        <Text style={styles.sheetConfirmText}>SET FOCUS</Text>
-                      </TouchableOpacity>
-                      {(focusName.length > 0 || sheetText.trim().length > 0) && (
-                        <TouchableOpacity
-                          style={styles.sheetClearFocus}
-                          onPress={() => { clearFocusSettings(); closeSheet(); }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.sheetClearFocusText}>CLEAR FOCUS</Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
+                  <TouchableOpacity style={styles.sheetConfirm} onPress={confirmSheet} activeOpacity={0.85}>
+                    <Text style={styles.sheetConfirmText}>SET FOCUS</Text>
+                  </TouchableOpacity>
+                  {(focusName.length > 0 || sheetText.trim().length > 0) && (
+                    <TouchableOpacity style={styles.sheetClearFocus} onPress={() => { clearFocusSettings(); closeSheet(); }} activeOpacity={0.7}>
+                      <Text style={styles.sheetClearFocusText}>CLEAR FOCUS</Text>
+                    </TouchableOpacity>
                   )}
-
-                  {sheetMode === 'task' && (
-                    <>
-                      <View style={styles.sheetCardSpacer} />
-                      <View style={styles.sheetCardFooter}>
-                        <View style={styles.sheetCardDivider} />
-                        <View style={styles.priorityRow}>
-                          {(['LOW', 'MEDIUM', 'HIGH'] as Priority[]).map(p => (
-                            <TouchableOpacity
-                              key={p}
-                              style={[
-                                styles.priorityBtn,
-                                styles[`priorityBtn_${p}`],
-                                sheetPriority === p && styles.priorityBtnSelected,
-                              ]}
-                              onPress={() => setSheetPriority(p)}
-                              activeOpacity={0.7}
-                            >
-                              <Text
-                                style={[
-                                  styles.priorityBtnText,
-                                  styles.priorityBtnTextOnColor,
-                                  sheetPriority === p && styles.priorityBtnTextSelected,
-                                ]}
-                              >
-                                {p.toUpperCase()}
-                              </Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                        <TouchableOpacity
-                          style={[styles.sheetConfirm, styles.sheetConfirmBottom]}
-                          onPress={confirmSheet}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.sheetConfirmText}>ADD TASK</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  )}
-
                 </View>
               </Animated.View>
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={sheetMode === 'task'}
+        transparent
+        animationType="fade"
+        onRequestClose={closeSheet}
+      >
+        <View style={{ flex: 1 }}>
+          <Pressable style={styles.taskModalBackdrop} onPress={closeSheet}>
+            <Pressable style={styles.taskModalCard} onPress={e => e.stopPropagation()}>
+              <Text style={styles.sheetLabel}>
+                {editingTaskId ? 'EDIT TASK' : 'NEW TASK'}
+              </Text>
+              <TextInput
+                style={[styles.sheetInput, styles.sheetInputTask]}
+                value={sheetText}
+                onChangeText={setSheetText}
+                placeholder="TASK NAME..."
+                placeholderTextColor="#C7C1B8"
+                autoCapitalize="characters"
+                returnKeyType="done"
+                onSubmitEditing={confirmSheet}
+              />
+              <TaskModalFields
+                dateIndex={sheetDateIndex}
+                onDatePreview={onSheetDatePreview}
+                onDateCommit={onSheetDateCommit}
+                hour={sheetHour}
+                minute={sheetMinute}
+                onHourPreview={onSheetHourPreview}
+                onHourCommit={onSheetHourCommit}
+                onMinutePreview={onSheetMinutePreview}
+                onMinuteCommit={onSheetMinuteCommit}
+                location={sheetLocation}
+                onLocationChange={setSheetLocation}
+                priority={sheetPriority}
+                onPriorityChange={setSheetPriority}
+                footer={
+                  <>
+                    <View style={styles.sheetCardDivider} />
+                    <TouchableOpacity
+                      style={[styles.sheetConfirm, styles.sheetConfirmBottom]}
+                      onPress={confirmSheet}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.sheetConfirmText}>
+                        {editingTaskId ? 'SAVE TASK' : 'ADD TASK'}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                }
+              />
+            </Pressable>
+          </Pressable>
+        </View>
       </Modal>
 
     </SafeAreaView>
@@ -1444,13 +1723,80 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   // "TODAY'S TASKS" label at the top of the task list.
+  cardLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    marginTop: 4,
+  },
+  cardLabelCol: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  cardLabelDate: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 10,
+    color: '#8C857B',
+    letterSpacing: 0.5,
+  },
   cardLabel: {
     fontFamily: 'PixeloidSans_700Bold',
     fontSize: 13,
     color: '#FF4D00',
-    marginBottom: 24,
-    marginTop: 4,
     letterSpacing: 1,
+  },
+  editHint: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 9,
+    color: '#8C857B',
+    marginBottom: 10,
+    letterSpacing: 0.5,
+  },
+  editHeaderBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    marginTop: 14,
+  },
+  editHeaderBtnText: {
+    fontFamily: 'PixeloidSans_700Bold',
+    fontSize: 10,
+    color: '#8C857B',
+    letterSpacing: 1.5,
+  },
+  editHeaderBtnTextActive: {
+    color: '#FF4D00',
+  },
+  editModeActive: {
+    backgroundColor: 'rgba(255,77,0,0.10)',
+    borderRadius: 4,
+    padding: 3,
+  },
+  // Edit mode task rows.
+  editModeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E1DA',
+  },
+  editModeRowDone: { opacity: 0.45 },
+  editModeLabel: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 11,
+    color: '#1A1714',
+  },
+  editModeMeta: {
+    fontFamily: 'PixeloidSans_400Regular',
+    fontSize: 9,
+    color: '#8C857B',
+    marginTop: 2,
+  },
+  editModeLabelDone: {
+    textDecorationLine: 'line-through',
+    color: '#8C857B',
   },
   // "NO TASKS YET." shown when the task list is empty.
   emptyWrap: {
@@ -1556,12 +1902,42 @@ const styles = StyleSheet.create({
   deleteBinCol: {
     backgroundColor: '#FFF1F0',
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: 'stretch',
     justifyContent: 'center',
-    gap: 12,
+    overflow: 'hidden',
     borderWidth: 2,
     borderColor: '#FF4D00',
     borderStyle: 'dashed',
+  },
+  // Each half of the split bin (delete top, edit bottom).
+  binFull: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  binHalf: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  binHalfDeleteActive: { backgroundColor: '#FF4D40' },
+  binHalfEditActive:   { backgroundColor: '#FF4D00' },
+  binHalfLabel: {
+    fontFamily: 'PixeloidSans_700Bold',
+    fontSize: 9,
+    color: '#FF4D00',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  binHalfLabelActive: { color: '#FCFBF9' },
+  binDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,77,0,0.25)',
+    marginHorizontal: 8,
   },
   deleteBinLabel: {
     fontFamily: 'PixeloidSans_700Bold',
@@ -1744,6 +2120,10 @@ const styles = StyleSheet.create({
   sheetGroup: {
     width: '100%',
   },
+  sheetGroupCentered: {
+    maxWidth: 340,
+    width: '100%',
+  },
   sheetAnimatedWrap: {
     width: '100%',
   },
@@ -1760,13 +2140,38 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   sheetCardTask: {
-    minHeight: 292,
-    paddingVertical: 20,
+    paddingVertical: 16,
     flexDirection: 'column',
   },
-  sheetCardSpacer: {
-    flexGrow: 1,
-    minHeight: 4,
+  sheetBackdropCentered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  // Task modal — matches exercise modal structure exactly.
+  taskModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  taskModalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: '88%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  sheetTaskScroll: {
+    flexGrow: 0,
   },
   sheetCardFooter: {
     width: '100%',

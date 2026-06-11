@@ -8,7 +8,13 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCalendarsUsageDescription": "Add tasks you create from the calendar to Apple Calendar.",
+        "NSRemindersUsageDescription": "Sync your daily tasks with Apple Reminders.",
+        "NSHealthShareUsageDescription": "Read your steps, walking distance, activity, sleep, and weight to show progress on the Body and Today screens.",
+        "NSHealthUpdateUsageDescription": "This app does not write health data; permission is only requested for compatibility with HealthKit."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +29,21 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Add tasks you create from the calendar to Apple Calendar.",
+          "remindersPermission": "Sync your daily tasks with Apple Reminders."
+        }
+      ],
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "Read your steps, walking distance, activity, sleep, and weight to show progress on the Body and Today screens.",
+          "healthUpdatePermission": "This app does not write health data to Apple Health."
+        }
+      ]
     ]
   }
 }

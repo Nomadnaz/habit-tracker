@@ -13,6 +13,14 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
+
+function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+async function getUid(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
+function bg(fn: () => Promise<unknown>) { fn().catch(() => {}); }
 
 const BODY_KEY = '@body';
 
@@ -55,6 +63,13 @@ export type HeadlineLift = {
 export type WeightLog = { weightKg: number; at: string };
 export type WaterLog = { amountMl: number; at: string };
 
+export type BodyActivityToday = {
+  activeMinutes: number;
+  caloriesKcal: number;
+  distanceM: number;
+  flightsClimbed: number;
+};
+
 export type BodyData = {
   // 1.1 Global stats bar
   workoutsTotal: number;
@@ -85,6 +100,11 @@ export type BodyData = {
   waterGoalMl: number;
   proteinTodayG: number;
   proteinGoalG: number;
+
+  // Apple Health (optional — filled after user connects on BODY tab)
+  appleHealthConnected?: boolean;
+  appleHealthLastSync?: string;
+  activityToday?: BodyActivityToday;
 };
 
 // ── Date helpers ───────────────────────────────────────────────────────────
@@ -260,19 +280,49 @@ async function save(data: BodyData): Promise<void> {
   await AsyncStorage.setItem(BODY_KEY, JSON.stringify(data));
 }
 
+export async function saveBodyData(data: BodyData): Promise<void> {
+  await save(data);
+}
+
+/** Sync from Apple Health when already connected (no permission dialog). */
+export async function refreshAppleHealthIfConnected(): Promise<BodyData | null> {
+  const data = await loadBodyData();
+  if (!data.appleHealthConnected) return null;
+  const { fetchAppleHealthMetrics, mergeAppleHealthIntoBodyData, initAppleHealth } = await import('./apple-health');
+  const granted = await initAppleHealth();
+  if (!granted) return null;
+  const metrics = await fetchAppleHealthMetrics(56);
+  if (!metrics) return null;
+  const merged = mergeAppleHealthIntoBodyData(data, metrics);
+  await save(merged);
+  return merged;
+}
+
 // ── Mutations (the interactive trackers) ────────────────────────────────────
 
 export async function addWater(amountMl: number): Promise<BodyData> {
   const data = await loadBodyData();
-  data.waterLogs.push({ amountMl, at: new Date().toISOString() });
+  const entry = { amountMl, at: new Date().toISOString() };
+  data.waterLogs.push(entry);
   await save(data);
+  bg(async () => {
+    const userId = await getUid();
+    if (!userId) return;
+    await supabase.from('water_logs').insert({ id: genId(), user_id: userId, amount_ml: amountMl, logged_at: entry.at });
+  });
   return data;
 }
 
 export async function logWeight(weightKg: number): Promise<BodyData> {
   const data = await loadBodyData();
-  data.weightLogs.push({ weightKg, at: new Date().toISOString() });
+  const entry = { weightKg, at: new Date().toISOString() };
+  data.weightLogs.push(entry);
   await save(data);
+  bg(async () => {
+    const userId = await getUid();
+    if (!userId) return;
+    await supabase.from('body_weight_logs').insert({ id: genId(), user_id: userId, weight_kg: weightKg, logged_at: entry.at });
+  });
   return data;
 }
 
@@ -341,4 +391,47 @@ export function goalStatus(pct: number): string {
 
 export function formatSleep(mins: number): string {
   return `${Math.floor(mins / 60)}H ${mins % 60}M`;
+}
+
+function formatActiveTimeHrs(mins: number): string {
+  if (mins <= 0) return '0:00';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
+
+function elevationMFromFlights(flights: number): number {
+  return Math.round(flights * 3);
+}
+
+export function getTrackerBarItems(d: BodyData) {
+  const steps = todaySteps(d);
+  const act = d.activityToday;
+
+  return [
+    {
+      icon: 'shoe-print' as const,
+      top: "TODAY'S STEPS",
+      value: steps > 0 ? steps.toLocaleString() : '—',
+      unit: 'STEPS',
+    },
+    {
+      icon: 'clock-outline' as const,
+      top: 'ACTIVE TIME',
+      value: act ? formatActiveTimeHrs(act.activeMinutes) : '—',
+      unit: 'HRS',
+    },
+    {
+      icon: 'fire' as const,
+      top: 'CALORIES',
+      value: act && act.caloriesKcal > 0 ? act.caloriesKcal.toLocaleString() : '—',
+      unit: 'KCAL',
+    },
+    {
+      icon: 'image-filter-hdr' as const,
+      top: 'ELEVATION',
+      value: act ? String(elevationMFromFlights(act.flightsClimbed)) : '—',
+      unit: 'M',
+    },
+  ];
 }
