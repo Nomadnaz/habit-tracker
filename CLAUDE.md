@@ -64,6 +64,24 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Read these three files first, every session, in this order
+1. `system-model.md` — canonical architecture and conflict-resolution rules. Wins over everything else, including this file.
+2. `database.md` — full schema reference, including what's already live vs. what's proposed.
+3. `current-state.md` — what's actually built right now, known conflicts, the next task to pick up.
+
+Then read **one task file** from `tasks/` (numbered, e.g. `tasks/002-...md`) — the next pending one per `current-state.md`. Do not load the full master spec (`habit-tracker-master-spec.md`, kept outside this repo) into context; it's the human-readable reference the task files were distilled from, and it's too large to feed an agent directly.
+
+## The build loop
+1. Read the three docs above + the next task file.
+2. Enrich the task (fill in implementation detail it intentionally left light).
+3. Implement it — one file/feature at a time, nothing beyond the task's stated scope.
+4. Deploy/run it and verify against the task's acceptance criteria.
+5. Update `current-state.md` (tick criteria, add a progress-log line).
+6. Commit the specific files changed and push.
+7. Move to the next task.
+
+One task per session. If a task is blocked (its file says so — e.g. waiting on an Apple/Google approval), say so and stop rather than working ahead out of order; dependencies between tasks are real.
+
 ## Expo version
 
 This project uses **Expo SDK ~54.0.0**. Always reference the versioned docs at https://docs.expo.dev/versions/v54.0.0/ before writing any Expo-specific code — APIs change between SDK versions.
@@ -75,29 +93,34 @@ npx expo start          # start dev server (scan QR with Expo Go)
 npx expo start --web    # run in browser
 npx expo start --android
 npx expo start --ios
+npm test                 # vitest — added in tasks/021, covers lib/streaks.ts and lib/classifier.ts
 ```
 
-No build step, no test runner, no linter configured.
+No build step or linter configured yet.
 
 ## Architecture
+
+See `system-model.md` for the full picture (data layer / intelligence layer / surface layer, the four data flows, the post-write fan-out). Summary of what's true in code today:
 
 **Routing** — Expo Router (file-based). `app/_layout.tsx` is the root; it guards all routes by checking Supabase session state and redirecting to `/(auth)/login` or `/(tabs)` accordingly. Font loading and splash screen are also gated here.
 
 **Auth** — Supabase (`lib/supabase.ts`). Session is persisted via AsyncStorage. The root layout subscribes to `onAuthStateChange` and redirects reactively.
 
-**Data — local-first with Supabase backup**
-- Tasks are stored in AsyncStorage under the key `@tasks` as a serialised `TaskMap` (`Record<dateKey, Task[]>`).
-- On mount, tasks load from AsyncStorage instantly (no network).
-- Mutations (add/toggle/remove) update AsyncStorage synchronously, then fire-and-forget to Supabase in the background.
-- Supabase `tasks` table schema: `id uuid, user_id uuid, date text, label text, done boolean, created_at timestamptz`. Row-level security enforces per-user access.
-- Today's focus name (and block length index) persist under AsyncStorage `@focus` and Supabase `user_focus` (`user_id`, `name`, `block_idx`). Run `supabase/user_focus.sql` in the Supabase SQL editor once to create the table.
+**Data — local-first with Supabase backup.** Tasks are stored in AsyncStorage under `@tasks`, mutations update AsyncStorage synchronously then fire-and-forget to Supabase. This pattern is canonical (see system-model.md flow 1) and should be followed for every new domain table, but every new write must go through `lib/postWrite.ts` (landing in `tasks/014`) once it exists — never touch `cumulative_stats`, badges, friend-feed, or Obsidian directly from a screen.
 
-**Date keys** — dates are keyed as `"YYYY-M-D"` (e.g. `"2026-5-1"` for June 1 2026; month is 0-indexed). This format is used in both AsyncStorage and the Supabase `date` column.
+**Date keys** — ⚠️ currently `"YYYY-M-D"` (0-indexed month) in the existing code. This is **superseded** — canonical is zero-padded ISO `YYYY-MM-DD`, 1-indexed, local timezone (see `system-model.md`). Migration tracked in `tasks/003`–`004`; don't introduce new code in the old format.
 
-**Fonts** — `PressStart2P_400Regular` (pixel/display) and `SpaceMono_400Regular`/`SpaceMono_700Bold` loaded via `expo-font` in the root layout. Both must be loaded before the splash screen hides. Use `PressStart2P` for headings/titles and `SpaceMono` for body/labels.
+**Design tokens** — ⚠️ currently light theme (`#FF4D00` accent, `#F5F5F5` bg, `#E0E0E0` border) in the existing code. Canonical is the dark system (`#0A0A0A` bg, `#FF4D00` accent, `#2A2A2A` border, PressStart2P/SpaceMono). Migration tracked in `tasks/077`, deliberately last — don't half-apply it earlier. Brand v2 (Michroma/Chakra Petch, cyan/amber) is **not** an active decision; ignore it.
 
-**Design tokens** — accent `#FF4D00`, background `#F5F5F5`, border `#E0E0E0`, muted text `#999`.
+**Fonts** — `PressStart2P_400Regular` (pixel/display) and `SpaceMono_400Regular`/`SpaceMono_700Bold` loaded via `expo-font` in the root layout, both before the splash screen hides.
 
 **Path alias** — `@/` resolves to the repo root (configured in `tsconfig.json`).
 
-**Screens** — only `app/(tabs)/index.tsx` (TODAY) is fully built. `gym`, `tree`, `progress`, and `profile` are placeholder screens.
+**Screens** — see `current-state.md` for the up-to-date per-screen build status; it's more accurate than any static description here.
+
+## Rules specific to this project
+- Never feed the full master spec into context — the three docs above plus one task file is the intended working set.
+- One feature/task per session.
+- If something breaks, paste the error directly rather than guessing.
+- Commit after every working task: `git add [specific files] && git commit -m "feat: ..." && git push`.
+- Never refactor or "improve" code outside a task's stated scope.
