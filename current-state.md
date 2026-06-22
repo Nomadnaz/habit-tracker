@@ -47,7 +47,7 @@ workouts, personal_bests, body_logs
 - This session adds: `system-model.md`, `database.md`, `current-state.md` (this file), rewritten `CLAUDE.md`, `tasks/001`–`tasks/077`
 
 ## NEXT TASK
-`tasks/003-date-key-audit-and-migration-plan.md` (the date-key inventory; tasks/001 and tasks/002 are done).
+`tasks/004-execute-date-key-migration.md` (execute the plan from tasks/003: tasks/001-003 are done).
 
 ## HOW TO UPDATE THIS FILE
 After a task is implemented, deployed, and tested:
@@ -59,3 +59,4 @@ After a task is implemented, deployed, and tested:
 ## PROGRESS LOG
 - 2026-06-22 — tasks/001 done: canonical docs (system-model.md, database.md, current-state.md) created, CLAUDE.md rewritten, tasks/002–077 generated.
 - 2026-06-22 — tasks/002 done: supabase/migrations/001_baseline.sql created from the live schema (run-this-once.sql). Discovered workout-schema.sql defines a conflicting, never-wired-up schema — marked dead rather than folded in. All five loose .sql files marked superseded in-place. Migration not yet executed against the live Supabase project (no DB credentials/CLI in this session) — run it manually in the SQL editor.
+- 2026-06-22 — tasks/003 done: found 5 independent inline re-implementations of the old "YYYY-M-D" date key (app/(tabs)/index.tsx, lib/task-schedule.ts, lib/body-data.ts, lib/apple-sync.ts, lib/workout-data.ts), affecting tasks.date / workout_done_log.date / pb_log.date in Supabase plus @tasks and BodyData.stepsHistory in AsyncStorage. Plan: consolidate into lib/dateKey.ts, one-time rewrite (no dual-format support — no production users yet), SQL migration for Supabase columns + a guarded boot-time AsyncStorage migration. Execution is tasks/004.
