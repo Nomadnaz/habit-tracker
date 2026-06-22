@@ -29,6 +29,11 @@ import * as SplashScreen from 'expo-splash-screen';
 // Our Supabase client — the connection to our backend/database.
 import { supabase } from '@/lib/supabase';
 
+// One-time migration of date keys from the old "YYYY-M-D" format to the
+// canonical zero-padded "YYYY-MM-DD" format. Self-guarding — safe to call
+// every launch. See tasks/004.
+import { migrateDateKeysV2 } from '@/lib/migrateDateKeysV2';
+
 // Lets us lock the app to portrait by default (the focus timer unlocks it for landscape).
 import * as ScreenOrientation from 'expo-screen-orientation';
 
@@ -47,6 +52,10 @@ export default function RootLayout() {
   // We wait for this before redirecting, so we don't flash the wrong screen.
   const [loading, setLoading] = useState(true);
 
+  // True once the one-time date-key migration has finished. Screens must not
+  // read @tasks/@body/etc. before this, or they'll see pre-migration keys.
+  const [dateKeysMigrated, setDateKeysMigrated] = useState(false);
+
   // router lets us programmatically send the user to a different screen.
   const router = useRouter();
 
@@ -61,15 +70,22 @@ export default function RootLayout() {
     PixeloidSans_700Bold: require('@/assets/fonts/PixeloidSans-Bold.ttf'),
   });
 
-  // Once fonts are ready, hide the splash screen and show the app.
+  // Once fonts are ready AND the date-key migration has finished, hide the
+  // splash screen and show the app — hiding it earlier would let a screen
+  // flash with @tasks/@body still in the old key format.
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+    if (fontsLoaded && dateKeysMigrated) SplashScreen.hideAsync();
+  }, [fontsLoaded, dateKeysMigrated]);
 
   // Lock the whole app to portrait by default. The focus timer screen unlocks this
   // for landscape while it's open, then re-locks portrait when you leave it.
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  }, []);
+
+  // Run the one-time date-key migration before any screen reads @tasks/@body/etc.
+  useEffect(() => {
+    migrateDateKeysV2().finally(() => setDateKeysMigrated(true));
   }, []);
 
   // On first load, check if the user already has a saved login session on their device.
@@ -95,7 +111,7 @@ export default function RootLayout() {
   // It's the "traffic cop" — it decides which screen the user should be on.
   useEffect(() => {
     // Don't redirect until we know the login state and fonts are ready.
-    if (loading || !fontsLoaded) return;
+    if (loading || !fontsLoaded || !dateKeysMigrated) return;
 
     // Check if the user is currently on an auth screen (login/signup).
     const inAuth = segments[0] === '(auth)';
@@ -107,10 +123,15 @@ export default function RootLayout() {
       // Logged in but still on the login screen — send them to the main app.
       router.replace('/(tabs)');
     }
-  }, [session, segments, loading, fontsLoaded]);
+  }, [session, segments, loading, fontsLoaded, dateKeysMigrated]);
 
   // Don't render anything until fonts are loaded, to avoid a flash of unstyled text.
   if (!fontsLoaded) return null;
+
+  // Hold the splash screen up a beat longer than fonts alone: rendering the
+  // tabs before the date-key migration finishes would let a screen read
+  // @tasks/@body in the old key format.
+  if (!dateKeysMigrated) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

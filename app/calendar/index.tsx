@@ -13,14 +13,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { toDateKey } from '@/lib/dateKey';
 
 type Task = { id: string; label: string; done: boolean; archived?: boolean };
 type TaskMap = Record<string, Task[]>;
 
 type MonthBlock = { year: number; month: number; key: string };
 
+// month here is 0-indexed (matches Date#getMonth()) — converted to the
+// canonical zero-padded, 1-indexed key format from lib/dateKey.ts.
 function dateKey(year: number, month: number, day: number): string {
-  return `${year}-${month}-${day}`;
+  return toDateKey(new Date(year, month, day));
 }
 
 const MONTH_NAMES = [

@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import { sortActiveTasks, type Priority, type Task, type TaskMap } from '@/lib/tasks-core';
 import { DEFAULT_TASK_DURATION_MINS } from '@/lib/task-schedule';
+import { toDateKey, fromDateKey } from '@/lib/dateKey';
 
 const LEGACY_REMINDER_NOTES = new Set(['habit-tracker', 'habit tracker']);
 
@@ -20,14 +21,9 @@ export function reminderNotesForPriority(priority?: Priority): string {
 
 export type AppleSyncMode = 'reminders-only' | 'reminders-and-calendar';
 
-/** dateKey format: YYYY-M-D (month is 0-based, same as app storage). */
+/** dateKey format: zero-padded YYYY-MM-DD (1-indexed month) — see lib/dateKey.ts. */
 export function dateFromTaskKey(dateKey: string): Date | null {
-  const parts = dateKey.split('-').map(Number);
-  if (parts.length !== 3 || parts.some(n => Number.isNaN(n))) return null;
-  const [year, month, day] = parts;
-  const d = new Date(year, month, day, 0, 0, 0, 0);
-  if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== day) return null;
-  return d;
+  return fromDateKey(dateKey);
 }
 
 export function buildTaskDueDate(dateKey: string, hour: number, minute: number): Date | null {
@@ -342,7 +338,7 @@ function genTaskId(): string {
 }
 
 export function dateKeyFromDate(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return toDateKey(d);
 }
 
 function addDays(base: Date, delta: number): Date {

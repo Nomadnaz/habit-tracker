@@ -1,20 +1,11 @@
 import type { Task, TaskMap } from '@/lib/tasks-core';
+import { toDateKey, fromDateKey } from '@/lib/dateKey';
 
 export const DEFAULT_TASK_DURATION_MINS = 30;
 export const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120, 180] as const;
 
-export function dateKeyFromParts(year: number, month: number, day: number): string {
-  return `${year}-${month}-${day}`;
-}
-
 export function parseDateKey(key: string): Date | null {
-  const parts = key.split('-').map(Number);
-  if (parts.length !== 3 || parts.some(n => Number.isNaN(n))) return null;
-  const [year, month, day] = parts;
-  const d = new Date(year, month, day);
-  if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== day) return null;
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return fromDateKey(key);
 }
 
 export function addDays(base: Date, delta: number): Date {
@@ -33,7 +24,7 @@ export function buildDateOptions(anchor: Date, daysBack = 30, daysForward = 120)
   const out: DateOption[] = [];
   for (let i = -daysBack; i <= daysForward; i++) {
     const d = addDays(anchor, i);
-    const key = dateKeyFromParts(d.getFullYear(), d.getMonth(), d.getDate());
+    const key = toDateKey(d);
     const label = `${monthNames[d.getMonth()]} ${d.getDate()} ${d.getFullYear()}`;
     out.push({ key, label });
   }

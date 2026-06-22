@@ -4,6 +4,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { toDateKey } from './dateKey';
 
 // Get the logged-in user's ID (null if not signed in).
 async function uid(): Promise<string | null> {
@@ -69,8 +70,7 @@ export function genId(): string {
 }
 
 function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return toDateKey(new Date());
 }
 
 // ── Storage helpers ────────────────────────────────────────────────────────

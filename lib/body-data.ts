@@ -108,11 +108,11 @@ export type BodyData = {
 };
 
 // ── Date helpers ───────────────────────────────────────────────────────────
-// Same key format as the rest of the app: "YYYY-M-D" with a 0-indexed month.
-
-export function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-}
+// Canonical date-key format (zero-padded YYYY-MM-DD) lives in lib/dateKey.ts.
+// Re-exported under the old name so existing importers (steps-data.ts,
+// apple-health.ts) don't need to change.
+import { toDateKey as dateKey } from './dateKey';
+export { dateKey };
 
 function startOfToday(): Date {
   const d = new Date();

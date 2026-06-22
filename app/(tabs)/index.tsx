@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Our Supabase client — used to back up tasks to the cloud database.
 import { supabase } from '@/lib/supabase';
+import { toDateKey } from '@/lib/dateKey';
 import {
   formatSessionRemainingLabel,
   getEffectiveSecsLeft,
@@ -138,8 +139,8 @@ function buildDates() {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
     out.push({
-      // The key is a unique string like "2026-5-1" used to look up tasks for that day.
-      key: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
+      // The key is a unique string like "2026-06-01" used to look up tasks for that day.
+      key: toDateKey(d),
       day: DAY_NAMES[d.getDay()],
       date: String(d.getDate()).padStart(2, '0'), // e.g. "01", "15"
       month: MONTH_NAMES[d.getMonth()],
