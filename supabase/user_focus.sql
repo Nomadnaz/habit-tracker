@@ -1,3 +1,6 @@
+-- SUPERSEDED by supabase/migrations/001_baseline.sql — kept for history only.
+-- Folded in along with user_focus_durations.sql's work_mins/break_mins columns.
+--
 -- Run this once in Supabase Dashboard → SQL Editor
 
 CREATE TABLE IF NOT EXISTS user_focus (

@@ -1,25 +1,31 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- SUPERSEDED by supabase/migrations/001_baseline.sql — kept for history only.
--- Do not run this file. It was the authoritative version of this schema
--- (confirmed by lib/workout-data.ts usage); 001_baseline.sql folds it in as-is.
--- ═══════════════════════════════════════════════════════════════════════════
+-- 001_baseline.sql
+-- Consolidates the loose SQL files that were run manually in the Supabase SQL
+-- editor before this migrations/ folder existed. Reproduces the schema as it
+-- actually exists in production today — no schema changes, no renames.
 --
--- RUN THIS ONCE in the Supabase SQL editor (supabase.com → your project →
--- SQL Editor → New query → paste everything below → Run)
+-- Source files folded in (now superseded by this migration, kept for history):
+--   supabase/run-this-once.sql          — authoritative for workout_templates/
+--                                          exercises/workout_exercises (the
+--                                          version actually wired up in
+--                                          lib/workout-data.ts)
+--   supabase/user_focus.sql             — superseded by run-this-once.sql's
+--                                          user_focus + the durations columns below
+--   supabase/user_focus_durations.sql   — adds work_mins/break_mins to user_focus
+--   supabase/task_schedule_columns.sql  — adds hour/minute/duration_mins/location to tasks
 --
--- What it creates:
---   tasks            — TODAY screen tasks (may already exist)
---   user_focus       — focus name + block setting (may already exist)
---   workout_templates — Push Day / Pull Day / Legs etc.
---   exercises         — exercise library
---   workout_exercises — which exercises are in each template (junction)
---   workout_done_log  — days user marked a workout as done
---   pb_log            — personal best weights per exercise
---   water_logs        — daily water intake entries
---   body_weight_logs  — body weight entries
+-- NOT included: supabase/workout-schema.sql. It defines a conflicting,
+-- UUID-keyed workout_templates/exercises schema and three tables
+-- (workout_sessions, session_sets, user_goals) that are never referenced
+-- anywhere in lib/ or app/ — confirmed dead, superseded by run-this-once.sql.
+-- Left on disk for history; do not run it.
 --
--- Every table has Row Level Security: users can only read/write their own rows.
--- Safe to re-run — uses CREATE TABLE IF NOT EXISTS throughout.
+-- Safe to re-run: CREATE TABLE/COLUMN IF NOT EXISTS throughout.
+--
+-- ⚠️  Date columns below are still 'YYYY-M-D' (0-indexed month) — this matches
+-- production data as it exists today. The canonical zero-padded YYYY-MM-DD
+-- format is the target of tasks/003-004 (a data + code migration), not
+-- something this baseline migration changes.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 
@@ -27,7 +33,7 @@
 CREATE TABLE IF NOT EXISTS tasks (
   id          TEXT        PRIMARY KEY,
   user_id     UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  date        TEXT        NOT NULL,   -- 'YYYY-M-D' (month 0-indexed, matches app)
+  date        TEXT        NOT NULL,   -- 'YYYY-M-D' (month 0-indexed, matches app) — see tasks/003-004
   label       TEXT        NOT NULL DEFAULT '',
   done        BOOLEAN     NOT NULL DEFAULT FALSE,
   archived    BOOLEAN     NOT NULL DEFAULT FALSE,
@@ -38,6 +44,12 @@ ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "own tasks" ON tasks;
 CREATE POLICY "own tasks" ON tasks FOR ALL USING (auth.uid() = user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user_date ON tasks (user_id, date);
+
+-- task_schedule_columns.sql deltas
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS hour SMALLINT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS minute SMALLINT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS duration_mins INTEGER;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS location TEXT;
 
 
 -- ── FOCUS SETTINGS ───────────────────────────────────────────────────────────
@@ -50,6 +62,10 @@ CREATE TABLE IF NOT EXISTS user_focus (
 ALTER TABLE user_focus ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "own focus" ON user_focus;
 CREATE POLICY "own focus" ON user_focus FOR ALL USING (auth.uid() = user_id);
+
+-- user_focus_durations.sql deltas
+ALTER TABLE user_focus ADD COLUMN IF NOT EXISTS work_mins INTEGER NOT NULL DEFAULT 90;
+ALTER TABLE user_focus ADD COLUMN IF NOT EXISTS break_mins INTEGER NOT NULL DEFAULT 20;
 
 
 -- ── WORKOUT TEMPLATES ────────────────────────────────────────────────────────
@@ -103,7 +119,7 @@ CREATE TABLE IF NOT EXISTS workout_done_log (
   id                  TEXT        PRIMARY KEY,
   user_id             UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   workout_template_id TEXT        NOT NULL,
-  date                TEXT        NOT NULL,  -- 'YYYY-M-D'
+  date                TEXT        NOT NULL,  -- 'YYYY-M-D' — see tasks/003-004
   logged_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, workout_template_id, date)
 );
@@ -120,7 +136,7 @@ CREATE TABLE IF NOT EXISTS pb_log (
   user_id     UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   exercise_id TEXT        NOT NULL,
   weight_kg   FLOAT       NOT NULL,
-  date        TEXT        NOT NULL,  -- 'YYYY-M-D'
+  date        TEXT        NOT NULL,  -- 'YYYY-M-D' — see tasks/003-004
   logged_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, exercise_id, date)
 );

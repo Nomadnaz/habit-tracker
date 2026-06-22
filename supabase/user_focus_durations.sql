@@ -1,3 +1,5 @@
+-- SUPERSEDED by supabase/migrations/001_baseline.sql — kept for history only.
+--
 -- Run once in Supabase Dashboard → SQL Editor (after user_focus.sql)
 
 ALTER TABLE user_focus

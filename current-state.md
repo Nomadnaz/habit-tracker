@@ -47,7 +47,7 @@ workouts, personal_bests, body_logs
 - This session adds: `system-model.md`, `database.md`, `current-state.md` (this file), rewritten `CLAUDE.md`, `tasks/001`–`tasks/077`
 
 ## NEXT TASK
-Start at `tasks/001-adopt-canonical-docs.md` (already DONE as of this commit — these docs are the deliverable). Then proceed to `tasks/002`.
+`tasks/003-date-key-audit-and-migration-plan.md` (the date-key inventory; tasks/001 and tasks/002 are done).
 
 ## HOW TO UPDATE THIS FILE
 After a task is implemented, deployed, and tested:
@@ -58,3 +58,4 @@ After a task is implemented, deployed, and tested:
 
 ## PROGRESS LOG
 - 2026-06-22 — tasks/001 done: canonical docs (system-model.md, database.md, current-state.md) created, CLAUDE.md rewritten, tasks/002–077 generated.
+- 2026-06-22 — tasks/002 done: supabase/migrations/001_baseline.sql created from the live schema (run-this-once.sql). Discovered workout-schema.sql defines a conflicting, never-wired-up schema — marked dead rather than folded in. All five loose .sql files marked superseded in-place. Migration not yet executed against the live Supabase project (no DB credentials/CLI in this session) — run it manually in the SQL editor.

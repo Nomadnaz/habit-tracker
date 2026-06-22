@@ -1,4 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────
+-- SUPERSEDED — DEAD CODE, DO NOT RUN.
+-- This schema (UUID-keyed workout_templates/exercises, plus workout_sessions/
+-- session_sets/user_goals) is never referenced anywhere in lib/ or app/.
+-- The schema actually wired up is run-this-once.sql, now in
+-- supabase/migrations/001_baseline.sql. Kept on disk for history only.
+-- ─────────────────────────────────────────────────────────────────────────
+--
 -- WORKOUT ENGINE — SUPABASE SCHEMA
 -- Run this once in the Supabase SQL editor.
 -- ─────────────────────────────────────────────────────────────────────────
