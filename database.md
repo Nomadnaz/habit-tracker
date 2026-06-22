@@ -22,7 +22,21 @@ body_weight_logs (...)                                           -- maps to prop
 water_logs (...)                                                 -- maps to proposed body_logs.water_ml
 ```
 
-**Decision (tasks/005):** extend/rename additively via migration, never destructively, and always with a data-migration step for existing rows — don't leave old tables orphaned with live data in them.
+**Decision (tasks/005): extend the existing tables additively. Do not introduce parallel spec-named tables (`workouts`, `personal_bests`, `body_logs`).**
+
+Rationale:
+1. The existing schema is already wired to working screens (`gym.tsx`, `workouts.tsx`, `workout-detail.tsx`, the body screens). Replacing it would be pure churn with no user-facing benefit.
+2. The existing relational design is, in places, *better* than the spec's flattened version — `workout_exercises` (a real junction table) and `workout_done_log`/`pb_log` (one row per logged event) preserve queryability that the spec's `workouts.exercises[]` jsonb blob would lose. Granular `water_logs`/`body_weight_logs` (multiple entries/day) also fit the spec's own UI description ("tap to log cups/ml") better than a single `body_logs` row per day would.
+3. Where the spec needs fields the existing tables lack, add them as new columns — never replace the table.
+
+Concrete mapping (see `supabase/migrations/003_gym_body_reconcile.sql`, drafted by tasks/005):
+| Spec concept | Lives in (after 003) |
+|---|---|
+| `workouts` (session log: duration, GPS check-in, HR, calories, notes) | `workout_done_log`, extended with those columns — name unchanged, code unchanged |
+| `personal_bests` (weight_kg + reps) | `pb_log`, extended with `reps` |
+| `gym_plan` (PPL day planner) | new table, no existing equivalent — added as-is |
+| `body_logs` (weight/water/steps/vitamins/notes, one row/day) | **not introduced** — stays split across `body_weight_logs`/`water_logs`; steps/vitamins/notes deferred to tasks/034 (Body page hub) as new columns on those tables if/when a screen needs them |
+| `exercises` | already matches, used as-is |
 
 ---
 

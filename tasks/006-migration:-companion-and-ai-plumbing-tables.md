@@ -8,7 +8,7 @@
 Add companions, companion_messages, companion_personas, api_usage, briefing_preferences, user_context_summary tables per database.md, with RLS user_id = auth.uid() on each.
 
 ## Key files
-supabase/migrations/003_companion_infra.sql
+supabase/migrations/00N_companion_infra.sql — **check `ls supabase/migrations/` for the next available number before naming it; do not assume 003.** (003 was claimed by tasks/005's gym/body reconciliation, written after this task was originally scoped — every hardcoded migration number in a *pending* task file is a hint, not a guarantee; always verify against what's actually on disk.)
 
 ## Acceptance criteria
 - [ ] Migration runs clean against current schema

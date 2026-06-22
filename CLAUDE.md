@@ -118,6 +118,9 @@ See `system-model.md` for the full picture (data layer / intelligence layer / su
 
 **Screens** — see `current-state.md` for the up-to-date per-screen build status; it's more accurate than any static description here.
 
+## Migration numbers in task files are hints, not guarantees
+Task files were generated in dependency order before any of them ran, so each one's suggested `supabase/migrations/0NN_*.sql` filename assumes the numbers before it landed exactly as planned. They don't always — `tasks/005` claimed `003` for a reconciliation task that wasn't in the original numbering, bumping everything after it. Before naming a new migration file, always run `ls supabase/migrations/` and use the next number actually on disk, not the number written in the task file.
+
 ## Rules specific to this project
 - Never feed the full master spec into context — the three docs above plus one task file is the intended working set.
 - One feature/task per session.

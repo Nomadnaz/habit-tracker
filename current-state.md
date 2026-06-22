@@ -47,12 +47,13 @@ workouts, personal_bests, body_logs
 - This session adds: `system-model.md`, `database.md`, `current-state.md` (this file), rewritten `CLAUDE.md`, `tasks/001`–`tasks/077`
 
 ## NEXT TASK
-`tasks/005-schema-reconciliation:-gym-body-domains.md` (tasks/001-004 are done; tasks/004 has one open follow-up — run `supabase/migrations/002_date_key_format.sql` manually against the live project, and confirm on a real device since no simulator was available this session).
+`tasks/006-migration:-companion-and-ai-plumbing-tables.md` (tasks/001-005 are done). Before naming its migration file, run `ls supabase/migrations/` — don't trust the hardcoded number in the task file (see "Migration numbers are hints" in CLAUDE.md).
 
 ## ⚠️ ACTION NEEDED BY YOU (cannot be done from this session)
 - Run `supabase/migrations/002_date_key_format.sql` once, manually, in the Supabase SQL editor. It is NOT safely re-runnable — see the warning in the file.
+- Run `supabase/migrations/003_gym_body_reconcile.sql` (safe to re-run, purely additive).
 - Open the app on a real device/simulator once and confirm Today/Calendar/Steps/Workouts still look right after the date-key migration (tsc is clean, but nothing was visually verified this session — no simulator was attached).
-- `git push` from a machine with GitHub credentials — this session has none. Currently 6 local commits ahead of `origin/main`.
+- `git push` from a machine with GitHub credentials — this session has none. Currently 7 local commits ahead of `origin/main`.
 
 ## HOW TO UPDATE THIS FILE
 After a task is implemented, deployed, and tested:
@@ -66,3 +67,4 @@ After a task is implemented, deployed, and tested:
 - 2026-06-22 — tasks/002 done: supabase/migrations/001_baseline.sql created from the live schema (run-this-once.sql). Discovered workout-schema.sql defines a conflicting, never-wired-up schema — marked dead rather than folded in. All five loose .sql files marked superseded in-place. Migration not yet executed against the live Supabase project (no DB credentials/CLI in this session) — run it manually in the SQL editor.
 - 2026-06-22 — tasks/003 done: found 5 independent inline re-implementations of the old "YYYY-M-D" date key (app/(tabs)/index.tsx, lib/task-schedule.ts, lib/body-data.ts, lib/apple-sync.ts, lib/workout-data.ts), affecting tasks.date / workout_done_log.date / pb_log.date in Supabase plus @tasks and BodyData.stepsHistory in AsyncStorage. Plan: consolidate into lib/dateKey.ts, one-time rewrite (no dual-format support — no production users yet), SQL migration for Supabase columns + a guarded boot-time AsyncStorage migration. Execution is tasks/004.
 - 2026-06-22 — tasks/004 done: added lib/dateKey.ts as the single canonical implementation; found and fixed a 6th call site (app/calendar/index.tsx) missed by tasks/003's inventory; wrote lib/migrateDateKeysV2.ts (one-time AsyncStorage migration, wired into app/_layout.tsx ahead of the splash-screen hide and auth redirect) and supabase/migrations/002_date_key_format.sql (Supabase column rewrite, not yet executed live). Used plain Date math instead of adding date-fns, to avoid touching package.json's already-dirty state for no functional gain. tsc clean (28 pre-existing errors, unrelated, unchanged). No on-device visual verification possible this session.
+- 2026-06-22 — tasks/005 done: decided to extend the existing gym/body tables additively rather than introduce parallel spec-named tables (workouts/personal_bests/body_logs) — documented in database.md with the full mapping. Drafted supabase/migrations/003_gym_body_reconcile.sql (workout_done_log gains duration/GPS/HR/calories/notes, pb_log gains reps, new gym_plan table; body_logs deliberately not introduced). Not yet run against the live project. Discovered tasks/006's hardcoded migration number (003) now collides — fixed by pointing it at "check ls supabase/migrations/ first" instead of cascading a renumber through 16 files; same caveat added to CLAUDE.md as a standing rule.
