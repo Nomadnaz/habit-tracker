@@ -149,6 +149,7 @@ export default function RootLayout() {
         <Stack.Screen name="workout-detail" />
         <Stack.Screen name="steps" />
         <Stack.Screen name="focus-timer" />
+        <Stack.Screen name="calorie" />
       </Stack>
     </GestureHandlerRootView>
   );
