@@ -103,6 +103,15 @@ export const companions: Record<string, CompanionConfig> = {
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'sleep'),
     actions: [],
   },
+  goals: {
+    defaultName: 'Compass',
+    // task 068's own acceptance criterion: goals AI references real habit/
+    // workout data when discussing progress, not just the goals table itself.
+    contextSources: ['goals', 'habit_logs', 'workout_done_log', 'user_context_summary'],
+    model: 'haiku',
+    systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'goals'),
+    actions: [],
+  },
 };
 
 export type CompanionType = keyof typeof companions;

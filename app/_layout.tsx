@@ -206,6 +206,7 @@ export default function RootLayout() {
         <Stack.Screen name="calorie" />
         <Stack.Screen name="ble-bridge" />
         <Stack.Screen name="modals/sleep-detail" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="modals/goals" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/companion-persona" />
       </Stack>

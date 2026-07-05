@@ -262,6 +262,31 @@ export async function buildContext(
     })());
   }
 
+  if (want('goals')) {
+    jobs.push((async () => {
+      const { data: goals } = await supabase
+        .from('goals')
+        .select('id, title, target_date')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .limit(15);
+      if (!goals?.length) { raw.goals = []; lines.push('GOALS: none active.'); return; }
+
+      const { data: milestones } = await supabase
+        .from('milestones')
+        .select('goal_id, completed')
+        .in('goal_id', goals.map((g: { id: string }) => g.id));
+      raw.goals = goals;
+
+      lines.push('GOALS (active):');
+      for (const g of goals) {
+        const own = (milestones ?? []).filter((m: { goal_id: string }) => m.goal_id === g.id);
+        const pct = own.length ? Math.round((own.filter((m: { completed: boolean }) => m.completed).length / own.length) * 100) : null;
+        lines.push(`- ${g.title}${g.target_date ? ` (by ${g.target_date})` : ''}${pct !== null ? `: ${pct}% of milestones done` : ''}`);
+      }
+    })());
+  }
+
   await Promise.all(jobs);
 
   return { text: lines.join('\n') || 'No data yet.', raw };
