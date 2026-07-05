@@ -36,6 +36,7 @@ export type Habit = {
   frequency: Frequency;
   reminderTime?: string;
   active: boolean;
+  autoFreezeEnabled: boolean; // task 076: MVP freeze-only streak recovery
   createdAt: string; // ISO timestamp
 };
 
@@ -76,6 +77,7 @@ export async function addHabit(input: { name: string; frequency: Frequency; remi
     frequency: input.frequency,
     reminderTime: input.reminderTime,
     active: true,
+    autoFreezeEnabled: false,
     createdAt: new Date().toISOString(),
   };
   const habits = await loadHabits();
@@ -86,10 +88,17 @@ export async function addHabit(input: { name: string; frequency: Frequency; remi
     if (!userId) return;
     await supabase.from('habits').insert({
       id: habit.id, user_id: userId, name: habit.name, frequency: habit.frequency,
-      reminder_time: habit.reminderTime ?? null, active: true,
+      reminder_time: habit.reminderTime ?? null, active: true, auto_freeze_enabled: false,
     });
   });
   return habit;
+}
+
+/** Task 076 MVP: 2 free auto-freezes/month, opt-in per habit. */
+export async function setAutoFreeze(habitId: string, enabled: boolean): Promise<void> {
+  const habits = await loadHabits();
+  await saveHabits(habits.map(h => (h.id === habitId ? { ...h, autoFreezeEnabled: enabled } : h)));
+  bg(async () => { await supabase.from('habits').update({ auto_freeze_enabled: enabled }).eq('id', habitId); });
 }
 
 export async function deleteHabit(habitId: string): Promise<void> {
@@ -219,17 +228,58 @@ function daysBetween(aKey: string, bKey: string): number {
   return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
-export type HeatmapCell = { date: string; state: 'done' | 'missed' | 'before' };
+export type HeatmapCell = { date: string; state: 'done' | 'missed' | 'before' | 'frozen' };
 
-/** Last `days` cells ending today, for HeatmapCalendar. */
+/**
+ * Task 076 MVP: which past missed days are covered by an auto-freeze, capped
+ * at 2 per calendar month, only for habits with autoFreezeEnabled. Walks
+ * chronologically (oldest -> newest) so the monthly cap is applied in the
+ * order freezes actually would have been consumed, not in reverse.
+ */
+export function computeFrozenDates(habit: Habit, logs: HabitLog[]): Set<string> {
+  const frozen = new Set<string>();
+  if (!habit.autoFreezeEnabled) return frozen;
+
+  const doneDates = new Set(logs.filter(l => l.completed).map(l => l.date));
+  const createdKey = toDateKey(new Date(habit.createdAt));
+  const today = toDateKey(new Date());
+
+  let cursor = new Date(createdKey);
+  let monthKey = '';
+  let usedThisMonth = 0;
+  while (toDateKey(cursor) < today) {
+    const key = toDateKey(cursor);
+    const thisMonth = key.slice(0, 7);
+    if (thisMonth !== monthKey) { monthKey = thisMonth; usedThisMonth = 0; }
+    if (!doneDates.has(key) && usedThisMonth < 2) {
+      frozen.add(key);
+      usedThisMonth += 1;
+    }
+    cursor = new Date(cursor.getTime() + 86400000);
+  }
+  return frozen;
+}
+
+/** Same as computeStreak, but a frozen day counts as continuing the streak. */
+export function computeStreakWithFreezes(habit: Habit, logs: HabitLog[]): StreakInfo {
+  if (!habit.autoFreezeEnabled) return computeStreak(logs);
+  const frozenDates = computeFrozenDates(habit, logs);
+  const augmented = logs.map(l => l);
+  for (const date of frozenDates) augmented.push({ id: `frozen-${date}`, habitId: habit.id, date, completed: true, createdAt: '' });
+  return computeStreak(augmented);
+}
+
+/** Last `days` cells ending today, for HeatmapCalendar. Frozen days render blue. */
 export function buildHeatmap(habit: Habit, logs: HabitLog[], days = 35): HeatmapCell[] {
   const doneDates = new Set(logs.filter(l => l.completed).map(l => l.date));
+  const frozenDates = computeFrozenDates(habit, logs);
   const createdKey = toDateKey(new Date(habit.createdAt));
   const cells: HeatmapCell[] = [];
   const now = new Date();
   for (let i = days - 1; i >= 0; i--) {
     const key = toDateKey(new Date(now.getTime() - i * 86400000));
-    const state: HeatmapCell['state'] = key < createdKey ? 'before' : doneDates.has(key) ? 'done' : 'missed';
+    const state: HeatmapCell['state'] =
+      key < createdKey ? 'before' : doneDates.has(key) ? 'done' : frozenDates.has(key) ? 'frozen' : 'missed';
     cells.push({ date: key, state });
   }
   return cells;

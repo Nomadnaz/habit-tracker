@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────
 // HeatmapCalendar — small grid of coloured cells for a habit's recent history.
-// green = done, red = missed, grey = before the habit existed / no data yet.
-// Freeze/holiday/repair colours arrive with task 074 — not built here.
+// green = done, red = missed, grey = before the habit existed / no data yet,
+// blue = auto-frozen (task 076, MVP freeze-only — repair/holiday are a
+// separate future sub-task, not built here).
 // ─────────────────────────────────────────────────────────────────────────
 
 import { View, StyleSheet } from 'react-native';
@@ -11,6 +12,7 @@ const COLORS: Record<HeatmapCell['state'], string> = {
   done: '#3B7A57',
   missed: '#C0432B',
   before: '#E5E1DA',
+  frozen: '#3B82F6',
 };
 
 export default function HeatmapCalendar({ cells, cols = 7 }: { cells: HeatmapCell[]; cols?: number }) {

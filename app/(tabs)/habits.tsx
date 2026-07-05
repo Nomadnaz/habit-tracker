@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 
 import {
   getActiveHabits, addHabit, deleteHabit, getLogsForHabit,
-  toggleToday, computeStreak, buildHeatmap, isDoneOnDate,
+  toggleToday, computeStreakWithFreezes, buildHeatmap, isDoneOnDate, setAutoFreeze,
   type Habit, type HabitLog, type Frequency,
 } from '@/lib/habits-data';
 import {
@@ -152,7 +152,7 @@ export default function HabitsScreen() {
             <Text style={styles.empty}>No habits yet. Tap + to add your first one.</Text>
           )}
           {rows.map(row => {
-            const streak = computeStreak(row.logs);
+            const streak = computeStreakWithFreezes(row.habit, row.logs);
             const done = isDoneOnDate(row.logs, today);
             const cells = buildHeatmap(row.habit, row.logs);
             return (
@@ -177,6 +177,19 @@ export default function HabitsScreen() {
                   </TouchableOpacity>
                 </View>
                 <HeatmapCalendar cells={cells} />
+                <TouchableOpacity
+                  style={styles.freezeRow}
+                  onPress={() => setAutoFreeze(row.habit.id, !row.habit.autoFreezeEnabled).then(refresh)}
+                >
+                  <MaterialCommunityIcons
+                    name={row.habit.autoFreezeEnabled ? 'snowflake' : 'snowflake-off'}
+                    size={14}
+                    color={row.habit.autoFreezeEnabled ? '#3B82F6' : MUTED}
+                  />
+                  <Text style={styles.freezeText}>
+                    {row.habit.autoFreezeEnabled ? 'Auto-freeze on (2/month)' : 'Auto-freeze off'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             );
           })}
@@ -323,6 +336,8 @@ const styles = StyleSheet.create({
   nameWrap: { flex: 1 },
   habitName: { fontFamily: BOLD, fontSize: 13, color: INK },
   streakText: { fontFamily: REG, fontSize: 10, color: MUTED, marginTop: 2 },
+  freezeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  freezeText: { fontFamily: REG, fontSize: 9, color: MUTED },
   completeBtn: {
     width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: ORANGE,
     alignItems: 'center', justifyContent: 'center', marginLeft: 12,
