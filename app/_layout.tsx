@@ -29,6 +29,13 @@ import * as SplashScreen from 'expo-splash-screen';
 // Our Supabase client — the connection to our backend/database.
 import { supabase } from '@/lib/supabase';
 
+// Live sync of tasks created OUTSIDE the app (e.g. by the voice device via
+// ai-chat) into the on-device store + Apple Calendar — see lib/use-remote-task-sync.ts.
+import { useRemoteTaskSync } from '@/lib/use-remote-task-sync';
+
+// Slide-down banner + buzz when a task arrives live from the device.
+import { RemoteTaskBanner } from '@/components/RemoteTaskBanner';
+
 // One-time migration of date keys from the old "YYYY-M-D" format to the
 // canonical zero-padded "YYYY-MM-DD" format. Self-guarding — safe to call
 // every launch. See tasks/004.
@@ -62,6 +69,10 @@ export default function RootLayout() {
   // segments is an array of the current URL path, e.g. ['(auth)', 'login'] or ['(tabs)'].
   // We use this to know which section of the app the user is currently in.
   const segments = useSegments();
+
+  // Keep on-device tasks in sync with task changes that originate outside the
+  // app (the voice device, other devices) in real time. No-op until logged in.
+  useRemoteTaskSync(session?.user?.id ?? null);
 
   // Load our custom fonts. fontsLoaded becomes true once they're downloaded and ready.
   // Until then, we don't render anything (to avoid text flashing with the wrong font).
@@ -150,7 +161,12 @@ export default function RootLayout() {
         <Stack.Screen name="steps" />
         <Stack.Screen name="focus-timer" />
         <Stack.Screen name="calorie" />
+        <Stack.Screen name="ble-bridge" />
+        <Stack.Screen name="modals/sleep-detail" options={{ presentation: 'modal' }} />
       </Stack>
+
+      {/* Floats above every screen; shows when a task syncs in from the device. */}
+      <RemoteTaskBanner />
     </GestureHandlerRootView>
   );
 }

@@ -523,7 +523,11 @@ export default function BodyScreen() {
         {/* ── Recovery ───────────────────────────────────── */}
         <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>RECOVERY</Text>
         <View style={styles.recoveryCard}>
-          <Recovery icon="moon-waning-crescent" label="SLEEP" value={formatSleep(data.sleepMins)} status={goalStatus(sleepPct)} />
+          <TouchableOpacity style={styles.recoveryItem} activeOpacity={0.85} onPress={() => router.push('/modals/sleep-detail')}>
+            <MaterialCommunityIcons name="moon-waning-crescent" size={22} color={ORANGE} />
+            <Text style={styles.recoveryValue}>{formatSleep(data.sleepMins)}</Text>
+            <Text style={styles.recoveryStatus}>{goalStatus(sleepPct)}</Text>
+          </TouchableOpacity>
           <View style={styles.statDivider} />
           <TouchableOpacity style={styles.recoveryItem} activeOpacity={0.85} onPress={() => setWaterOpen(true)}>
             <MaterialCommunityIcons name="water" size={22} color={ORANGE} />
