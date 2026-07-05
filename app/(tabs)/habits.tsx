@@ -1,7 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────
 // HABITS TAB — list of active habits, per-habit streak + heatmap, a
-// completion button, and an add-habit flow (task 023). Data lives in
-// lib/habits-data.ts (local-first, same pattern as lib/meals-data.ts).
+// completion button, and an add-habit flow (task 023). A MEDS toggle at the
+// top switches to the Medication & Supplements sub-section (task 024) —
+// same screen, not a separate tab, per that task's spec. Data lives in
+// lib/habits-data.ts / lib/medications-data.ts (local-first, mirrors
+// lib/meals-data.ts's pattern).
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useState } from 'react';
@@ -19,6 +22,12 @@ import {
   toggleToday, computeStreak, buildHeatmap, isDoneOnDate,
   type Habit, type HabitLog, type Frequency,
 } from '@/lib/habits-data';
+import {
+  getActiveMedications, addMedication, deleteMedication, getLogsForMedication,
+  toggleTodayDose, computeMedStreak, buildMedHeatmap, isDoseTakenOnDate,
+  computeAdherence30d, courseProgress,
+  type Medication, type MedicationLog, type MedType,
+} from '@/lib/medications-data';
 import { toDateKey } from '@/lib/dateKey';
 import HeatmapCalendar from '@/components/HeatmapCalendar';
 
@@ -32,29 +41,43 @@ const BG     = '#F4F2EE';
 const BOLD   = 'PixeloidSans_700Bold';
 const REG    = 'PixeloidSans_400Regular';
 
-type Row = { habit: Habit; logs: HabitLog[] };
+type Section = 'habits' | 'meds';
+type HabitRow = { habit: Habit; logs: HabitLog[] };
+type MedRow = { med: Medication; logs: MedicationLog[] };
 
 export default function HabitsScreen() {
-  const [rows, setRows] = useState<Row[]>([]);
+  const [section, setSection] = useState<Section>('habits');
+
+  const [rows, setRows] = useState<HabitRow[]>([]);
   const [addVisible, setAddVisible] = useState(false);
   const [name, setName] = useState('');
   const [frequency, setFrequency] = useState<Frequency>('daily');
+
+  const [medRows, setMedRows] = useState<MedRow[]>([]);
+  const [addMedVisible, setAddMedVisible] = useState(false);
+  const [medName, setMedName] = useState('');
+  const [medType, setMedType] = useState<MedType>('medication');
+  const [medCourseLength, setMedCourseLength] = useState('');
 
   const refresh = useCallback(async () => {
     const habits = await getActiveHabits();
     const logs = await Promise.all(habits.map(h => getLogsForHabit(h.id)));
     setRows(habits.map((habit, i) => ({ habit, logs: logs[i] })));
+
+    const meds = await getActiveMedications();
+    const medLogs = await Promise.all(meds.map(m => getLogsForMedication(m.id)));
+    setMedRows(meds.map((med, i) => ({ med, logs: medLogs[i] })));
   }, []);
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
-  async function handleToggle(row: Row) {
+  async function handleToggle(row: HabitRow) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await toggleToday(row.habit);
     refresh();
   }
 
-  function handleDelete(row: Row) {
+  function handleDelete(row: HabitRow) {
     Alert.alert(row.habit.name, 'Remove this habit?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => { await deleteHabit(row.habit.id); refresh(); } },
@@ -72,51 +95,131 @@ export default function HabitsScreen() {
     refresh();
   }
 
+  async function handleToggleDose(row: MedRow) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await toggleTodayDose(row.med);
+    refresh();
+  }
+
+  function handleDeleteMed(row: MedRow) {
+    Alert.alert(row.med.name, 'Remove this medication?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => { await deleteMedication(row.med.id); refresh(); } },
+    ]);
+  }
+
+  async function saveMed() {
+    const trimmed = medName.trim();
+    if (!trimmed) return;
+    const courseLength = medCourseLength.trim() ? parseInt(medCourseLength, 10) : undefined;
+    await addMedication({ name: trimmed, type: medType, courseLength: courseLength && !Number.isNaN(courseLength) ? courseLength : undefined });
+    setMedName('');
+    setMedType('medication');
+    setMedCourseLength('');
+    setAddMedVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    refresh();
+  }
+
   const today = toDateKey(new Date());
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>HABITS</Text>
-        <TouchableOpacity onPress={() => setAddVisible(true)} hitSlop={12}>
+        <Text style={styles.title}>{section === 'habits' ? 'HABITS' : 'MEDS'}</Text>
+        <TouchableOpacity onPress={() => (section === 'habits' ? setAddVisible(true) : setAddMedVisible(true))} hitSlop={12}>
           <MaterialCommunityIcons name="plus" size={22} color={INK} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.list}>
-        {rows.length === 0 && (
-          <Text style={styles.empty}>No habits yet. Tap + to add your first one.</Text>
-        )}
-        {rows.map(row => {
-          const streak = computeStreak(row.logs);
-          const done = isDoneOnDate(row.logs, today);
-          const cells = buildHeatmap(row.habit, row.logs);
-          return (
-            <View key={row.habit.id} style={styles.card}>
-              <View style={styles.cardTop}>
-                <TouchableOpacity style={styles.nameWrap} onLongPress={() => handleDelete(row)}>
-                  <Text style={styles.habitName}>{row.habit.name}</Text>
-                  <Text style={styles.streakText}>
-                    {streak.current > 0 ? `${streak.current} day streak` : 'No active streak'}
-                    {streak.longest > streak.current ? ` · best ${streak.longest}` : ''}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.completeBtn, done && styles.completeBtnDone]}
-                  onPress={() => handleToggle(row)}
-                >
-                  <MaterialCommunityIcons
-                    name={done ? 'check-circle' : 'circle-outline'}
-                    size={28}
-                    color={done ? '#FFFFFF' : ORANGE}
-                  />
-                </TouchableOpacity>
+      <View style={styles.segmentRow}>
+        {(['habits', 'meds'] as Section[]).map(s => (
+          <TouchableOpacity
+            key={s}
+            style={[styles.segment, section === s && styles.segmentActive]}
+            onPress={() => setSection(s)}
+          >
+            <Text style={[styles.segmentText, section === s && styles.segmentTextActive]}>
+              {s === 'habits' ? 'HABITS' : 'MEDICATION & SUPPLEMENTS'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {section === 'habits' ? (
+        <ScrollView contentContainerStyle={styles.list}>
+          {rows.length === 0 && (
+            <Text style={styles.empty}>No habits yet. Tap + to add your first one.</Text>
+          )}
+          {rows.map(row => {
+            const streak = computeStreak(row.logs);
+            const done = isDoneOnDate(row.logs, today);
+            const cells = buildHeatmap(row.habit, row.logs);
+            return (
+              <View key={row.habit.id} style={styles.card}>
+                <View style={styles.cardTop}>
+                  <TouchableOpacity style={styles.nameWrap} onLongPress={() => handleDelete(row)}>
+                    <Text style={styles.habitName}>{row.habit.name}</Text>
+                    <Text style={styles.streakText}>
+                      {streak.current > 0 ? `${streak.current} day streak` : 'No active streak'}
+                      {streak.longest > streak.current ? ` · best ${streak.longest}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.completeBtn, done && styles.completeBtnDone]}
+                    onPress={() => handleToggle(row)}
+                  >
+                    <MaterialCommunityIcons
+                      name={done ? 'check-circle' : 'circle-outline'}
+                      size={28}
+                      color={done ? '#FFFFFF' : ORANGE}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <HeatmapCalendar cells={cells} />
               </View>
-              <HeatmapCalendar cells={cells} />
-            </View>
-          );
-        })}
-      </ScrollView>
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={styles.list}>
+          {medRows.length === 0 && (
+            <Text style={styles.empty}>No medications or supplements yet. Tap + to add one.</Text>
+          )}
+          {medRows.map(row => {
+            const streak = computeMedStreak(row.logs);
+            const taken = isDoseTakenOnDate(row.logs, today);
+            const cells = buildMedHeatmap(row.med, row.logs);
+            const adherence = computeAdherence30d(row.med, row.logs);
+            const course = courseProgress(row.med);
+            return (
+              <View key={row.med.id} style={styles.card}>
+                <View style={styles.cardTop}>
+                  <TouchableOpacity style={styles.nameWrap} onLongPress={() => handleDeleteMed(row)}>
+                    <Text style={styles.habitName}>{row.med.name}</Text>
+                    <Text style={styles.streakText}>
+                      {streak.current > 0 ? `${streak.current} day streak` : 'No active streak'}
+                      {' · '}{adherence}% adherence (30d)
+                      {course ? ` · Day ${course.day} of ${course.total}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.completeBtn, taken && styles.completeBtnDone]}
+                    onPress={() => handleToggleDose(row)}
+                  >
+                    <MaterialCommunityIcons
+                      name={taken ? 'check-circle' : 'circle-outline'}
+                      size={28}
+                      color={taken ? '#FFFFFF' : ORANGE}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <HeatmapCalendar cells={cells} />
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
 
       <Modal visible={addVisible} transparent animationType="fade" onRequestClose={() => setAddVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalWrap}>
@@ -150,6 +253,47 @@ export default function HabitsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal visible={addMedVisible} transparent animationType="fade" onRequestClose={() => setAddMedVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalWrap}>
+          <Pressable style={styles.backdrop} onPress={() => setAddMedVisible(false)} />
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>NEW MEDICATION / SUPPLEMENT</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Vitamin D, Antibiotic course"
+              placeholderTextColor={MUTED}
+              value={medName}
+              onChangeText={setMedName}
+              autoFocus
+            />
+            <View style={styles.freqRow}>
+              {(['medication', 'supplement'] as MedType[]).map(t => (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.freqChip, medType === t && styles.freqChipActive]}
+                  onPress={() => setMedType(t)}
+                >
+                  <Text style={[styles.freqChipText, medType === t && styles.freqChipTextActive]}>
+                    {t.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="Course length in days (optional, e.g. 7)"
+              placeholderTextColor={MUTED}
+              value={medCourseLength}
+              onChangeText={setMedCourseLength}
+              keyboardType="number-pad"
+            />
+            <TouchableOpacity style={styles.saveBtn} onPress={saveMed}>
+              <Text style={styles.saveBtnText}>ADD</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -161,6 +305,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
   },
   title: { fontFamily: BOLD, fontSize: 16, color: INK },
+  segmentRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
+  segment: {
+    flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: BORDER,
+    alignItems: 'center',
+  },
+  segmentActive: { backgroundColor: ORANGE, borderColor: ORANGE },
+  segmentText: { fontFamily: REG, fontSize: 9, color: MUTED },
+  segmentTextActive: { color: '#FFFFFF' },
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   empty: { fontFamily: REG, fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 40 },
   card: {

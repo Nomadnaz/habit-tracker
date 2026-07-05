@@ -182,7 +182,7 @@ async function saveStreak(habitId: string, streak: StreakInfo, lastCompletedDate
 // ── Streak + heatmap helpers ──────────────────────────────────────────────────
 
 /** Current streak = consecutive completed days ending today or yesterday. */
-export function computeStreak(logs: HabitLog[]): StreakInfo {
+export function computeStreak(logs: Array<{ date: string; completed: boolean }>): StreakInfo {
   const doneDates = new Set(logs.filter(l => l.completed).map(l => l.date));
   if (doneDates.size === 0) return { current: 0, longest: 0 };
 
