@@ -44,6 +44,13 @@ import { migrateDateKeysV2 } from '@/lib/migrateDateKeysV2';
 // Lets us lock the app to portrait by default (the focus timer unlocks it for landscape).
 import * as ScreenOrientation from 'expo-screen-orientation';
 
+// Onboarding (task 062): local "have I onboarded on this device" flag +
+// the flush that writes locally-collected answers into Supabase once a
+// session exists (handles both immediate-session signup and the
+// email-confirmation-required path, where the session only appears on a
+// later login).
+import { isOnboardingComplete, flushOnboardingIfNeeded } from '@/lib/onboarding-data';
+
 // Keep the splash screen visible immediately on launch.
 // Without this, it would disappear too early before fonts are loaded.
 SplashScreen.preventAutoHideAsync();
@@ -63,6 +70,9 @@ export default function RootLayout() {
   // read @tasks/@body/etc. before this, or they'll see pre-migration keys.
   const [dateKeysMigrated, setDateKeysMigrated] = useState(false);
 
+  // null = not checked yet (don't route on a guess); true/false once known.
+  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
   // router lets us programmatically send the user to a different screen.
   const router = useRouter();
 
@@ -81,12 +91,12 @@ export default function RootLayout() {
     PixeloidSans_700Bold: require('@/assets/fonts/PixeloidSans-Bold.ttf'),
   });
 
-  // Once fonts are ready AND the date-key migration has finished, hide the
-  // splash screen and show the app — hiding it earlier would let a screen
-  // flash with @tasks/@body still in the old key format.
+  // Once fonts are ready AND the date-key migration has finished AND we know
+  // the onboarding flag, hide the splash screen and show the app — hiding it
+  // earlier would let a screen flash with stale data or the wrong route.
   useEffect(() => {
-    if (fontsLoaded && dateKeysMigrated) SplashScreen.hideAsync();
-  }, [fontsLoaded, dateKeysMigrated]);
+    if (fontsLoaded && dateKeysMigrated && onboardingDone !== null) SplashScreen.hideAsync();
+  }, [fontsLoaded, dateKeysMigrated, onboardingDone]);
 
   // Lock the whole app to portrait by default. The focus timer screen unlocks this
   // for landscape while it's open, then re-locks portrait when you leave it.
@@ -106,35 +116,63 @@ export default function RootLayout() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false); // We now know the login state, so stop showing the loading screen.
+      if (session) flushOnboardingIfNeeded();
     });
 
     // onAuthStateChange fires whenever the user logs in or logs out.
     // This keeps our session state in sync automatically.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      // Covers the "email confirmation required" onboarding path: the first
+      // login after confirming is where the cached answers finally get a
+      // userId to write against.
+      if (session) flushOnboardingIfNeeded();
     });
 
     // When this component unmounts (app closes), stop listening to auth changes.
     return () => subscription.unsubscribe();
   }, []);
 
+  // Whether this device has completed (or explicitly skipped) onboarding —
+  // independent of login state, per task 062: new installs see the
+  // onboarding flow before login, returning logged-out users still go
+  // straight to the login screen as before. Re-read on every top-level
+  // navigation (cheap AsyncStorage read), not just once on launch — the
+  // welcome screen's "I already have an account" shortcut flips this flag
+  // from inside (onboarding), and without a re-check here the routing
+  // effect below would still see the stale `false` and bounce straight
+  // back to onboarding after that screen's own router.replace('/(auth)/login').
+  useEffect(() => {
+    isOnboardingComplete().then(setOnboardingDone);
+  }, [segments[0]]);
+
   // This runs whenever login state, current screen, or font loading changes.
   // It's the "traffic cop" — it decides which screen the user should be on.
   useEffect(() => {
-    // Don't redirect until we know the login state and fonts are ready.
-    if (loading || !fontsLoaded || !dateKeysMigrated) return;
+    // Don't redirect until we know the login state, onboarding state, and fonts are ready.
+    if (loading || !fontsLoaded || !dateKeysMigrated || onboardingDone === null) return;
 
-    // Check if the user is currently on an auth screen (login/signup).
     const inAuth = segments[0] === '(auth)';
+    const inOnboarding = segments[0] === '(onboarding)';
 
-    if (!session && !inAuth) {
-      // Not logged in and not on the login screen — send them to login.
-      router.replace('/(auth)/login');
-    } else if (session && inAuth) {
+    if (session) {
       // Logged in but still on the login screen — send them to the main app.
-      router.replace('/(tabs)');
+      // Deliberately NOT auto-redirecting out of (onboarding) here: signUp()
+      // on the account screen (screen 9) makes `session` truthy immediately,
+      // but the user still has one more screen (briefing-builder, screen 10)
+      // to see. That screen calls router.replace('/(tabs)') itself once it's
+      // done — see app/(onboarding)/briefing-builder.tsx.
+      if (inAuth) router.replace('/(tabs)');
+    } else if (!onboardingDone && !inOnboarding) {
+      // Brand-new device, never onboarded (or explicitly skipped via "I
+      // already have an account") — the account wall is deliberately late
+      // (task 062), so this comes before login, not instead of it.
+      router.replace('/(onboarding)/welcome');
+    } else if (onboardingDone && !inAuth) {
+      // Already onboarded (or skipped) but logged out — the familiar path.
+      router.replace('/(auth)/login');
     }
-  }, [session, segments, loading, fontsLoaded, dateKeysMigrated]);
+  }, [session, segments, loading, fontsLoaded, dateKeysMigrated, onboardingDone]);
 
   // Don't render anything until fonts are loaded, to avoid a flash of unstyled text.
   if (!fontsLoaded) return null;
@@ -144,6 +182,10 @@ export default function RootLayout() {
   // @tasks/@body in the old key format.
   if (!dateKeysMigrated) return null;
 
+  // Same reasoning for the onboarding flag: without it we don't know yet
+  // whether a logged-out user belongs on /(onboarding)/welcome or /(auth)/login.
+  if (onboardingDone === null) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       {/* Dark icons/text in the status bar (time, battery) to contrast with our light background. */}
@@ -152,8 +194,9 @@ export default function RootLayout() {
       {/* Stack is the navigation system. It manages moving between screens.
           headerShown: false hides the default navigation header bar on every screen. */}
       <Stack screenOptions={{ headerShown: false }}>
-        {/* Register the two main sections of the app as navigable destinations. */}
+        {/* Register the main sections of the app as navigable destinations. */}
         <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
         <Stack.Screen name="workouts" />
