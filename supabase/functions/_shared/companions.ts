@@ -112,6 +112,16 @@ export const companions: Record<string, CompanionConfig> = {
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'goals'),
     actions: [],
   },
+  mood: {
+    defaultName: 'Anchor',
+    // Deliberately mood_logs ONLY — never journal_entries/therapy_notes
+    // (task 066's privacy acceptance criterion; those tables aren't even
+    // written to yet, see supabase/migrations/019_mental_health.sql).
+    contextSources: ['mood_logs', 'user_context_summary'],
+    model: 'haiku',
+    systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'mood & wellbeing'),
+    actions: [],
+  },
 };
 
 export type CompanionType = keyof typeof companions;

@@ -262,6 +262,29 @@ export async function buildContext(
     })());
   }
 
+  if (want('mood_logs')) {
+    jobs.push((async () => {
+      // Only mood_score/stress_score/triggers — journal_entries/therapy_notes
+      // are never queried by buildContext at all (task 066's acceptance
+      // criterion: the AI never sees journal/therapy content unless the user
+      // pastes it into the conversation themselves).
+      const { data } = await supabase
+        .from('mood_logs')
+        .select('date, mood_score, stress_score')
+        .eq('user_id', userId)
+        .gte('date', new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10))
+        .order('date', { ascending: false })
+        .limit(14);
+      raw.mood_logs = data ?? [];
+      if (data?.length) {
+        const avg = data.reduce((s: number, d: { mood_score: number }) => s + d.mood_score, 0) / data.length;
+        lines.push(`MOOD (last ${data.length} days): avg ${avg.toFixed(1)}/10, latest ${data[0].mood_score}/10.`);
+      } else {
+        lines.push('MOOD: none logged in the last 2 weeks.');
+      }
+    })());
+  }
+
   if (want('goals')) {
     jobs.push((async () => {
       const { data: goals } = await supabase
