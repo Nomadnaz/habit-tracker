@@ -60,6 +60,7 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  DeviceEventEmitter,
 } from 'react-native';
 import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import { TaskRow, InsertionGhost } from '@/components/TaskRow';
@@ -96,7 +97,9 @@ import { useAppleReminderSync } from '@/lib/use-apple-reminder-sync';
 import { TaskModalFields } from '@/components/TaskModalFields';
 import { WHEEL_DECELERATION } from '@/components/WheelPicker';
 import { buildDateOptions, findTaskDateKey, moveTaskInMap } from '@/lib/task-schedule';
+import { TASKS_CHANGED_EVENT } from '@/lib/use-remote-task-sync';
 import { TASK_SELECT_COLUMNS, taskFromDbRow, taskToDbRow } from '@/lib/task-supabase';
+import BriefingCard from '@/components/BriefingCard';
 
 // Enable LayoutAnimation on Android (iOS enables it automatically).
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -491,26 +494,28 @@ export default function TodayScreen() {
           ...taskMap,
           [dateKey]: [...insertNewActiveTask(dayActive, newTask), ...dayArchived],
         };
-        persist(newMap);
-        if (userId) {
-          void supabase.from('tasks').insert(taskToDbRow(newTask, dateKey, userId));
-        }
-        void syncNewTaskToApple({
-          label,
-          dateKey,
-          mode: 'reminders-only',
-          hour: saveHour,
-          minute: saveMinute,
-          location,
-          priority: sheetPriority,
-        }).then(ids => {
+        void (async () => {
+          await persist(newMap);
+          if (userId) {
+            const { error } = await supabase.from('tasks').insert(taskToDbRow(newTask, dateKey, userId));
+            if (error) console.warn('[task insert] failed:', error.code, error.message);
+          }
+          const ids = await syncNewTaskToApple({
+            label,
+            dateKey,
+            mode: 'reminders-only',
+            hour: saveHour,
+            minute: saveMinute,
+            location,
+            priority: sheetPriority,
+          });
           if (!ids.appleReminderId && !ids.appleEventId) return;
           setTaskMap(prev => {
             const next = mergeAppleIdsIntoTaskMap(prev, dateKey, id, ids);
-            AsyncStorage.setItem('@tasks', JSON.stringify(next));
+            void AsyncStorage.setItem('@tasks', JSON.stringify(next));
             return next;
           });
-        });
+        })();
       }
       closeSheet();
     }
@@ -810,6 +815,17 @@ export default function TodayScreen() {
     init();
   }, []); // The empty array [] means: only run this once, when the component first mounts.
 
+  // Refresh the list when a task is synced in from outside the app (e.g. created
+  // by the voice device → ai-chat → useRemoteTaskSync writes @tasks).
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(TASKS_CHANGED_EVENT, () => {
+      AsyncStorage.getItem('@tasks').then(raw => {
+        if (raw) setTaskMap(normalizeTaskMap(JSON.parse(raw) as TaskMap));
+      });
+    });
+    return () => sub.remove();
+  }, []);
+
   useAppleReminderSync(
     taskMap,
     setTaskMap,
@@ -843,9 +859,9 @@ export default function TodayScreen() {
 
   // Saves a new version of the task map both in memory (instant UI update)
   // and to AsyncStorage (so it survives app restarts).
-  function persist(newMap: TaskMap) {
-    setTaskMap(newMap);                                         // Update the UI immediately.
-    AsyncStorage.setItem('@tasks', JSON.stringify(newMap));    // Save to the device in the background.
+  function persist(newMap: TaskMap): Promise<void> {
+    setTaskMap(newMap);
+    return AsyncStorage.setItem('@tasks', JSON.stringify(newMap)).then(() => undefined);
   }
 
   function removeCompletingState(id: string) {
@@ -1163,6 +1179,12 @@ export default function TodayScreen() {
             <MaterialCommunityIcons name="food-apple-outline" size={18} color="#FF4D00" />
           </TouchableOpacity>
           <TouchableOpacity
+            onPress={() => router.push('/ble-bridge')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="bluetooth" size={18} color="#FF4D00" />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={async () => {
               await supabase.auth.signOut();
               router.replace('/(auth)/login');
@@ -1175,6 +1197,8 @@ export default function TodayScreen() {
         </View>
         <Text style={styles.tagline}>PLAN. TRACK. EXECUTE.</Text>
       </View>
+
+      <BriefingCard />
 
       {/* ── Main body: date column + task list ─────────── */}
       {/* This row takes up all remaining space (flex: 1) between the header and tracker bar. */}
@@ -1471,20 +1495,6 @@ export default function TodayScreen() {
           </TouchableOpacity>
         </GHScrollView>
 
-      </View>
-
-      {/* ── Tracker bar ────────────────────────────────── */}
-      {/* Tracker bar — steps, activity, calories, elevation (Apple Health when connected). */}
-      <View style={styles.trackerBar}>
-        {trackers.map((t, i) => (
-          // trackerItemFirst removes the left border from the first item (no double border at the edge).
-          <View key={t.unit} style={[styles.trackerItem, i === 0 && styles.trackerItemFirst]}>
-            <Text style={styles.trackerTop} numberOfLines={1}>{t.top}</Text>
-            <MaterialCommunityIcons name={t.icon} size={22} color="#FF4D00" style={styles.trackerIcon} />
-            <Text style={styles.trackerValue}>{t.value}</Text>
-            <Text style={styles.trackerUnit}>{t.unit}</Text>
-          </View>
-        ))}
       </View>
 
       <DragTaskFloatingChip
