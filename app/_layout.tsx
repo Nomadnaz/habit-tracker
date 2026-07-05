@@ -211,6 +211,7 @@ export default function RootLayout() {
         <Stack.Screen name="modals/mood" options={{ presentation: 'modal' }} />
         <Stack.Screen name="modals/cycle-tracking" options={{ presentation: 'modal' }} />
         <Stack.Screen name="modals/library" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="modals/search" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/companion-persona" />
       </Stack>

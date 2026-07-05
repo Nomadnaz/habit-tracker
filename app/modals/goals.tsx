@@ -10,7 +10,7 @@ import {
   Modal, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -34,8 +34,9 @@ type Row = { goal: Goal; milestones: Milestone[]; logs: GoalLog[] };
 
 export default function GoalsModal() {
   const router = useRouter();
+  const { highlightId } = useLocalSearchParams<{ highlightId?: string }>(); // set by GlobalSearch (task 074)
   const [rows, setRows] = useState<Row[]>([]);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(highlightId ?? null);
   const [addVisible, setAddVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [milestoneInput, setMilestoneInput] = useState<Record<string, string>>({});

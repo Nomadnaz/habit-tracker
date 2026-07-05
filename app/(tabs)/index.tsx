@@ -1167,6 +1167,12 @@ export default function TodayScreen() {
           <View style={[styles.corner, styles.cornerTL]} />{/* Top-left orange corner line. */}
           <Text style={styles.title}>TODAY</Text>
           <TouchableOpacity
+            onPress={() => router.push('/modals/search')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="magnify" size={18} color="#FF4D00" />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => router.push('/calendar')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
