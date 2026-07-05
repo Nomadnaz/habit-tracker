@@ -52,6 +52,7 @@ export default function TabsLayout() {
     >
       {/* Each Tabs.Screen registers one tab. The "name" must match the filename in (tabs)/. */}
       <Tabs.Screen name="index"    options={{ title: 'TODAY'    }} />
+      <Tabs.Screen name="habits"   options={{ title: 'HABITS'   }} />
       <Tabs.Screen name="gym"      options={{ title: 'BODY'     }} />
       <Tabs.Screen name="tree"     options={{ title: 'TREE'     }} />
       <Tabs.Screen name="progress" options={{ title: 'PROGRESS' }} />
