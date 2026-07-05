@@ -29,8 +29,10 @@ import {
 import {
   ensureSeeded,
   getBodyWorkoutPreview,
+  getGymPlan, setGymPlanDay, WEEKDAYS,
   type BodyWorkoutPreview,
   type BodyMovement,
+  type GymPlan, type PlanDayValue,
 } from '@/lib/workout-data';
 import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
 
@@ -172,6 +174,7 @@ export default function BodyScreen() {
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightInput, setWeightInput] = useState('');
   const [healthSyncing, setHealthSyncing] = useState(false);
+  const [gymPlan, setGymPlanState] = useState<GymPlan | null>(null);
   const refreshWorkoutPreview = useCallback(async (movement: BodyMovement) => {
     await ensureSeeded();
     setWorkoutPreview(await getBodyWorkoutPreview(movement));
@@ -190,7 +193,17 @@ export default function BodyScreen() {
       }
     });
     ensureSeeded();
+    getGymPlan().then(setGymPlanState);
   }, [refreshWorkoutPreview]));
+
+  // Tapping a planner day cycles through push -> pull -> legs -> upper ->
+  // lower -> rest -> cheat -> (cleared), one column per weekday (task 025).
+  const PLAN_CYCLE: PlanDayValue[] = ['push', 'pull', 'legs', 'upper', 'lower', 'rest', 'cheat', null];
+  async function cyclePlanDay(day: keyof GymPlan) {
+    const current = gymPlan?.[day] ?? null;
+    const next = PLAN_CYCLE[(PLAN_CYCLE.indexOf(current) + 1) % PLAN_CYCLE.length];
+    setGymPlanState(await setGymPlanDay(day, next));
+  }
 
   useEffect(() => {
     void refreshWorkoutPreview(activeMovement);
@@ -287,6 +300,31 @@ export default function BodyScreen() {
           <Text style={styles.logWorkoutText}>LOG WORKOUT</Text>
           <MaterialCommunityIcons name="chevron-right" size={16} color="#FFFFFF" />
         </TouchableOpacity>
+
+        {/* ── PPL day planner (task 025) — tap a day to cycle push/pull/legs/upper/lower/rest/cheat ── */}
+        <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>WEEK PLAN</Text>
+        <View style={styles.plannerRow}>
+          {WEEKDAYS.map(day => {
+            const value = gymPlan?.[day] ?? null;
+            const isRest = value === 'rest';
+            const isCheat = value === 'cheat';
+            return (
+              <TouchableOpacity key={day} style={styles.plannerCol} onPress={() => cyclePlanDay(day)}>
+                <Text style={styles.plannerDayLabel}>{day.slice(0, 3).toUpperCase()}</Text>
+                <View style={[
+                  styles.plannerChip,
+                  value && !isRest && !isCheat && styles.plannerChipActive,
+                  isRest && styles.plannerChipRest,
+                  isCheat && styles.plannerChipCheat,
+                ]}>
+                  <Text style={[styles.plannerChipText, value && styles.plannerChipTextActive]}>
+                    {value ? (isRest ? 'REST' : isCheat ? 'CHEAT' : value.slice(0, 4).toUpperCase()) : '—'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         {/* ── Global stats bar ───────────────────────────── */}
         <View style={styles.statsBar}>
@@ -662,6 +700,19 @@ const styles = StyleSheet.create({
   sectionRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 18, justifyContent: 'space-between' },
   sectionLabel: { fontFamily: 'PixeloidSans_700Bold', fontSize: 11, color: INK, letterSpacing: 1 },
   sectionLabelStandalone: { paddingHorizontal: 20, marginBottom: 12 },
+
+  plannerRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 18, gap: 4 },
+  plannerCol: { flex: 1, alignItems: 'center', gap: 4 },
+  plannerDayLabel: { fontFamily: NUM_FONT, fontSize: 8, color: MUTED },
+  plannerChip: {
+    width: '100%', paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: BORDER,
+    alignItems: 'center', backgroundColor: CARD,
+  },
+  plannerChipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
+  plannerChipRest: { backgroundColor: FAINT, borderColor: FAINT },
+  plannerChipCheat: { backgroundColor: '#C98A1B', borderColor: '#C98A1B' },
+  plannerChipText: { fontFamily: NUM_FONT, fontSize: 7, color: MUTED },
+  plannerChipTextActive: { color: '#FFFFFF' },
 
   stepsLeft: { flex: 1, paddingRight: 14 },
   bigNumber: { fontFamily: NUM_FONT, fontSize: 38, color: ORANGE, marginTop: 6 },

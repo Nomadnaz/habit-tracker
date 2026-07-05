@@ -5,6 +5,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
+import { postWrite } from './postWrite';
 
 // Get the logged-in user's ID (null if not signed in).
 async function uid(): Promise<string | null> {
@@ -365,12 +366,16 @@ export async function markDoneToday(templateId: string): Promise<void> {
   const today = todayKey();
   const filtered = log.filter(e => !(e.templateId === templateId && e.date === today));
   const entry = { id: genId(), templateId, date: today };
+  const wasAlreadyDone = filtered.length !== log.length;
   await save(K.doneLog, [...filtered, { date: today, templateId }]);
   bg(async () => {
     const userId = await uid();
     if (!userId) return;
     await supabase.from('workout_done_log').upsert({ id: entry.id, user_id: userId, workout_template_id: templateId, date: today });
   });
+  // task 025: this was writing straight to workout_done_log with no fan-out
+  // at all — postWrite('workout', ...) had never been wired here. Fixed.
+  postWrite('workout', { template_id: templateId, date: today }, wasAlreadyDone ? 'update' : 'create');
 }
 
 export async function unmarkDoneToday(templateId: string): Promise<void> {
@@ -413,4 +418,32 @@ export async function deletePB(pbId: string): Promise<void> {
   bg(async () => {
     await supabase.from('pb_log').delete().eq('id', pbId);
   });
+}
+
+// ── Gym plan (PPL day planner, task 025) ────────────────────────────────────
+// gym_plan already existed (migration 003) but nothing read/wrote it. One row
+// per user, one column per weekday — reusing BodyMovement's push/pull/legs/
+// upper/lower vocabulary, plus 'rest'/'cheat' markers this task adds.
+
+export type PlanDayValue = BodyMovement | 'rest' | 'cheat' | null;
+export type GymPlan = Record<'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday', PlanDayValue>;
+export const WEEKDAYS: (keyof GymPlan)[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+const GYM_PLAN_KEY = '@gym_plan';
+const EMPTY_PLAN: GymPlan = { monday: null, tuesday: null, wednesday: null, thursday: null, friday: null, saturday: null, sunday: null };
+
+export async function getGymPlan(): Promise<GymPlan> {
+  return load<GymPlan>(GYM_PLAN_KEY, EMPTY_PLAN);
+}
+
+export async function setGymPlanDay(day: keyof GymPlan, value: PlanDayValue): Promise<GymPlan> {
+  const plan = await getGymPlan();
+  const next = { ...plan, [day]: value };
+  await save(GYM_PLAN_KEY, next);
+  bg(async () => {
+    const userId = await uid();
+    if (!userId) return;
+    await supabase.from('gym_plan').upsert({ user_id: userId, ...next, updated_at: new Date().toISOString() });
+  });
+  return next;
 }
