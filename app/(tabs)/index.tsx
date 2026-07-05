@@ -1203,6 +1203,12 @@ export default function TodayScreen() {
             <MaterialCommunityIcons name="emoticon-outline" size={18} color="#FF4D00" />
           </TouchableOpacity>
           <TouchableOpacity
+            onPress={() => router.push('/modals/library')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="book-outline" size={18} color="#FF4D00" />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => router.push('/settings')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
