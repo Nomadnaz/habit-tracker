@@ -206,6 +206,8 @@ export default function RootLayout() {
         <Stack.Screen name="calorie" />
         <Stack.Screen name="ble-bridge" />
         <Stack.Screen name="modals/sleep-detail" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="settings/index" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="settings/companion-persona" />
       </Stack>
 
       {/* Floats above every screen; shows when a task syncs in from the device. */}
