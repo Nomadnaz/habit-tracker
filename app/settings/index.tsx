@@ -130,6 +130,13 @@ export default function Settings() {
             <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
           </TouchableOpacity>
         ))}
+
+        <Text style={styles.sectionLabel}>PRIVACY</Text>
+        <TouchableOpacity style={styles.companionRow} onPress={() => router.push('/modals/cycle-tracking')}>
+          <MaterialCommunityIcons name="calendar-heart" size={22} color={ORANGE} />
+          <Text style={styles.companionLabel}>Cycle tracking (off by default)</Text>
+          <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
