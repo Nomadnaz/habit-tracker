@@ -61,29 +61,44 @@ The lean MVP spine, onboarding, AND minimal Settings are now code-complete. Two 
 (Phase-0 tasks/001–005 done; AI infra tasks 006/007/010/013 effectively done via the live deploy; briefing 018+019 done; onboarding 062 done; calorie tasks 028–030 done; action execution 012+039 substantially done, pending on-device verify; habits+medication 022–024 done, sleep 035–036 done, activity 031+032 partially done (foreground only), buildContext/companions extended to all 3 new domains (task 037) pending redeploy, all pending on-device verify + live migration runs; tasks/034 turned out to already be satisfied by the existing gym.tsx — see its task notes.) Before naming any new migration file, run `ls supabase/migrations/` — next free number is `014` (don't trust hardcoded numbers in task files; see "Migration numbers are hints" in CLAUDE.md).
 
 ## ⚠️ ACTION NEEDED BY YOU (cannot be done from this session)
-- **🔁 ROTATE THE ANTHROPIC KEY (do this first).** It was pasted into a chat transcript twice. Revoke at console.anthropic.com → API Keys, issue a new one, and set it via the **Supabase dashboard** (Settings → Edge Functions → Secrets) — NOT via chat, NOT in `app.json`. Confirmed not in git history, so revoking fully closes it.
-- **NEVER run `supabase db push`** on this project — it re-runs the one-time-unsafe `002_date_key_format.sql` against live data. Paste individual migration files into the SQL editor instead. (`006_ai_companions.sql` is already live; `002`/`003`/`007` per below.)
-- Run `supabase/migrations/002_date_key_format.sql` once, manually, in the Supabase SQL editor. It is NOT safely re-runnable — see the warning in the file.
-- Run `supabase/migrations/003_gym_body_reconcile.sql` (safe to re-run, purely additive).
-- **Habits (tasks 022+023):** run `supabase/migrations/009_habits.sql` (safe to re-run, additive) — adds `habits`/`habit_logs`/`streak_data`/`streak_events`. Nothing to deploy (no Edge Function involved). Then open the app, add a habit, mark it done, confirm the heatmap cell turns green and the streak survives an app restart.
-- **Medication (task 024):** run `supabase/migrations/010_medications.sql` (safe to re-run, additive) — adds `medications`/`medication_logs`. Then in the app, switch the Habits tab's toggle to MEDICATION, add one with a course length, mark today's dose, confirm adherence % and 'Day X of Y' render.
-- **Sleep (tasks 035+036):** run `supabase/migrations/011_sleep.sql` (safe to re-run, additive) — adds `sleep_logs`/`sleep_phone_logs`/`winddown_logs`. Then tap the SLEEP recovery card on the Body (gym) tab, log a night and a Phone Down Challenge entry, confirm the weekly bar chart and Pass/Close/Fail + streak render.
-- **Activity (tasks 031+032):** run `supabase/migrations/012_activity.sql` (safe to re-run, additive) — adds `activities`/`activity_stats_cumulative`. Then on the ACTIVITY tab, grant location access, start a short walk, confirm the live stats update and the polyline/route saves on stop. Separately, a real 30-min outdoor test is needed to judge background-location battery drain before this is called done — that part was intentionally not built this session (foreground-only tracking).
-- **buildContext (task 037):** run `supabase functions deploy ai-chat` to pick up the new `habit_logs`/`meals`/`activities`/`sleep_logs`/`sleep_phone_logs` context sources and the 3 new companion configs (`calorie`/`activity`/`sleep`). No migration involved, just a redeploy.
-- **Daily briefing (tasks 018+019):** run `supabase functions deploy daily-briefing` (brand new function, needs the same `ANTHROPIC_API_KEY` secret already set for `ai-chat`/`food-vision`). Then open the Today screen, tap GET DAILY BRIEFING under the header, confirm a <150-word summary appears and persists across an app restart (same day).
-- **Global Search (task 074):** no migration needed. Tap the new magnifying-glass icon next to "TODAY", search for a habit/goal/book/expense/task by name, confirm results appear and tapping one navigates correctly.
-- **Streak freezes (task 076):** run `supabase/migrations/022_streak_freezes.sql` (safe to re-run, additive — one column). On the Habits tab, toggle auto-freeze on for a habit, skip a day, confirm it renders blue on the heatmap and the streak counter doesn't reset.
-- **Library (task 064):** run `supabase/migrations/021_library.sql` (safe to re-run, additive). Tap the new book icon on the Today header, paste a URL and a plain title into the capture bar, confirm they land in Links vs Books correctly.
-- **Cycle tracking (task 067):** run `supabase/migrations/020_cycle.sql` (safe to re-run, additive). Go to Settings → "Cycle tracking (off by default)", turn it on, log a period, confirm the next-period prediction updates.
-- **Mood (task 066):** run `supabase/migrations/019_mental_health.sql` (safe to re-run, additive). Tap the new emoticon icon on the Today header, log a mood + stress score, confirm it persists. Journal/therapy are not built — nothing to test there yet.
-- **Finance (task 065):** run `supabase/migrations/018_finance.sql` (safe to re-run, additive). Tap the new cash icon on the Today header, log an expense, add a bill, set a budget, confirm the BUDGETS section flags over-spend in red.
-- **Goals (task 068):** run `supabase/migrations/017_goals.sql` (safe to re-run, additive). Tap the new flag icon on the Today header, add a goal + milestones, confirm the progress bar updates as milestones are checked off.
-- **Badges + cumulative stats (tasks 014+063):** run `supabase/migrations/015_badges.sql` and `016_cumulative_stats.sql` (both safe to re-run, additive). Then complete a habit, a workout, or a run/hike/walk and check the PROFILE tab's new badge grid updates, and that `cumulative_stats`/`badges_earned` rows appear in the Supabase dashboard.
-- **Settings (task 020):** run `supabase/migrations/014_user_api_keys.sql` (safe to re-run, additive), then `supabase functions deploy save-api-key` — needs a NEW secret first: `supabase secrets set API_KEY_ENCRYPTION_SECRET=$(openssl rand -base64 32)`. Then tap the new gear icon on the Today header, toggle "use my own key" on/off, and set up a companion's name/photo.
-- **Onboarding (task 062) — READ THIS ONE FIRST, it changes the login flow:** run `supabase/migrations/013_user_profiles.sql` (safe to re-run, additive). Then, IMPORTANT — the next time you open the app logged out, you'll see the new onboarding flow instead of the login screen directly (there's no way to tell "existing tester" from "new install" apart from a flag that starts unset for both; see tasks/062 notes). Either run through the full 10-screen flow once to test it, or tap "I ALREADY HAVE AN ACCOUNT" on the welcome screen to skip straight to the familiar login screen. If you do run the full flow: confirm it ends by landing in the app with your first habit, nutrition targets, and briefing preferences already saved, then force-quit and reopen to confirm it does NOT show onboarding again.
-- Open the app on a real device/simulator once and confirm Today/Calendar/Steps/Workouts still look right after the date-key migration (tsc is clean, but nothing was visually verified this session — no simulator was attached).
-- **Calorie (tasks 028–030):** run `supabase/migrations/007_nutrition.sql` (safe to re-run, additive); deploy the vision function and set its key: `supabase functions deploy food-vision` + `supabase secrets set ANTHROPIC_API_KEY=…`. Until deployed, the snap flow returns a clearly-labeled *demo* estimate — the rest of the flow (compress → confirm → save) works fully. Manual logging needs nothing.
-- `git push` from a machine with GitHub credentials — this session has none.
+### ⚠️ Critical — do these two first, before anything else
+1. **🔁 ROTATE THE ANTHROPIC KEY.** It was pasted into a chat transcript twice. Revoke at console.anthropic.com → API Keys, issue a new one, and set it via the **Supabase dashboard** (Settings → Edge Functions → Secrets) — NOT via chat, NOT in `app.json`. Confirmed not in git history, so revoking fully closes it.
+2. **NEVER run `supabase db push`** on this project — it re-runs the one-time-unsafe `002_date_key_format.sql` against live data. Paste individual migration files into the SQL editor instead.
+
+### Migrations — run in the SQL editor, in this order (all safe/additive except #1)
+1. `002_date_key_format.sql` — ⚠️ run ONCE, NOT safely re-runnable (see the warning inside the file). If already run in a prior session, skip.
+2. `003_gym_body_reconcile.sql`
+3. `007_nutrition.sql` (calorie/nutrition, tasks 028–030)
+4. `009_habits.sql` → `010_medications.sql` → `011_sleep.sql` → `012_activity.sql` (this session's core domains)
+5. `013_user_profiles.sql` (onboarding, task 062 — **do this before testing onboarding**)
+6. `014_user_api_keys.sql` (Settings BYOK, task 020)
+7. `015_badges.sql` → `016_cumulative_stats.sql` (task 014+063 — fixes a long-standing gap)
+8. `017_goals.sql` → `018_finance.sql` → `019_mental_health.sql` → `020_cycle.sql` → `021_library.sql` (this session's Phase-8 domains)
+9. `022_streak_freezes.sql` (one column on `habits`)
+
+`006_ai_companions.sql` and `008_realtime_tasks.sql` are already live from a prior session.
+
+### Edge Function deploys / secrets
+- `supabase functions deploy ai-chat` — picks up task 037's new contextSources (`habit_logs`/`meals`/`activities`/`sleep_logs`/`goals`/`mood_logs`) and 5 new companion configs (`calorie`/`activity`/`sleep`/`goals`/`mood`).
+- `supabase functions deploy daily-briefing` — brand new function (tasks 018+019), needs the same `ANTHROPIC_API_KEY` secret already set for `ai-chat`.
+- `supabase functions deploy food-vision` + `supabase secrets set ANTHROPIC_API_KEY=…` — calorie snap-a-meal (tasks 028–030); until deployed it returns a clearly-labeled demo estimate, manual logging works regardless.
+- `supabase secrets set API_KEY_ENCRYPTION_SECRET=$(openssl rand -base64 32)` then `supabase functions deploy save-api-key` — Settings BYOK toggle (task 020).
+
+### On-device verification — nothing this session has been run on a real device/simulator
+**Start with onboarding — it's the riskiest change (rewrites the login-entry routing) and the most important to check first.** The next time you open the app logged out, you'll see the new onboarding flow instead of the login screen directly (no way to tell "existing tester" from "new install" apart — see tasks/062 notes). Either run the full 10-screen flow once (confirm it ends by landing in the app with your first habit/targets/briefing prefs saved, then force-quit and reopen to confirm it does NOT re-onboard), or tap "I ALREADY HAVE AN ACCOUNT" on the welcome screen to skip straight to login.
+
+Then, in whatever order is convenient:
+- **Today/Calendar/Steps/Workouts** still look right after the date-key migration (tsc clean, never visually checked).
+- **Habits tab**: add a habit, mark it done, confirm the heatmap turns green and the streak survives a restart; toggle auto-freeze on, skip a day, confirm it renders blue (task 076); switch to MEDICATION, add one with a course length, confirm adherence %/course progress.
+- **Body (gym) tab**: tap the SLEEP recovery card, log a night + a Phone Down Challenge entry.
+- **Activity tab**: grant location, take a short walk, confirm live stats + polyline. A real 30-min outdoor test is still needed to judge background-location battery drain — not attempted this session (foreground-only tracking).
+- **Today header icons** (search 🔍, calendar, calorie 🍎, bluetooth, goals 🚩, finance 💵, mood 🙂, library 📖, settings ⚙️, logout — **9 icons, genuinely overcrowded, flagged repeatedly this session, still not fixed**): goals (add + milestones), finance (expense/bill/budget + over-spend flag), mood (log + persists), library (paste a URL vs a plain title, confirm they land correctly), global search (search for anything, confirm navigation).
+- **Settings**: toggle "use my own API key" on/off; set up a companion's name/photo; go to "Cycle tracking (off by default)", turn it on, log a period, confirm the prediction.
+- **Daily briefing**: tap GET DAILY BRIEFING under the Today header, confirm a <150-word summary appears and persists.
+- **Badges**: complete a habit/workout/run and check the PROFILE tab's badge grid + confirm `cumulative_stats`/`badges_earned` rows appear in the Supabase dashboard.
+
+### Standing
+- `git push` — not needed right now, this session pushed everything as it went.
 
 ## HOW TO UPDATE THIS FILE
 After a task is implemented, deployed, and tested:
