@@ -8,17 +8,23 @@
 import { updateStreak } from './streaks';
 import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
+import { checkAndAwardBadges } from './badges';
 
 export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication' | 'activity';
 export type Action = 'create' | 'update' | 'delete';
 
 export async function postWrite(entity: Entity, record: any, action: Action): Promise<void> {
+  // updateStreak runs FIRST and is awaited on its own: checkBadges (streak_7/
+  // streak_30/workouts_10, etc.) reads state updateStreak just wrote
+  // (record.streak, @body.workoutsTotal) — running everything in one
+  // Promise.allSettled would race the two with no guaranteed order.
+  await updateStreak(entity, record).catch(err => console.warn('postWrite updateStreak failed:', err));
+
   const effects = [
     incrementCumulativeStats(entity, record, action),
-    updateStreak(entity, record),
-    checkBadges(entity, record), // stub
-    addFriendFeedEvent(entity, record), // stub
-    writeObsidian(entity, record), // stub
+    checkBadges(entity, record),
+    addFriendFeedEvent(entity, record), // stub — task 070/socials FUTURE
+    writeObsidian(entity, record), // stub — task 058/059, needs iCloud (device-gated)
     updateUserContextSummary(record),
   ];
 
@@ -33,19 +39,51 @@ export async function postWrite(entity: Entity, record: any, action: Action): Pr
 }
 
 async function incrementCumulativeStats(entity: Entity, record: any, action: Action): Promise<void> {
+  if (action !== 'create') return; // only count new occurrences, not edits/deletes
   try {
-    // Stub: would increment cumulative_stats table
-    // For now, just log
-    console.log(`incrementCumulativeStats: ${entity} ${action}`, record);
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    const delta: Record<string, number> = {};
+    if (entity === 'habit' && record.completed) delta.total_habits_completed = 1;
+    if (entity === 'workout') delta.total_gym_sessions = 1;
+    if (entity === 'activity') {
+      const meters = typeof record.distanceM === 'number' ? record.distanceM : 0;
+      if (record.type === 'run') delta.total_distance_run_m = meters;
+      else delta.total_distance_walked_m = meters; // hike + walk both count as walked distance
+    }
+    if (Object.keys(delta).length === 0) return; // nothing this entity contributes to yet
+
+    const { data: existing } = await supabase
+      .from('cumulative_stats')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    const base = existing ?? {
+      total_steps: 0, total_distance_walked_m: 0, total_distance_run_m: 0, total_gym_sessions: 0,
+      total_focus_secs: 0, total_habits_completed: 0, total_books_finished: 0, total_movies_watched: 0,
+      longest_streak_ever: 0,
+    };
+    const next: Record<string, number> = { ...base };
+    for (const [key, amount] of Object.entries(delta)) next[key] = (base[key] ?? 0) + amount;
+
+    await supabase.from('cumulative_stats').upsert({
+      user_id: userId, ...next, last_updated: new Date().toISOString(),
+    });
   } catch (err) {
     console.error('incrementCumulativeStats error:', err);
-    throw err;
+    // Never throw — this runs inside Promise.allSettled, but keep the
+    // contract explicit: a stats-write failure must never block the caller.
   }
 }
 
 async function checkBadges(entity: Entity, record: any): Promise<void> {
-  // Stub: would check if user unlocked any badges
-  console.log('checkBadges stub:', entity);
+  try {
+    await checkAndAwardBadges(entity, record);
+  } catch (err) {
+    console.warn('checkBadges error:', err);
+  }
 }
 
 async function addFriendFeedEvent(entity: Entity, record: any): Promise<void> {

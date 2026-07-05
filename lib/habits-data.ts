@@ -158,10 +158,12 @@ export async function toggleToday(habit: Habit): Promise<boolean> {
   });
 
   // Recompute + persist streak from the source-of-truth log, then run the
-  // shared fan-out (cumulative_stats / badges stubs) — never touched directly.
+  // shared fan-out (cumulative_stats / badges) — never touched directly.
+  // streak.current is included so postWrite's badge check (streak_7/streak_30,
+  // task 063) doesn't need to recompute it or import this module back.
   const streak = computeStreak(map[habit.id]);
   bg(() => saveStreak(habit.id, streak, nextCompleted ? today : null));
-  postWrite('habit', { habit_id: habit.id, date: today, completed: nextCompleted }, existing ? 'update' : 'create');
+  postWrite('habit', { habit_id: habit.id, date: today, completed: nextCompleted, streak: streak.current }, existing ? 'update' : 'create');
 
   return nextCompleted;
 }

@@ -119,7 +119,8 @@ export async function logSleep(input: {
       { onConflict: 'user_id,date' },
     );
   });
-  postWrite('sleep', { date: log.date, totalHours: log.totalHours, qualityScore: log.qualityScore }, 'create');
+  // wakeTime feeds postWrite's badge check (the hidden 'early_bird' badge, task 063).
+  postWrite('sleep', { date: log.date, totalHours: log.totalHours, qualityScore: log.qualityScore, wakeTime: log.wakeTime }, 'create');
 
   return log;
 }
@@ -208,6 +209,9 @@ export async function logPhoneDown(dateKey: string, phoneDownTime: string): Prom
       { onConflict: 'user_id,date' },
     );
   });
+
+  // challengeStreak feeds postWrite's badge check ('phone_free_week', task 063).
+  postWrite('sleep', { date: dateKey, challengeStreak: streak }, 'create');
 
   return log;
 }
