@@ -186,22 +186,43 @@ export async function buildContext(
 
   if (want('meals')) {
     jobs.push((async () => {
-      const { data } = await supabase
-        .from('meals')
-        .select('date, meal_type, name, calories')
-        .eq('user_id', userId)
-        .gte('date', new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10))
-        .order('date', { ascending: false })
-        .limit(30);
+      const [{ data }, { data: targets }] = await Promise.all([
+        supabase
+          .from('meals')
+          .select('date, meal_type, name, calories, protein_g')
+          .eq('user_id', userId)
+          .gte('date', new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10))
+          .order('date', { ascending: false })
+          .limit(30),
+        supabase.from('nutrition_targets').select('calories, protein_g').eq('user_id', userId).maybeSingle(),
+      ]);
       raw.meals = data ?? [];
+      raw.nutrition_targets = targets ?? null;
       if (data?.length) {
         const todayTotal = data.filter((m: { date: string }) => m.date === todayKey())
           .reduce((s: number, m: { calories?: number }) => s + (m.calories ?? 0), 0);
         lines.push(`MEALS TODAY: ${todayTotal} cal logged so far.`);
+        if (targets?.calories) lines.push(`CALORIE TARGET: ${targets.calories}/day, protein target ${targets.protein_g ?? '?'}g/day.`);
         lines.push('RECENT MEALS (last 3 days):');
-        for (const m of data.slice(0, 10)) lines.push(`- ${m.date} ${m.meal_type}: ${m.name} (${m.calories} cal)`);
+        for (const m of data.slice(0, 10)) lines.push(`- ${m.date} ${m.meal_type}: ${m.name} (${m.calories} cal, ${m.protein_g ?? 0}g protein)`);
       } else {
         lines.push('MEALS: none logged in the last 3 days.');
+      }
+    })());
+  }
+
+  if (want('gym_plan')) {
+    jobs.push((async () => {
+      // Task 041: Calorie AI factoring in tomorrow's gym session (e.g. to
+      // answer "what's my protein target today" with tomorrow's leg day in mind).
+      const { data } = await supabase.from('gym_plan').select('*').eq('user_id', userId).maybeSingle();
+      raw.gym_plan = data ?? null;
+      if (data) {
+        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const todayIdx = new Date(`${todayKey()}T12:00:00Z`).getUTCDay();
+        const tomorrow = days[(todayIdx + 1) % 7];
+        const tomorrowPlan = data[tomorrow];
+        lines.push(`GYM PLAN: tomorrow (${tomorrow}) is ${tomorrowPlan || 'a rest day'}.`);
       }
     })());
   }
@@ -311,6 +332,62 @@ export async function buildContext(
   }
 
   await Promise.all(jobs);
+
+  // ── Precomputed flags (task 040) ───────────────────────────────────────────
+  // Computed from whatever sources were already fetched above — a flag is
+  // only ever considered if its underlying contextSource was requested, so
+  // this never triggers an extra query beyond what the companion already asked for.
+  const flags: string[] = [];
+
+  // OVERREACHING: 6+ workouts logged in the trailing 7 days (no rest day).
+  if (Array.isArray(raw.workout_done_log)) {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const recentCount = (raw.workout_done_log as Array<{ date: string }>).filter(w => w.date >= sevenDaysAgo).length;
+    if (recentCount >= 6) flags.push('OVERREACHING');
+  }
+
+  // SLEEP_DEBT: 3+ nights under 7h in the fetched window.
+  if (Array.isArray(raw.sleep_logs)) {
+    const underTarget = (raw.sleep_logs as Array<{ total_hours?: number }>).filter(s => (s.total_hours ?? 8) < 7).length;
+    if (underTarget >= 3) flags.push('SLEEP_DEBT');
+  }
+
+  // UNDERFUELLING / LOW_PROTEIN: trailing-3-day average vs nutrition_targets.
+  if (Array.isArray(raw.meals) && raw.nutrition_targets) {
+    const meals = raw.meals as Array<{ date: string; calories?: number; protein_g?: number }>;
+    const targets = raw.nutrition_targets as { calories?: number; protein_g?: number };
+    const byDate = new Map<string, { cal: number; protein: number }>();
+    for (const m of meals) {
+      const cur = byDate.get(m.date) ?? { cal: 0, protein: 0 };
+      cur.cal += m.calories ?? 0;
+      cur.protein += m.protein_g ?? 0;
+      byDate.set(m.date, cur);
+    }
+    const days = [...byDate.values()];
+    if (days.length && targets.calories) {
+      const avgCal = days.reduce((s, d) => s + d.cal, 0) / days.length;
+      if (avgCal < targets.calories * 0.7) flags.push('UNDERFUELLING');
+    }
+    if (days.length && targets.protein_g) {
+      const avgProtein = days.reduce((s, d) => s + d.protein, 0) / days.length;
+      if (avgProtein < targets.protein_g * 0.7) flags.push('LOW_PROTEIN');
+    }
+  }
+
+  // STRESS_SLEEP (cross-domain): elevated stress AND sleep debt together.
+  if (Array.isArray(raw.mood_logs) && flags.includes('SLEEP_DEBT')) {
+    const moods = raw.mood_logs as Array<{ stress_score?: number }>;
+    const withStress = moods.filter(m => typeof m.stress_score === 'number');
+    if (withStress.length) {
+      const avgStress = withStress.reduce((s, m) => s + (m.stress_score ?? 0), 0) / withStress.length;
+      if (avgStress >= 7) flags.push('STRESS_SLEEP');
+    }
+  }
+
+  if (flags.length) {
+    raw.flags = flags;
+    lines.push(`FLAGS: ${flags.join(', ')} — factor these into your tone and suggestions (see system prompt for what each means).`);
+  }
 
   return { text: lines.join('\n') || 'No data yet.', raw };
 }

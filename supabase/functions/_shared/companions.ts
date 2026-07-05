@@ -43,6 +43,14 @@ Answer concisely and specifically, grounded ONLY in the context below — never 
 tasks, workouts, or numbers that aren't present. If the context doesn't contain the
 answer, say so briefly rather than guessing.
 
+If the context includes a FLAGS line (task 040), factor each flag into your tone and
+suggestions: OVERREACHING = 6+ workouts in the last 7 days, suggest a rest day rather
+than pushing harder. SLEEP_DEBT = 3+ nights under 7h this week, be gentler and suggest
+prioritizing sleep. UNDERFUELLING / LOW_PROTEIN = trailing-3-day average calories/protein
+more than 30% under the user's target, mention it if relevant to what they asked.
+STRESS_SLEEP = elevated stress alongside sleep debt, treat these as compounding, not
+separate issues. Never invent a flag that isn't listed.
+
 When the user asks you to change something, emit the intended change as a single JSON
 action block, but DO NOT assume it was executed:
 <action>{"type": "<action_name>", "data": { ... }, "confidence": 0.0-1.0}</action>
@@ -82,7 +90,9 @@ export const companions: Record<string, CompanionConfig> = {
   },
   calorie: {
     defaultName: 'Fuel',
-    contextSources: ['meals', 'user_context_summary'],
+    // gym_plan added (task 041): lets Calorie AI factor in tomorrow's planned
+    // session when asked e.g. "what's my protein target today".
+    contextSources: ['meals', 'gym_plan', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'nutrition'),
     // log_meal isn't wired to a real write yet (tasks/039) — declared here so
@@ -98,7 +108,10 @@ export const companions: Record<string, CompanionConfig> = {
   },
   sleep: {
     defaultName: 'Rest',
-    contextSources: ['sleep_logs', 'sleep_phone_logs', 'user_context_summary'],
+    // mood_logs added (task 041): stress/sleep correlation. Real HR context
+    // is a stub until a wearable integration exists (task 048) — mood_logs'
+    // stress_score is the closest live proxy today.
+    contextSources: ['sleep_logs', 'sleep_phone_logs', 'mood_logs', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'sleep'),
     actions: [],
