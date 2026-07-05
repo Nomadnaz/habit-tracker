@@ -9,7 +9,7 @@ import { updateStreak } from './streaks';
 import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
 
-export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication';
+export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication' | 'activity';
 export type Action = 'create' | 'update' | 'delete';
 
 export async function postWrite(entity: Entity, record: any, action: Action): Promise<void> {

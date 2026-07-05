@@ -54,6 +54,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index"    options={{ title: 'TODAY'    }} />
       <Tabs.Screen name="habits"   options={{ title: 'HABITS'   }} />
       <Tabs.Screen name="gym"      options={{ title: 'BODY'     }} />
+      <Tabs.Screen name="activity" options={{ title: 'ACTIVITY' }} />
       <Tabs.Screen name="tree"     options={{ title: 'TREE'     }} />
       <Tabs.Screen name="progress" options={{ title: 'PROGRESS' }} />
       <Tabs.Screen name="profile"  options={{ title: 'PROFILE'  }} />
