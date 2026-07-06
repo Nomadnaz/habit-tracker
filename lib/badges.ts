@@ -88,10 +88,16 @@ export async function checkAndAwardBadges(entity: Entity, record: any): Promise<
     if (condition && (await award(id))) newlyEarned.push(id);
   };
 
+  // Every "first_X"/"X_10" check below uses >= rather than === N: award()
+  // already dedupes via the earned-badges cache (a no-op after the first
+  // grant), but exact equality meant a count that skipped past N — e.g. a
+  // habit imported/synced after the fact, or the workout counter (see
+  // below) missing a same-day refresh — would permanently miss the badge.
+  // Audit finding H3 (2026-07-06).
   try {
     if (entity === 'habit' && record.completed) {
       const totalHabitLogs = await countInBlob('@habit_logs', (l: any) => l.completed);
-      await maybeAward('first_habit', totalHabitLogs === 1);
+      await maybeAward('first_habit', totalHabitLogs >= 1);
       if (typeof record.streak === 'number') {
         await maybeAward('streak_7', record.streak >= 7);
         await maybeAward('streak_30', record.streak >= 30);
@@ -102,20 +108,20 @@ export async function checkAndAwardBadges(entity: Entity, record: any): Promise<
       try {
         const raw = await AsyncStorage.getItem('@body');
         const total = raw ? JSON.parse(raw).workoutsTotal ?? 0 : 0;
-        await maybeAward('first_workout', total === 1);
-        await maybeAward('workouts_10', total === 10);
+        await maybeAward('first_workout', total >= 1);
+        await maybeAward('workouts_10', total >= 10);
       } catch { /* no-op */ }
     }
 
     if (entity === 'activity') {
       const sameType = await countInBlob('@activities', (a: any) => a.type === record.type);
-      if (record.type === 'run') await maybeAward('first_run', sameType === 1);
-      if (record.type === 'hike') await maybeAward('first_hike', sameType === 1);
+      if (record.type === 'run') await maybeAward('first_run', sameType >= 1);
+      if (record.type === 'hike') await maybeAward('first_hike', sameType >= 1);
     }
 
     if (entity === 'meal') {
       const total = await countInBlob('@meals', () => true);
-      await maybeAward('first_meal', total === 1);
+      await maybeAward('first_meal', total >= 1);
     }
 
     if (entity === 'sleep') {
