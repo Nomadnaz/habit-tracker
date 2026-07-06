@@ -27,6 +27,14 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 // everyone gets a reasonable baseline instead of an empty briefing).
 const DEFAULT_MODULES = ['tasks', 'habit_logs'];
 
+// This had NO rate limit at all before an audit (2026-07-06) flagged it as
+// an open cost hole: any authed user could loop this endpoint, and each
+// call runs buildContext's full query fan-out plus a Haiku call on the
+// app's shared key. A briefing is meant to be requested ~once/day (plus
+// occasional manual refreshes) — 10/day is generous headroom for that,
+// configurable via the BRIEFING_DAILY_CAP secret without a redeploy.
+const BRIEFING_DAILY_CAP = Number(Deno.env.get('BRIEFING_DAILY_CAP') ?? '10');
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type',
@@ -58,6 +66,23 @@ Deno.serve(async (req: Request) => {
     const tzOffsetMinutes: number = typeof body.tzOffsetMinutes === 'number' ? body.tzOffsetMinutes : 0;
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // Rate limit FIRST, before any buildContext query or Claude call — an
+    // atomic increment-and-return-new-count RPC (supabase/migrations/
+    // 024_api_usage_increment.sql), so a burst of concurrent requests can't
+    // all read the same pre-increment count and all pass (the race
+    // ai-chat's own read-then-write check still has, see that file's notes).
+    // A rejected request still consumes one from the day's allowance —
+    // deliberately conservative, discourages retry-spam rather than
+    // rewarding it.
+    const day = new Date().toISOString().slice(0, 10);
+    const { data: newBriefingCount } = await admin.rpc('increment_briefing_usage', {
+      p_user_id: userId,
+      p_date: day,
+    });
+    if (typeof newBriefingCount === 'number' && newBriefingCount > BRIEFING_DAILY_CAP) {
+      return new Response(JSON.stringify({ error: 'daily briefing limit reached' }), { status: 429, headers: cors });
+    }
 
     const { data: prefs } = await admin
       .from('briefing_preferences')

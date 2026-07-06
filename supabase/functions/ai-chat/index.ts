@@ -27,9 +27,13 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 
 // Server-side daily message ceiling. Configurable via the FREE_DAILY_CAP
-// function secret so it can be tuned without a redeploy; defaults high for
-// development. Lower it (e.g. 25) for a production free tier per system-model.md.
-const FREE_DAILY_CAP = Number(Deno.env.get('FREE_DAILY_CAP') ?? '500');
+// function secret so it can be tuned without a redeploy. Defaults to the
+// production free-tier cap system-model.md specifies (25/day) — set the
+// FREE_DAILY_CAP secret higher during development if 25 is too tight for
+// testing, rather than leaving a dev-convenience default live in prod
+// (an audit, 2026-07-06, found this defaulted to 500 — ~$1.75/user/day
+// worst case at Haiku pricing).
+const FREE_DAILY_CAP = Number(Deno.env.get('FREE_DAILY_CAP') ?? '25');
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -183,14 +187,22 @@ Deno.serve(async (req: Request) => {
           model_used: modelId, tokens_in: tokensIn, tokens_out: tokensOut, created_at: now,
         },
       ]),
-      admin.from('api_usage').upsert({
-        user_id: userId,
-        date: day,
-        message_count: (usage?.message_count ?? 0) + 1,
-        tokens_in: tokensIn ?? 0,
-        tokens_out: tokensOut ?? 0,
-        last_message_at: now,
-      }, { onConflict: 'user_id,date' }),
+      // Atomic, additive increment (supabase/migrations/024_api_usage_increment.sql)
+      // — a plain upsert here used to OVERWRITE tokens_in/tokens_out with just
+      // this one message's tokens instead of accumulating the day's running
+      // total, breaking api_usage's stated cost-visibility purpose (audit
+      // 2026-07-06). The message_count cap CHECK above still reads before
+      // this increment runs, so a burst of concurrent requests from the same
+      // user could still slip a few past FREE_DAILY_CAP — that narrower,
+      // cost-bounded race isn't closed by this fix; the accounting
+      // correctness bug is.
+      admin.rpc('increment_api_usage', {
+        p_user_id: userId,
+        p_date: day,
+        p_message_count: 1,
+        p_tokens_in: tokensIn ?? 0,
+        p_tokens_out: tokensOut ?? 0,
+      }),
     ]);
 
     return new Response(JSON.stringify({ response: responseText, actions }), { status: 200, headers: cors });
