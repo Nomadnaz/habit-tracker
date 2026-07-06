@@ -337,51 +337,89 @@ export async function buildContext(
 
   await Promise.all(jobs);
 
-  // ── Precomputed flags (task 040) ───────────────────────────────────────────
-  // Computed from whatever sources were already fetched above — a flag is
-  // only ever considered if its underlying contextSource was requested, so
-  // this never triggers an extra query beyond what the companion already asked for.
+  // ── Precomputed flags (task 040/041) ───────────────────────────────────────
+  // Each flag has its own fixed, tiny query — independent of contextSources —
+  // so e.g. SLEEP_DEBT can reach the gym companion and OVERREACHING can reach
+  // the calorie companion, not just whichever companion happens to already
+  // read that domain. The original version only computed a flag from raw.*
+  // that a companion's own contextSources had already populated, which meant
+  // "cross-domain" flags could almost never actually cross domains — an
+  // audit (2026-07-06) found e.g. OVERREACHING needs workout_done_log, which
+  // only the gym/goals companions read, so the calorie companion (the one
+  // that should say "you're overreaching AND underfuelling") could never see
+  // it. Reuses raw.* when the companion already fetched the same window
+  // (zero extra cost); otherwise runs one small windowed query per input —
+  // a deliberate, cheap trade documented here rather than silently dropped.
+  const sevenDaysAgo = localDateKeyPlusDays(-7, tzOffsetMinutes);
+  const threeDaysAgo = localDateKeyPlusDays(-3, tzOffsetMinutes);
+  const fourteenDaysAgo = localDateKeyPlusDays(-14, tzOffsetMinutes);
+
+  const [workoutsForFlags, sleepForFlags, mealsForFlags, targetsForFlags, moodForFlags]: [
+    Array<{ date: string }>,
+    Array<{ total_hours?: number }>,
+    Array<{ date: string; calories?: number; protein_g?: number }>,
+    { calories?: number; protein_g?: number } | null,
+    Array<{ stress_score?: number }>,
+  ] = await Promise.all([
+    Array.isArray(raw.workout_done_log)
+      ? Promise.resolve(raw.workout_done_log as Array<{ date: string }>)
+      : supabase.from('workout_done_log').select('date').eq('user_id', userId)
+          .gte('date', sevenDaysAgo).limit(20).then((r: { data: unknown }) => (r.data as Array<{ date: string }>) ?? []),
+    Array.isArray(raw.sleep_logs)
+      ? Promise.resolve(raw.sleep_logs as Array<{ total_hours?: number }>)
+      : supabase.from('sleep_logs').select('total_hours').eq('user_id', userId)
+          .gte('date', sevenDaysAgo).limit(7).then((r: { data: unknown }) => (r.data as Array<{ total_hours?: number }>) ?? []),
+    Array.isArray(raw.meals)
+      ? Promise.resolve(raw.meals as Array<{ date: string; calories?: number; protein_g?: number }>)
+      : supabase.from('meals').select('date, calories, protein_g').eq('user_id', userId)
+          .gte('date', threeDaysAgo).limit(30).then((r: { data: unknown }) => (r.data as Array<{ date: string; calories?: number; protein_g?: number }>) ?? []),
+    raw.nutrition_targets !== undefined
+      ? Promise.resolve(raw.nutrition_targets as { calories?: number; protein_g?: number } | null)
+      : supabase.from('nutrition_targets').select('calories, protein_g').eq('user_id', userId)
+          .maybeSingle().then((r: { data: unknown }) => (r.data as { calories?: number; protein_g?: number } | null) ?? null),
+    Array.isArray(raw.mood_logs)
+      ? Promise.resolve(raw.mood_logs as Array<{ stress_score?: number }>)
+      : supabase.from('mood_logs').select('stress_score').eq('user_id', userId)
+          .gte('date', fourteenDaysAgo).limit(14).then((r: { data: unknown }) => (r.data as Array<{ stress_score?: number }>) ?? []),
+  ]);
+
   const flags: string[] = [];
 
   // OVERREACHING: 6+ workouts logged in the trailing 7 days (no rest day).
-  if (Array.isArray(raw.workout_done_log)) {
-    const sevenDaysAgo = localDateKeyPlusDays(-7, tzOffsetMinutes);
-    const recentCount = (raw.workout_done_log as Array<{ date: string }>).filter(w => w.date >= sevenDaysAgo).length;
+  if (workoutsForFlags.length) {
+    const recentCount = workoutsForFlags.filter(w => w.date >= sevenDaysAgo).length;
     if (recentCount >= 6) flags.push('OVERREACHING');
   }
 
   // SLEEP_DEBT: 3+ nights under 7h in the fetched window.
-  if (Array.isArray(raw.sleep_logs)) {
-    const underTarget = (raw.sleep_logs as Array<{ total_hours?: number }>).filter(s => (s.total_hours ?? 8) < 7).length;
+  if (sleepForFlags.length) {
+    const underTarget = sleepForFlags.filter(s => (s.total_hours ?? 8) < 7).length;
     if (underTarget >= 3) flags.push('SLEEP_DEBT');
   }
 
   // UNDERFUELLING / LOW_PROTEIN: trailing-3-day average vs nutrition_targets.
-  if (Array.isArray(raw.meals) && raw.nutrition_targets) {
-    const meals = raw.meals as Array<{ date: string; calories?: number; protein_g?: number }>;
-    const targets = raw.nutrition_targets as { calories?: number; protein_g?: number };
+  if (mealsForFlags.length && targetsForFlags) {
     const byDate = new Map<string, { cal: number; protein: number }>();
-    for (const m of meals) {
+    for (const m of mealsForFlags) {
       const cur = byDate.get(m.date) ?? { cal: 0, protein: 0 };
       cur.cal += m.calories ?? 0;
       cur.protein += m.protein_g ?? 0;
       byDate.set(m.date, cur);
     }
     const days = [...byDate.values()];
-    if (days.length && targets.calories) {
+    if (days.length && targetsForFlags.calories) {
       const avgCal = days.reduce((s, d) => s + d.cal, 0) / days.length;
-      if (avgCal < targets.calories * 0.7) flags.push('UNDERFUELLING');
+      if (avgCal < targetsForFlags.calories * 0.7) flags.push('UNDERFUELLING');
     }
-    if (days.length && targets.protein_g) {
+    if (days.length && targetsForFlags.protein_g) {
       const avgProtein = days.reduce((s, d) => s + d.protein, 0) / days.length;
-      if (avgProtein < targets.protein_g * 0.7) flags.push('LOW_PROTEIN');
+      if (avgProtein < targetsForFlags.protein_g * 0.7) flags.push('LOW_PROTEIN');
     }
   }
 
   // STRESS_SLEEP (cross-domain): elevated stress AND sleep debt together.
-  if (Array.isArray(raw.mood_logs) && flags.includes('SLEEP_DEBT')) {
-    const moods = raw.mood_logs as Array<{ stress_score?: number }>;
-    const withStress = moods.filter(m => typeof m.stress_score === 'number');
+  if (moodForFlags.length && flags.includes('SLEEP_DEBT')) {
+    const withStress = moodForFlags.filter(m => typeof m.stress_score === 'number');
     if (withStress.length) {
       const avgStress = withStress.reduce((s, m) => s + (m.stress_score ?? 0), 0) / withStress.length;
       if (avgStress >= 7) flags.push('STRESS_SLEEP');
