@@ -90,6 +90,9 @@ export default function ChatScreen({
           message: userMsg,
           companionType: 'habitCoach',
           conversationHistory: history,
+          // Lets the server resolve TODAY/tomorrow in local time instead of
+          // UTC — see supabase/functions/_shared/localDate.ts (audit 2026-07-06).
+          tzOffsetMinutes: new Date().getTimezoneOffset(),
         },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });

@@ -232,6 +232,11 @@ class BleBridgeManager {
         companionType: this._companionType,
         conversationHistory: this.history.slice(-10),
         execute: true, // high-confidence actions execute server-side
+        // The phone (not the ESP32) sends this — same fix as ChatScreen.tsx,
+        // see supabase/functions/_shared/localDate.ts (audit 2026-07-06).
+        // Matters more here than in-app: execute:true means the server
+        // actually writes the task's date, not just displays it.
+        tzOffsetMinutes: new Date().getTimezoneOffset(),
       },
     });
     if (error) throw error;

@@ -47,6 +47,9 @@ export default function BriefingCard() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       const { data, error } = await supabase.functions.invoke('daily-briefing', {
+        // Lets the server resolve TODAY/tomorrow in local time instead of
+        // UTC — see supabase/functions/_shared/localDate.ts (audit 2026-07-06).
+        body: { tzOffsetMinutes: new Date().getTimezoneOffset() },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error || !data?.briefing) return;

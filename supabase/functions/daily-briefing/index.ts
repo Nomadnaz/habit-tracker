@@ -51,6 +51,12 @@ Deno.serve(async (req: Request) => {
     }
     const userId = user.id;
 
+    const body = await req.json().catch(() => ({}));
+    // Client's `new Date().getTimezoneOffset()` — see _shared/localDate.ts.
+    // Without this, TODAY/tomorrow's-gym-session in the briefing text could
+    // name the wrong calendar day for anyone west of UTC (audit 2026-07-06).
+    const tzOffsetMinutes: number = typeof body.tzOffsetMinutes === 'number' ? body.tzOffsetMinutes : 0;
+
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const { data: prefs } = await admin
@@ -60,7 +66,7 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     const selectedModules: string[] = prefs?.selected_modules?.length ? prefs.selected_modules : DEFAULT_MODULES;
 
-    const ctx = await buildContext(admin, userId, selectedModules);
+    const ctx = await buildContext(admin, userId, selectedModules, tzOffsetMinutes);
 
     const systemPrompt = `You write a single short daily briefing for a habit-tracking app user, grounded ONLY in the context below — never invent tasks, numbers, or streaks that aren't present. Under 150 words. Plain prose, no headers, no bullet points, second person ("you have..."). If the context is sparse, keep it brief rather than padding.
 

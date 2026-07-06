@@ -25,6 +25,8 @@
 //   exists), but is OFF by default.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { localDateKey, localDateKeyPlusDays } from './localDate.ts';
+
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
 
@@ -70,33 +72,35 @@ type InternalExecutor = (
   supabase: SupabaseClient,
   userId: string,
   data: Record<string, unknown>,
+  tzOffsetMinutes: number,
 ) => Promise<Record<string, unknown>>;
-
-const todayKey = (): string => new Date().toISOString().slice(0, 10);
 
 const str = (v: unknown): string | undefined =>
   typeof v === 'string' && v.trim() ? v.trim() : undefined;
 const num = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 
-// Resolve a model-supplied date into a YYYY-MM-DD key (handles today/tomorrow).
-const resolveDateKey = (v: unknown): string => {
+// Resolve a model-supplied date into a YYYY-MM-DD key (handles today/tomorrow),
+// in the CALLER's local time via tzOffsetMinutes — see _shared/localDate.ts
+// for why this exists (audit 2026-07-06: this used to be UTC-only, resolving
+// to the wrong calendar day for anyone west of UTC from evening onward).
+const resolveDateKey = (v: unknown, tzOffsetMinutes = 0): string => {
   const s = str(v)?.toLowerCase();
-  if (!s || s === 'today') return todayKey();
-  if (s === 'tomorrow') return new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (!s || s === 'today') return localDateKey(tzOffsetMinutes);
+  if (s === 'tomorrow') return localDateKeyPlusDays(1, tzOffsetMinutes);
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  return todayKey();
+  return localDateKey(tzOffsetMinutes);
 };
 
 const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
   // "add gym tomorrow at 6" → a real row in `tasks`.
-  create_task: async (supabase, userId, data) => {
+  create_task: async (supabase, userId, data, tzOffsetMinutes) => {
     const label = str(data.label) ?? str(data.title) ?? str(data.name);
     if (!label) throw new Error('create_task needs a label');
     const row = {
       id: crypto.randomUUID(),
       user_id: userId,
-      date: resolveDateKey(data.date),
+      date: resolveDateKey(data.date, tzOffsetMinutes),
       label,
       done: false,
       archived: false,
@@ -111,11 +115,11 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     return { id: row.id, table: 'tasks', date: row.date, label: row.label };
   },
 
-  reschedule_task: async (supabase, userId, data) => {
+  reschedule_task: async (supabase, userId, data, tzOffsetMinutes) => {
     const taskId = str(data.taskId) ?? str(data.id);
     if (!taskId) throw new Error('reschedule_task needs a taskId');
     const patch: Record<string, unknown> = {};
-    if (str(data.date)) patch.date = resolveDateKey(data.date);
+    if (str(data.date)) patch.date = resolveDateKey(data.date, tzOffsetMinutes);
     if (num(data.hour) !== undefined) patch.hour = num(data.hour);
     if (num(data.minute) !== undefined) patch.minute = num(data.minute);
     if (str(data.priority)) patch.priority = str(data.priority);
@@ -129,7 +133,7 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     return { id: taskId, table: 'tasks', ...patch };
   },
 
-  complete_task: async (supabase, userId, data) => {
+  complete_task: async (supabase, userId, data, _tzOffsetMinutes) => {
     const taskId = str(data.taskId) ?? str(data.id);
     if (!taskId) throw new Error('complete_task needs a taskId');
     const { error } = await supabase
@@ -141,7 +145,7 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     return { id: taskId, table: 'tasks', done: true };
   },
 
-  log_pb: async (supabase, userId, data) => {
+  log_pb: async (supabase, userId, data, tzOffsetMinutes) => {
     const exerciseId = str(data.exerciseId) ?? str(data.exercise_id);
     const weightKg = num(data.weightKg) ?? num(data.weight_kg);
     if (!exerciseId || weightKg === undefined) throw new Error('log_pb needs exerciseId + weightKg');
@@ -150,7 +154,7 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
       exercise_id: exerciseId,
       weight_kg: weightKg,
       reps: num(data.reps) ?? null,
-      date: resolveDateKey(data.date),
+      date: resolveDateKey(data.date, tzOffsetMinutes),
     };
     const { error } = await supabase.from('pb_log').insert(row);
     if (error) throw new Error(error.message);
@@ -197,7 +201,7 @@ export async function processActions(
   supabase: SupabaseClient,
   userId: string,
   actions: CompanionAction[],
-  opts: { execute?: boolean } = {},
+  opts: { execute?: boolean; tzOffsetMinutes?: number } = {},
 ): Promise<ProcessedAction[]> {
   const out: ProcessedAction[] = [];
   for (const action of actions) {
@@ -208,7 +212,7 @@ export async function processActions(
     }
     // opts.execute && high-confidence internal → run it server-side now.
     try {
-      const result = await INTERNAL_EXECUTORS[action.type](supabase, userId, action.data ?? {});
+      const result = await INTERNAL_EXECUTORS[action.type](supabase, userId, action.data ?? {}, opts.tzOffsetMinutes ?? 0);
       out.push({ ...action, status: 'executed', result, message: `Done: ${action.type}` });
     } catch (err) {
       out.push({

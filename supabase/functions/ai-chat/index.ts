@@ -82,6 +82,10 @@ Deno.serve(async (req: Request) => {
     const companionType: string = companions[body.companionType] ? body.companionType : DEFAULT_COMPANION;
     const history: { role: 'user' | 'assistant'; content: string }[] =
       Array.isArray(body.conversationHistory) ? body.conversationHistory.slice(-10) : [];
+    // Client's `new Date().getTimezoneOffset()` — see _shared/localDate.ts.
+    // Defaults to 0 (UTC) for callers that don't send it yet (the voice
+    // device / tools/phone_sim.py), same as before this fix, not worse.
+    const tzOffsetMinutes: number = typeof body.tzOffsetMinutes === 'number' ? body.tzOffsetMinutes : 0;
 
     // Service-role client for context reads + persistence (bypasses RLS, scoped by userId).
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -100,7 +104,7 @@ Deno.serve(async (req: Request) => {
 
     // 3. buildContext — the grounding step.
     const cfg = companions[companionType];
-    const ctx = await buildContext(admin, userId, cfg.contextSources);
+    const ctx = await buildContext(admin, userId, cfg.contextSources, tzOffsetMinutes);
 
     // 4. buildSystemPrompt (persona + context + the actions this companion may
     // emit). Inlined for v1; task 011 extracts it. Spelling out the exact action
@@ -141,7 +145,7 @@ Deno.serve(async (req: Request) => {
     // Diagnostic: surfaces in Supabase dashboard → Edge Functions → Logs.
     console.log('[ai-chat] parsed actions:', JSON.stringify(parsedActions));
     const actions = parsedActions.length
-      ? await processActions(admin, userId, parsedActions, { execute: body.execute === true })
+      ? await processActions(admin, userId, parsedActions, { execute: body.execute === true, tzOffsetMinutes })
       : [];
 
     // The model sometimes replies with ONLY an <action> block (no prose), which

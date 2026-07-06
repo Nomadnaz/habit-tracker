@@ -10,6 +10,8 @@
 // by user_id, so it only ever reads the calling user's own rows.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { localDateKey, localDateKeyPlusDays, localWeekday } from './localDate.ts';
+
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
 
@@ -20,23 +22,25 @@ export interface ContextResult {
   raw: Record<string, unknown>;
 }
 
-const todayKey = (): string => {
-  // Canonical zero-padded YYYY-MM-DD (system-model.md). UTC is acceptable here
-  // for a coarse "recent" filter; per-user local-day precision is a later refinement.
-  return new Date().toISOString().slice(0, 10);
-};
-
 export async function buildContext(
   supabase: SupabaseClient,
   userId: string,
   contextSources: string[],
+  tzOffsetMinutes = 0,
 ): Promise<ContextResult> {
   const raw: Record<string, unknown> = {};
   const lines: string[] = [];
   const want = (s: string) => contextSources.includes(s);
 
-  const today = todayKey();
-  const lookbackKey = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  // tzOffsetMinutes is the client's `new Date().getTimezoneOffset()` (JS
+  // convention: positive when local is behind UTC). An audit (2026-07-06)
+  // found TODAY/the gym_plan "tomorrow" line/the flag windows below all used
+  // UTC, reporting the wrong calendar day for anyone west of UTC from
+  // roughly evening onward — the exact bug that would make "tomorrow is leg
+  // day" name the wrong day. See _shared/localDate.ts. Defaults to 0 (UTC)
+  // for callers that don't send it yet (daily-briefing, the voice device).
+  const today = localDateKey(tzOffsetMinutes);
+  const lookbackKey = localDateKeyPlusDays(-14, tzOffsetMinutes);
   // The model has no clock — tell it today's date so it can judge
   // today / upcoming / overdue. Without this it can't answer "what's due today".
   lines.push(`TODAY: ${today} (use this to decide what is due today vs upcoming vs overdue).`);
@@ -135,7 +139,7 @@ export async function buildContext(
         .from('water_logs')
         .select('amount_ml, logged_at')
         .eq('user_id', userId)
-        .gte('logged_at', `${todayKey()}T00:00:00`)
+        .gte('logged_at', `${today}T00:00:00`)
         .limit(50);
       raw.water_logs = data ?? [];
       const total = (data ?? []).reduce((s: number, r: { amount_ml?: number }) => s + (r.amount_ml ?? 0), 0);
@@ -191,7 +195,7 @@ export async function buildContext(
           .from('meals')
           .select('date, meal_type, name, calories, protein_g')
           .eq('user_id', userId)
-          .gte('date', new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10))
+          .gte('date', localDateKeyPlusDays(-3, tzOffsetMinutes))
           .order('date', { ascending: false })
           .limit(30),
         supabase.from('nutrition_targets').select('calories, protein_g').eq('user_id', userId).maybeSingle(),
@@ -199,7 +203,7 @@ export async function buildContext(
       raw.meals = data ?? [];
       raw.nutrition_targets = targets ?? null;
       if (data?.length) {
-        const todayTotal = data.filter((m: { date: string }) => m.date === todayKey())
+        const todayTotal = data.filter((m: { date: string }) => m.date === today)
           .reduce((s: number, m: { calories?: number }) => s + (m.calories ?? 0), 0);
         lines.push(`MEALS TODAY: ${todayTotal} cal logged so far.`);
         if (targets?.calories) lines.push(`CALORIE TARGET: ${targets.calories}/day, protein target ${targets.protein_g ?? '?'}g/day.`);
@@ -219,7 +223,7 @@ export async function buildContext(
       raw.gym_plan = data ?? null;
       if (data) {
         const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const todayIdx = new Date(`${todayKey()}T12:00:00Z`).getUTCDay();
+        const todayIdx = localWeekday(tzOffsetMinutes);
         const tomorrow = days[(todayIdx + 1) % 7];
         const tomorrowPlan = data[tomorrow];
         lines.push(`GYM PLAN: tomorrow (${tomorrow}) is ${tomorrowPlan || 'a rest day'}.`);
@@ -257,7 +261,7 @@ export async function buildContext(
           .from('sleep_logs')
           .select('date, total_hours, quality_score')
           .eq('user_id', userId)
-          .gte('date', new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10))
+          .gte('date', localDateKeyPlusDays(-7, tzOffsetMinutes))
           .order('date', { ascending: false })
           .limit(7);
         raw.sleep_logs = data ?? [];
@@ -293,7 +297,7 @@ export async function buildContext(
         .from('mood_logs')
         .select('date, mood_score, stress_score')
         .eq('user_id', userId)
-        .gte('date', new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10))
+        .gte('date', localDateKeyPlusDays(-14, tzOffsetMinutes))
         .order('date', { ascending: false })
         .limit(14);
       raw.mood_logs = data ?? [];
@@ -341,7 +345,7 @@ export async function buildContext(
 
   // OVERREACHING: 6+ workouts logged in the trailing 7 days (no rest day).
   if (Array.isArray(raw.workout_done_log)) {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const sevenDaysAgo = localDateKeyPlusDays(-7, tzOffsetMinutes);
     const recentCount = (raw.workout_done_log as Array<{ date: string }>).filter(w => w.date >= sevenDaysAgo).length;
     if (recentCount >= 6) flags.push('OVERREACHING');
   }
