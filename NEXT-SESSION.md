@@ -1,5 +1,9 @@
 # NEXT-SESSION.md — start here to continue the habit-tracker build
 
+> ⚠️ **STALE — superseded by `handover.md` (2026-07-06).** This file describes the two-parallel-chat
+> split from 2026-06-29 (Chat A/B); that split no longer reflects how the project is worked. Read
+> `handover.md` instead. Kept here for history only.
+
 > Hand-off file. The previous chat ran out of token budget. Read this, then the three canonical
 > docs, then act. Last updated: 2026-06-29.
 
