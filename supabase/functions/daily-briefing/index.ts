@@ -16,6 +16,7 @@
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import { buildContext } from '../_shared/buildContext.ts';
+import { localDateKey } from '../_shared/localDate.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -40,6 +41,62 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, content-type',
   'Content-Type': 'application/json',
 };
+
+// deno-lint-ignore no-explicit-any
+type SupabaseClient = any;
+
+/**
+ * Regenerates user_context_summary.profile_md (the personal-context layer,
+ * task 057) — a short markdown summary buildContext's user_context_summary
+ * source reads back into other companions' prompts. This USED to run inside
+ * lib/postWrite.ts on EVERY domain write (a sip of water triggered a
+ * 130-row Supabase fetch to regenerate 5 lines of near-zero-new-information
+ * text) — an audit (2026-07-06) called it the worst cost/value ratio in the
+ * codebase and moved it here, where it runs once per briefing generation
+ * (organically ~once/day, plus manual refreshes) instead of once per write.
+ * Reuses ctx.raw.tasks/workout_done_log when the user's selected briefing
+ * modules already fetched them; otherwise does one small dedicated query
+ * each, same reuse pattern as buildContext's precomputed-flags section.
+ * Fire-and-forget from the caller — never blocks the briefing response.
+ */
+async function updateUserContextSummary(
+  admin: SupabaseClient,
+  userId: string,
+  ctxRaw: Record<string, unknown>,
+  tzOffsetMinutes: number,
+): Promise<void> {
+  try {
+    const today = localDateKey(tzOffsetMinutes);
+
+    const tasks = Array.isArray(ctxRaw.tasks)
+      ? (ctxRaw.tasks as Array<{ date: string }>)
+      : ((await admin.from('tasks').select('date').eq('user_id', userId)
+          .order('created_at', { ascending: false }).limit(100)).data as Array<{ date: string }> | null) ?? [];
+
+    const workouts = Array.isArray(ctxRaw.workout_done_log)
+      ? (ctxRaw.workout_done_log as Array<{ date: string }>)
+      : ((await admin.from('workout_done_log').select('date').eq('user_id', userId)
+          .order('date', { ascending: false }).limit(30)).data as Array<{ date: string }> | null) ?? [];
+
+    const tasksTodayCount = tasks.filter(t => t.date === today).length;
+
+    const profileMd = [
+      `Tasks tracked: ${tasks.length} (recent).`,
+      `Tasks today (${today}): ${tasksTodayCount}.`,
+      `Workouts logged: ${workouts.length} (recent).`,
+      tasks[0]?.date ? `Last task date: ${tasks[0].date}.` : null,
+      workouts[0]?.date ? `Last workout date: ${workouts[0].date}.` : null,
+    ].filter(Boolean).join('\n');
+
+    const now = new Date().toISOString();
+    await admin.from('user_context_summary').upsert(
+      { user_id: userId, profile_md: profileMd, profile_updated_at: now, updated_at: now },
+      { onConflict: 'user_id' },
+    );
+  } catch (err) {
+    console.error('updateUserContextSummary error:', err);
+  }
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -113,6 +170,9 @@ ${ctx.text}`;
       .trim();
 
     const generatedAt = new Date().toISOString();
+
+    // Fire-and-forget — never delays or fails the briefing response.
+    updateUserContextSummary(admin, userId, ctx.raw, tzOffsetMinutes).catch(() => {});
 
     return new Response(JSON.stringify({ briefing: briefing || 'Nothing to report yet today.', generatedAt }), {
       status: 200,
