@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -53,8 +54,10 @@ export async function getActiveGoals(): Promise<Goal[]> {
 
 export async function addGoal(input: { title: string; category?: string; why?: string; targetDate?: string }): Promise<Goal> {
   const goal: Goal = { id: genId(), status: 'active', createdAt: new Date().toISOString(), ...input };
-  const goals = await loadList<Goal>(GOALS_KEY);
-  await AsyncStorage.setItem(GOALS_KEY, JSON.stringify([...goals, goal]));
+  await withStorageLock(GOALS_KEY, async () => {
+    const goals = await loadList<Goal>(GOALS_KEY);
+    await AsyncStorage.setItem(GOALS_KEY, JSON.stringify([...goals, goal]));
+  });
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -67,8 +70,10 @@ export async function addGoal(input: { title: string; category?: string; why?: s
 }
 
 export async function setGoalStatus(goalId: string, status: GoalStatus): Promise<void> {
-  const goals = await loadList<Goal>(GOALS_KEY);
-  await AsyncStorage.setItem(GOALS_KEY, JSON.stringify(goals.map(g => (g.id === goalId ? { ...g, status } : g))));
+  await withStorageLock(GOALS_KEY, async () => {
+    const goals = await loadList<Goal>(GOALS_KEY);
+    await AsyncStorage.setItem(GOALS_KEY, JSON.stringify(goals.map(g => (g.id === goalId ? { ...g, status } : g))));
+  });
   bg(async () => { await supabase.from('goals').update({ status }).eq('id', goalId); });
 }
 
@@ -79,9 +84,11 @@ export async function getMilestones(goalId: string): Promise<Milestone[]> {
 
 export async function addMilestone(goalId: string, title: string, deadline?: string): Promise<Milestone> {
   const milestone: Milestone = { id: genId(), goalId, title, deadline, completed: false };
-  const map = await loadMap<Milestone>(MILESTONES_KEY);
-  map[goalId] = [...(map[goalId] ?? []), milestone];
-  await AsyncStorage.setItem(MILESTONES_KEY, JSON.stringify(map));
+  await withStorageLock(MILESTONES_KEY, async () => {
+    const map = await loadMap<Milestone>(MILESTONES_KEY);
+    map[goalId] = [...(map[goalId] ?? []), milestone];
+    await AsyncStorage.setItem(MILESTONES_KEY, JSON.stringify(map));
+  });
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -93,15 +100,18 @@ export async function addMilestone(goalId: string, title: string, deadline?: str
 }
 
 export async function toggleMilestone(goalId: string, milestoneId: string): Promise<void> {
-  const map = await loadMap<Milestone>(MILESTONES_KEY);
-  const list = map[goalId] ?? [];
-  let nowCompleted = false;
-  map[goalId] = list.map(m => {
-    if (m.id !== milestoneId) return m;
-    nowCompleted = !m.completed;
-    return { ...m, completed: nowCompleted };
+  const nowCompleted = await withStorageLock(MILESTONES_KEY, async () => {
+    const map = await loadMap<Milestone>(MILESTONES_KEY);
+    const list = map[goalId] ?? [];
+    let nowCompleted = false;
+    map[goalId] = list.map(m => {
+      if (m.id !== milestoneId) return m;
+      nowCompleted = !m.completed;
+      return { ...m, completed: nowCompleted };
+    });
+    await AsyncStorage.setItem(MILESTONES_KEY, JSON.stringify(map));
+    return nowCompleted;
   });
-  await AsyncStorage.setItem(MILESTONES_KEY, JSON.stringify(map));
   bg(async () => {
     await supabase.from('milestones').update({
       completed: nowCompleted, completed_at: nowCompleted ? new Date().toISOString() : null,
@@ -117,9 +127,11 @@ export async function getGoalLogs(goalId: string): Promise<GoalLog[]> {
 
 export async function logProgress(goalId: string, note: string | undefined, progressPercent?: number): Promise<GoalLog> {
   const log: GoalLog = { id: genId(), goalId, date: toDateKey(new Date()), note, progressPercent };
-  const map = await loadMap<GoalLog>(LOGS_KEY);
-  map[goalId] = [...(map[goalId] ?? []), log];
-  await AsyncStorage.setItem(LOGS_KEY, JSON.stringify(map));
+  await withStorageLock(LOGS_KEY, async () => {
+    const map = await loadMap<GoalLog>(LOGS_KEY);
+    map[goalId] = [...(map[goalId] ?? []), log];
+    await AsyncStorage.setItem(LOGS_KEY, JSON.stringify(map));
+  });
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;

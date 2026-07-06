@@ -12,6 +12,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { withStorageLock } from './storageLock';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -51,8 +52,7 @@ export async function getBooks(): Promise<Book[]> { return loadList<Book>(BOOKS_
 
 export async function addBook(title: string, author?: string): Promise<Book> {
   const book: Book = { id: genId(), title, author, status: 'to_read', currentPage: 0, createdAt: new Date().toISOString() };
-  const list = await getBooks();
-  await saveList(BOOKS_KEY, [...list, book]);
+  await withStorageLock(BOOKS_KEY, async () => saveList(BOOKS_KEY, [...(await getBooks()), book]));
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -62,8 +62,10 @@ export async function addBook(title: string, author?: string): Promise<Book> {
 }
 
 export async function setBookStatus(id: string, status: BookStatus): Promise<void> {
-  const list = await getBooks();
-  await saveList(BOOKS_KEY, list.map(b => (b.id === id ? { ...b, status } : b)));
+  await withStorageLock(BOOKS_KEY, async () => {
+    const list = await getBooks();
+    await saveList(BOOKS_KEY, list.map(b => (b.id === id ? { ...b, status } : b)));
+  });
   bg(async () => {
     await supabase.from('books').update({
       status, finished_at: status === 'finished' ? new Date().toISOString() : null,
@@ -77,8 +79,7 @@ export async function getMovies(): Promise<Movie[]> { return loadList<Movie>(MOV
 
 export async function addMovie(title: string, year?: number): Promise<Movie> {
   const movie: Movie = { id: genId(), title, year, status: 'to_watch', createdAt: new Date().toISOString() };
-  const list = await getMovies();
-  await saveList(MOVIES_KEY, [...list, movie]);
+  await withStorageLock(MOVIES_KEY, async () => saveList(MOVIES_KEY, [...(await getMovies()), movie]));
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -88,8 +89,10 @@ export async function addMovie(title: string, year?: number): Promise<Movie> {
 }
 
 export async function markWatched(id: string, rating?: number): Promise<void> {
-  const list = await getMovies();
-  await saveList(MOVIES_KEY, list.map(m => (m.id === id ? { ...m, status: 'watched' as MovieStatus, rating } : m)));
+  await withStorageLock(MOVIES_KEY, async () => {
+    const list = await getMovies();
+    await saveList(MOVIES_KEY, list.map(m => (m.id === id ? { ...m, status: 'watched' as MovieStatus, rating } : m)));
+  });
   bg(async () => {
     await supabase.from('movies').update({
       status: 'watched', rating: rating ?? null, date_watched: new Date().toISOString().slice(0, 10),
@@ -105,8 +108,7 @@ export async function addLink(url: string, title?: string): Promise<SavedLink> {
   let domain: string | undefined;
   try { domain = new URL(url).hostname; } catch { /* not a valid URL, leave domain undefined */ }
   const link: SavedLink = { id: genId(), url, title, domain, createdAt: new Date().toISOString() };
-  const list = await getLinks();
-  await saveList(LINKS_KEY, [...list, link]);
+  await withStorageLock(LINKS_KEY, async () => saveList(LINKS_KEY, [...(await getLinks()), link]));
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -121,8 +123,7 @@ export async function getIdeas(): Promise<Idea[]> { return loadList<Idea>(IDEAS_
 
 export async function addIdea(content: string): Promise<Idea> {
   const idea: Idea = { id: genId(), content, createdAt: new Date().toISOString() };
-  const list = await getIdeas();
-  await saveList(IDEAS_KEY, [...list, idea]);
+  await withStorageLock(IDEAS_KEY, async () => saveList(IDEAS_KEY, [...(await getIdeas()), idea]));
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -138,9 +139,10 @@ export type CaptureType = 'link' | 'movie' | 'book' | 'idea';
 const URL_RE = /^https?:\/\/\S+$/i;
 
 /**
- * Plain heuristic: URL regex first, then keyword matching, defaulting to
- * 'idea' for anything freeform. This is NOT Google Books/TMDB-backed
- * disambiguation — see this file's header comment.
+ * Plain heuristic: URL regex first, then keyword matching, then a
+ * length-based default (short title-like phrases → 'book', the more common
+ * capture; longer freeform text → 'idea'). This is NOT Google Books/TMDB-
+ * backed disambiguation — see this file's header comment.
  */
 export function classifyCapture(text: string): CaptureType {
   const trimmed = text.trim();

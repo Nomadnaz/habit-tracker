@@ -18,6 +18,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import type { Entity } from './postWrite';
+import { withStorageLock } from './storageLock';
 
 export type Badge = { id: string; name: string; description: string; hidden?: boolean };
 
@@ -50,9 +51,13 @@ export async function getEarnedBadgeIds(): Promise<string[]> {
 }
 
 async function award(id: string): Promise<boolean> {
-  const earned = await getEarnedBadgeIds();
-  if (earned.includes(id)) return false;
-  await AsyncStorage.setItem(EARNED_KEY, JSON.stringify([...earned, id]));
+  const newlyAwarded = await withStorageLock(EARNED_KEY, async () => {
+    const earned = await getEarnedBadgeIds();
+    if (earned.includes(id)) return false;
+    await AsyncStorage.setItem(EARNED_KEY, JSON.stringify([...earned, id]));
+    return true;
+  });
+  if (!newlyAwarded) return false;
 
   const userId = await getUid();
   if (userId) {

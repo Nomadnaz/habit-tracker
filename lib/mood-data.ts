@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { toDateKey, addDaysToKey } from './dateKey';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -56,9 +57,11 @@ export async function getTodayMood(): Promise<MoodLog | null> {
 export async function logMood(input: { moodScore: number; stressScore?: number; triggers: string[]; note?: string }): Promise<MoodLog> {
   const date = toDateKey(new Date());
   const log: MoodLog = { id: genId(), date, createdAt: new Date().toISOString(), ...input };
-  const map = await loadMap();
-  map[date] = log;
-  await AsyncStorage.setItem(MOOD_KEY, JSON.stringify(map));
+  await withStorageLock(MOOD_KEY, async () => {
+    const map = await loadMap();
+    map[date] = log;
+    await AsyncStorage.setItem(MOOD_KEY, JSON.stringify(map));
+  });
 
   bg(async () => {
     const userId = await getUid();

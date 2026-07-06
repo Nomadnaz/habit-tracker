@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { toDateKey, addDaysToKey } from './dateKey';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -103,9 +104,11 @@ export async function logSleep(input: {
     totalHours, qualityScore: input.qualityScore, notes: input.notes,
     createdAt: new Date().toISOString(),
   };
-  const map = await loadSleepMap();
-  map[input.date] = log;
-  await saveSleepMap(map);
+  await withStorageLock(SLEEP_KEY, async () => {
+    const map = await loadSleepMap();
+    map[input.date] = log;
+    await saveSleepMap(map);
+  });
 
   bg(async () => {
     const userId = await getUid();
@@ -136,7 +139,7 @@ export async function getPhoneDownTarget(): Promise<string> {
 }
 
 export async function setPhoneDownTarget(hm: string): Promise<void> {
-  await AsyncStorage.setItem(TARGET_KEY, hm);
+  await withStorageLock(TARGET_KEY, () => AsyncStorage.setItem(TARGET_KEY, hm));
 }
 
 type PhoneMap = Record<string, PhoneLog>;
@@ -199,9 +202,12 @@ export async function logPhoneDown(dateKey: string, phoneDownTime: string): Prom
   const challengeResult = scoreChallenge(phoneDownTime, target);
   const log: PhoneLog = { id: genId(), date: dateKey, phoneDownTime, challengeResult, createdAt: new Date().toISOString() };
 
-  const map = await loadPhoneMap();
-  map[dateKey] = log;
-  await savePhoneMap(map);
+  const map = await withStorageLock(PHONE_KEY, async () => {
+    const map = await loadPhoneMap();
+    map[dateKey] = log;
+    await savePhoneMap(map);
+    return map;
+  });
 
   const streak = computeChallengeStreak(Object.values(map));
 

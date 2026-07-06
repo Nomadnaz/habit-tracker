@@ -17,6 +17,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { toDateKey, addDaysToKey } from './dateKey';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
+
+// One lock key covers both @habits and @habit_logs: deleteHabit touches
+// both, so it must serialize against toggleToday (which only touches logs)
+// and addHabit/setAutoFreeze (which only touch habits) — see storageLock.ts.
+const LOCK = 'habits-data';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -80,8 +86,10 @@ export async function addHabit(input: { name: string; frequency: Frequency; remi
     autoFreezeEnabled: false,
     createdAt: new Date().toISOString(),
   };
-  const habits = await loadHabits();
-  await saveHabits([...habits, habit]);
+  await withStorageLock(LOCK, async () => {
+    const habits = await loadHabits();
+    await saveHabits([...habits, habit]);
+  });
 
   bg(async () => {
     const userId = await getUid();
@@ -96,18 +104,22 @@ export async function addHabit(input: { name: string; frequency: Frequency; remi
 
 /** Task 076 MVP: 2 free auto-freezes/month, opt-in per habit. */
 export async function setAutoFreeze(habitId: string, enabled: boolean): Promise<void> {
-  const habits = await loadHabits();
-  await saveHabits(habits.map(h => (h.id === habitId ? { ...h, autoFreezeEnabled: enabled } : h)));
+  await withStorageLock(LOCK, async () => {
+    const habits = await loadHabits();
+    await saveHabits(habits.map(h => (h.id === habitId ? { ...h, autoFreezeEnabled: enabled } : h)));
+  });
   bg(async () => { await supabase.from('habits').update({ auto_freeze_enabled: enabled }).eq('id', habitId); });
 }
 
 export async function deleteHabit(habitId: string): Promise<void> {
-  const habits = await loadHabits();
-  await saveHabits(habits.filter(h => h.id !== habitId));
+  await withStorageLock(LOCK, async () => {
+    const habits = await loadHabits();
+    await saveHabits(habits.filter(h => h.id !== habitId));
 
-  const logMap = await loadLogMap();
-  delete logMap[habitId];
-  await saveLogMap(logMap);
+    const logMap = await loadLogMap();
+    delete logMap[habitId];
+    await saveLogMap(logMap);
+  });
 
   bg(async () => { await supabase.from('habits').delete().eq('id', habitId); });
 }
@@ -140,22 +152,26 @@ export function isDoneOnDate(logs: HabitLog[], dateKey: string): boolean {
 /** Toggle today's completion for a habit. Returns the new completed state. */
 export async function toggleToday(habit: Habit): Promise<boolean> {
   const today = toDateKey(new Date());
-  const map = await loadLogMap();
-  const logs = map[habit.id] ?? [];
-  const existing = logs.find(l => l.date === today);
 
-  let nextCompleted: boolean;
-  let record: HabitLog;
-  if (existing) {
-    nextCompleted = !existing.completed;
-    record = { ...existing, completed: nextCompleted };
-    map[habit.id] = logs.map(l => (l.id === existing.id ? record : l));
-  } else {
-    nextCompleted = true;
-    record = { id: genId(), habitId: habit.id, date: today, completed: true, createdAt: new Date().toISOString() };
-    map[habit.id] = [...logs, record];
-  }
-  await saveLogMap(map);
+  const { map, nextCompleted, record, wasExisting } = await withStorageLock(LOCK, async () => {
+    const map = await loadLogMap();
+    const logs = map[habit.id] ?? [];
+    const existing = logs.find(l => l.date === today);
+
+    let nextCompleted: boolean;
+    let record: HabitLog;
+    if (existing) {
+      nextCompleted = !existing.completed;
+      record = { ...existing, completed: nextCompleted };
+      map[habit.id] = logs.map(l => (l.id === existing.id ? record : l));
+    } else {
+      nextCompleted = true;
+      record = { id: genId(), habitId: habit.id, date: today, completed: true, createdAt: new Date().toISOString() };
+      map[habit.id] = [...logs, record];
+    }
+    await saveLogMap(map);
+    return { map, nextCompleted, record, wasExisting: !!existing };
+  });
 
   bg(async () => {
     const userId = await getUid();
@@ -172,7 +188,7 @@ export async function toggleToday(habit: Habit): Promise<boolean> {
   // task 063) doesn't need to recompute it or import this module back.
   const streak = computeStreak(map[habit.id]);
   bg(() => saveStreak(habit.id, streak, nextCompleted ? today : null));
-  postWrite('habit', { habit_id: habit.id, date: today, completed: nextCompleted, streak: streak.current }, existing ? 'update' : 'create');
+  postWrite('habit', { habit_id: habit.id, date: today, completed: nextCompleted, streak: streak.current }, wasExisting ? 'update' : 'create');
 
   return nextCompleted;
 }

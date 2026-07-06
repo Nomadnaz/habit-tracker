@@ -5,8 +5,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
-import { toDateKey } from './dateKey';
+import { toDateKey, fromDateKey } from './dateKey';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -43,8 +44,10 @@ export async function getExpensesForMonth(monthKey: string): Promise<Expense[]> 
 
 export async function addExpense(input: { amount: number; category: Category; note?: string; date: string }): Promise<Expense> {
   const expense: Expense = { id: genId(), createdAt: new Date().toISOString(), ...input };
-  const list = await loadList<Expense>(EXPENSES_KEY);
-  await AsyncStorage.setItem(EXPENSES_KEY, JSON.stringify([...list, expense]));
+  await withStorageLock(EXPENSES_KEY, async () => {
+    const list = await loadList<Expense>(EXPENSES_KEY);
+    await AsyncStorage.setItem(EXPENSES_KEY, JSON.stringify([...list, expense]));
+  });
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -66,8 +69,10 @@ export async function getActiveBills(): Promise<Bill[]> {
 
 export async function addBill(input: { name: string; amount: number; dueDate: string; frequency: Bill['frequency'] }): Promise<Bill> {
   const bill: Bill = { id: genId(), active: true, ...input };
-  const list = await loadList<Bill>(BILLS_KEY);
-  await AsyncStorage.setItem(BILLS_KEY, JSON.stringify([...list, bill]));
+  await withStorageLock(BILLS_KEY, async () => {
+    const list = await loadList<Bill>(BILLS_KEY);
+    await AsyncStorage.setItem(BILLS_KEY, JSON.stringify([...list, bill]));
+  });
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -80,19 +85,33 @@ export async function addBill(input: { name: string; amount: number; dueDate: st
 }
 
 export async function markBillPaid(billId: string): Promise<void> {
-  const list = await loadList<Bill>(BILLS_KEY);
-  const bill = list.find(b => b.id === billId);
-  if (!bill) return;
-  const nextDue = advanceDate(bill.dueDate, bill.frequency);
-  const updated = list.map(b => (b.id === billId ? { ...b, dueDate: nextDue } : b));
-  await AsyncStorage.setItem(BILLS_KEY, JSON.stringify(updated));
+  const nextDue = await withStorageLock(BILLS_KEY, async () => {
+    const list = await loadList<Bill>(BILLS_KEY);
+    const bill = list.find(b => b.id === billId);
+    if (!bill) return null;
+    const nextDue = advanceDate(bill.dueDate, bill.frequency);
+    const updated = list.map(b => (b.id === billId ? { ...b, dueDate: nextDue } : b));
+    await AsyncStorage.setItem(BILLS_KEY, JSON.stringify(updated));
+    return nextDue;
+  });
+  if (!nextDue) return;
   bg(async () => {
     await supabase.from('bills').update({ due_date: nextDue, last_paid: toDateKey(new Date()) }).eq('id', billId);
   });
 }
 
+/**
+ * Was parsing dateKey with `new Date(dateKey)` — UTC midnight — then calling
+ * setDate/setMonth/setFullYear on it, which mutate based on the LOCAL
+ * representation of that UTC instant. For negative-offset timezones that
+ * local representation is the evening before, so every advance landed one
+ * day early (a monthly bill due the 1st would drift to the ~19th of the
+ * prior month over a year). Fixed by parsing via fromDateKey (local
+ * midnight) instead — an audit (2026-07-06) finding, M3.
+ */
 function advanceDate(dateKey: string, frequency: Bill['frequency']): string {
-  const d = new Date(dateKey);
+  const d = fromDateKey(dateKey);
+  if (!d) throw new Error(`advanceDate: invalid date key "${dateKey}"`);
   if (frequency === 'weekly') d.setDate(d.getDate() + 7);
   else if (frequency === 'yearly') d.setFullYear(d.getFullYear() + 1);
   else d.setMonth(d.getMonth() + 1);
@@ -110,9 +129,11 @@ export async function getBudgets(): Promise<Budgets> {
 }
 
 export async function setBudget(category: Category, monthlyTarget: number): Promise<void> {
-  const budgets = await getBudgets();
-  const next = { ...budgets, [category]: monthlyTarget };
-  await AsyncStorage.setItem(BUDGETS_KEY, JSON.stringify(next));
+  await withStorageLock(BUDGETS_KEY, async () => {
+    const budgets = await getBudgets();
+    const next = { ...budgets, [category]: monthlyTarget };
+    await AsyncStorage.setItem(BUDGETS_KEY, JSON.stringify(next));
+  });
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;

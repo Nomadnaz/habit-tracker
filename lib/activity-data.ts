@@ -12,6 +12,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -119,8 +120,7 @@ export async function saveActivity(input: {
     createdAt: new Date().toISOString(),
   };
 
-  const list = await loadActivities();
-  await saveActivities([...list, activity]);
+  await withStorageLock(ACTIVITIES_KEY, async () => saveActivities([...(await loadActivities()), activity]));
 
   bg(async () => {
     const userId = await getUid();

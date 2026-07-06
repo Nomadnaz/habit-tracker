@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -91,9 +92,11 @@ function toDbRow(m: Meal, userId: string) {
 
 export async function addMeal(input: Omit<Meal, 'id' | 'createdAt'>): Promise<Meal> {
   const meal: Meal = { ...input, id: genId(), createdAt: new Date().toISOString() };
-  const map = await loadMealMap();
-  map[meal.date] = [...(map[meal.date] ?? []), meal];
-  await saveMealMap(map);
+  await withStorageLock(MEALS_KEY, async () => {
+    const map = await loadMealMap();
+    map[meal.date] = [...(map[meal.date] ?? []), meal];
+    await saveMealMap(map);
+  });
 
   bg(async () => {
     const userId = await getUid();
@@ -106,10 +109,12 @@ export async function addMeal(input: Omit<Meal, 'id' | 'createdAt'>): Promise<Me
 }
 
 export async function updateMeal(meal: Meal): Promise<void> {
-  const map = await loadMealMap();
-  const day = map[meal.date] ?? [];
-  map[meal.date] = day.map(m => (m.id === meal.id ? meal : m));
-  await saveMealMap(map);
+  await withStorageLock(MEALS_KEY, async () => {
+    const map = await loadMealMap();
+    const day = map[meal.date] ?? [];
+    map[meal.date] = day.map(m => (m.id === meal.id ? meal : m));
+    await saveMealMap(map);
+  });
 
   bg(async () => {
     const userId = await getUid();
@@ -120,9 +125,11 @@ export async function updateMeal(meal: Meal): Promise<void> {
 }
 
 export async function deleteMeal(dateKey: string, mealId: string): Promise<void> {
-  const map = await loadMealMap();
-  map[dateKey] = (map[dateKey] ?? []).filter(m => m.id !== mealId);
-  await saveMealMap(map);
+  await withStorageLock(MEALS_KEY, async () => {
+    const map = await loadMealMap();
+    map[dateKey] = (map[dateKey] ?? []).filter(m => m.id !== mealId);
+    await saveMealMap(map);
+  });
 
   bg(async () => { await supabase.from('meals').delete().eq('id', mealId); });
 }

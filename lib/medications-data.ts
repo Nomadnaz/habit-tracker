@@ -14,6 +14,9 @@ import { supabase } from './supabase';
 import { toDateKey, addDaysToKey, daysBetweenKeys } from './dateKey';
 import { postWrite } from './postWrite';
 import { computeStreak, type StreakInfo, type HeatmapCell } from './habits-data';
+import { withStorageLock } from './storageLock';
+
+const LOCK = 'medications-data'; // covers both @medications and @medication_logs
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -81,8 +84,10 @@ export async function addMedication(input: {
     active: true,
     createdAt: now.toISOString(),
   };
-  const meds = await loadMeds();
-  await saveMeds([...meds, med]);
+  await withStorageLock(LOCK, async () => {
+    const meds = await loadMeds();
+    await saveMeds([...meds, med]);
+  });
 
   bg(async () => {
     const userId = await getUid();
@@ -98,12 +103,14 @@ export async function addMedication(input: {
 }
 
 export async function deleteMedication(medicationId: string): Promise<void> {
-  const meds = await loadMeds();
-  await saveMeds(meds.filter(m => m.id !== medicationId));
+  await withStorageLock(LOCK, async () => {
+    const meds = await loadMeds();
+    await saveMeds(meds.filter(m => m.id !== medicationId));
 
-  const logMap = await loadLogMap();
-  delete logMap[medicationId];
-  await saveLogMap(logMap);
+    const logMap = await loadLogMap();
+    delete logMap[medicationId];
+    await saveLogMap(logMap);
+  });
 
   bg(async () => { await supabase.from('medications').delete().eq('id', medicationId); });
 }
@@ -136,22 +143,26 @@ export function isDoseTakenOnDate(logs: MedicationLog[], dateKey: string): boole
 /** Toggle today's dose for a medication. Returns the new taken state. */
 export async function toggleTodayDose(med: Medication): Promise<boolean> {
   const today = toDateKey(new Date());
-  const map = await loadLogMap();
-  const logs = map[med.id] ?? [];
-  const existing = logs.find(l => l.date === today);
 
-  let nextTaken: boolean;
-  let record: MedicationLog;
-  if (existing) {
-    nextTaken = !existing.taken;
-    record = { ...existing, taken: nextTaken };
-    map[med.id] = logs.map(l => (l.id === existing.id ? record : l));
-  } else {
-    nextTaken = true;
-    record = { id: genId(), medicationId: med.id, date: today, taken: true, createdAt: new Date().toISOString() };
-    map[med.id] = [...logs, record];
-  }
-  await saveLogMap(map);
+  const { nextTaken, record, wasExisting } = await withStorageLock(LOCK, async () => {
+    const map = await loadLogMap();
+    const logs = map[med.id] ?? [];
+    const existing = logs.find(l => l.date === today);
+
+    let nextTaken: boolean;
+    let record: MedicationLog;
+    if (existing) {
+      nextTaken = !existing.taken;
+      record = { ...existing, taken: nextTaken };
+      map[med.id] = logs.map(l => (l.id === existing.id ? record : l));
+    } else {
+      nextTaken = true;
+      record = { id: genId(), medicationId: med.id, date: today, taken: true, createdAt: new Date().toISOString() };
+      map[med.id] = [...logs, record];
+    }
+    await saveLogMap(map);
+    return { nextTaken, record, wasExisting: !!existing };
+  });
 
   bg(async () => {
     const userId = await getUid();
@@ -162,7 +173,7 @@ export async function toggleTodayDose(med: Medication): Promise<boolean> {
     );
   });
 
-  postWrite('medication', { medication_id: med.id, date: today, taken: nextTaken }, existing ? 'update' : 'create');
+  postWrite('medication', { medication_id: med.id, date: today, taken: nextTaken }, wasExisting ? 'update' : 'create');
 
   return nextTaken;
 }

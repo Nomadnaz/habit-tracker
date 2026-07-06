@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
 
 // Get the logged-in user's ID (null if not signed in).
 async function uid(): Promise<string | null> {
@@ -362,16 +363,29 @@ export async function removeExerciseFromTemplate(junctionId: string): Promise<vo
 }
 
 export async function markDoneToday(templateId: string): Promise<void> {
-  const log = await getDoneLog();
   const today = todayKey();
-  const filtered = log.filter(e => !(e.templateId === templateId && e.date === today));
   const entry = { id: genId(), templateId, date: today };
-  const wasAlreadyDone = filtered.length !== log.length;
-  await save(K.doneLog, [...filtered, { date: today, templateId }]);
+
+  const wasAlreadyDone = await withStorageLock(K.doneLog, async () => {
+    const log = await getDoneLog();
+    const filtered = log.filter(e => !(e.templateId === templateId && e.date === today));
+    await save(K.doneLog, [...filtered, { date: today, templateId }]);
+    return filtered.length !== log.length;
+  });
+
   bg(async () => {
     const userId = await uid();
     if (!userId) return;
-    await supabase.from('workout_done_log').upsert({ id: entry.id, user_id: userId, workout_template_id: templateId, date: today });
+    // onConflict must match the real unique index (user_id, workout_template_id,
+    // date) — an audit (2026-07-06) found this was upserting with no
+    // onConflict target at all, so PostgREST resolved conflicts on the PK
+    // (a fresh id every call) instead, meaning a second mark-done on a day
+    // already marked remotely raised a unique violation that bg()'s
+    // .catch(() => {}) silently swallowed — the remote write just failed.
+    await supabase.from('workout_done_log').upsert(
+      { id: entry.id, user_id: userId, workout_template_id: templateId, date: today },
+      { onConflict: 'user_id,workout_template_id,date' },
+    );
   });
   // task 025: this was writing straight to workout_done_log with no fan-out
   // at all — postWrite('workout', ...) had never been wired here. Fixed.
@@ -380,8 +394,10 @@ export async function markDoneToday(templateId: string): Promise<void> {
 
 export async function unmarkDoneToday(templateId: string): Promise<void> {
   const today = todayKey();
-  const log = await getDoneLog();
-  await save(K.doneLog, log.filter(e => !(e.templateId === templateId && e.date === today)));
+  await withStorageLock(K.doneLog, async () => {
+    const log = await getDoneLog();
+    await save(K.doneLog, log.filter(e => !(e.templateId === templateId && e.date === today)));
+  });
   bg(async () => {
     const userId = await uid();
     if (!userId) return;
@@ -437,9 +453,12 @@ export async function getGymPlan(): Promise<GymPlan> {
 }
 
 export async function setGymPlanDay(day: keyof GymPlan, value: PlanDayValue): Promise<GymPlan> {
-  const plan = await getGymPlan();
-  const next = { ...plan, [day]: value };
-  await save(GYM_PLAN_KEY, next);
+  const next = await withStorageLock(GYM_PLAN_KEY, async () => {
+    const plan = await getGymPlan();
+    const merged = { ...plan, [day]: value };
+    await save(GYM_PLAN_KEY, merged);
+    return merged;
+  });
   bg(async () => {
     const userId = await uid();
     if (!userId) return;

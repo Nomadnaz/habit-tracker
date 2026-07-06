@@ -13,7 +13,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
-import { toDateKey } from './dateKey';
+import { toDateKey, addDaysToKey } from './dateKey';
+import { withStorageLock } from './storageLock';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -40,7 +41,7 @@ export async function isOptedIn(): Promise<boolean> {
 }
 
 export async function setOptedIn(value: boolean): Promise<void> {
-  await AsyncStorage.setItem(OPT_IN_KEY, value ? 'true' : 'false');
+  await withStorageLock(OPT_IN_KEY, () => AsyncStorage.setItem(OPT_IN_KEY, value ? 'true' : 'false'));
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -57,7 +58,7 @@ export async function getSettings(): Promise<CycleSettings> {
 }
 
 export async function saveSettings(settings: CycleSettings): Promise<void> {
-  await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  await withStorageLock(SETTINGS_KEY, () => AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)));
   bg(async () => {
     const userId = await getUid();
     if (!userId) return;
@@ -74,7 +75,7 @@ export async function getRecentLogs(days = 90): Promise<CycleLog[]> {
   try {
     const raw = await AsyncStorage.getItem(LOGS_KEY);
     const all: CycleLog[] = raw ? JSON.parse(raw) : [];
-    const cutoff = toDateKey(new Date(Date.now() - days * 86400000));
+    const cutoff = addDaysToKey(toDateKey(new Date()), -days);
     return all.filter(l => l.date >= cutoff).sort((a, b) => b.date.localeCompare(a.date));
   } catch {
     return [];
@@ -83,9 +84,11 @@ export async function getRecentLogs(days = 90): Promise<CycleLog[]> {
 
 export async function addLog(input: { date: string; type: CycleLogType; flowIntensity?: string; symptoms?: string[]; notes?: string }): Promise<CycleLog> {
   const log: CycleLog = { id: genId(), symptoms: [], ...input };
-  const raw = await AsyncStorage.getItem(LOGS_KEY);
-  const all: CycleLog[] = raw ? JSON.parse(raw) : [];
-  await AsyncStorage.setItem(LOGS_KEY, JSON.stringify([...all, log]));
+  await withStorageLock(LOGS_KEY, async () => {
+    const raw = await AsyncStorage.getItem(LOGS_KEY);
+    const all: CycleLog[] = raw ? JSON.parse(raw) : [];
+    await AsyncStorage.setItem(LOGS_KEY, JSON.stringify([...all, log]));
+  });
 
   bg(async () => {
     const userId = await getUid();
@@ -106,9 +109,13 @@ export async function addLog(input: { date: string; type: CycleLogType; flowInte
   return log;
 }
 
+/**
+ * Was parsing lastPeriodStart with `new Date(key)` (UTC midnight) then
+ * calling setDate on it (which mutates based on the LOCAL representation of
+ * that instant) — predicted the next period one day early for
+ * negative-offset timezones. Fixed via addDaysToKey (audit 2026-07-06, M3).
+ */
 export function predictNextPeriod(settings: CycleSettings): string | null {
   if (!settings.lastPeriodStart) return null;
-  const next = new Date(settings.lastPeriodStart);
-  next.setDate(next.getDate() + settings.averageCycleLength);
-  return toDateKey(next);
+  return addDaysToKey(settings.lastPeriodStart, settings.averageCycleLength);
 }
