@@ -60,13 +60,28 @@ export async function skipOnboarding(): Promise<void> {
   await AsyncStorage.removeItem(ANSWERS_KEY);
 }
 
+// In-flight guard: app/_layout.tsx calls flushOnboardingIfNeeded() from both
+// its initial getSession() check AND its onAuthStateChange subscription,
+// which both fire on the same login — an audit (2026-07-06) found this let
+// two concurrent flushes read the same pending answers before either
+// cleared them, writing the first habit (addHabit) twice. Every caller
+// awaits the SAME in-flight promise instead of starting a second run.
+let flushInFlight: Promise<void> | null = null;
+
 /**
  * Runs once a real Supabase session exists: writes the locally-collected
  * answers into user_profiles/nutrition_targets/habits/briefing_preferences,
  * then clears the local answers and marks onboarding done. Safe to call
- * repeatedly — it no-ops once the answers are gone.
+ * repeatedly and concurrently — it no-ops once the answers are gone, and
+ * concurrent calls share one in-flight run rather than racing.
  */
 export async function flushOnboardingIfNeeded(): Promise<void> {
+  if (flushInFlight) return flushInFlight;
+  flushInFlight = doFlush().finally(() => { flushInFlight = null; });
+  return flushInFlight;
+}
+
+async function doFlush(): Promise<void> {
   if (await isOnboardingComplete()) return;
   const answers = await getAnswers();
   if (Object.keys(answers).length === 0) return; // nothing pending, e.g. skipOnboarding() path

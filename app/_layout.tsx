@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 // useEffect runs code after the screen renders. useState stores values that can change.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Platform, UIManager } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -80,6 +80,12 @@ export default function RootLayout() {
   // We use this to know which section of the app the user is currently in.
   const segments = useSegments();
 
+  // A live-updating ref mirror of segments, for the auth-effect below (which
+  // only runs once on mount, so a plain closure over `segments` there would
+  // always see the mount-time value, not the current screen).
+  const segmentsRef = useRef(segments);
+  useEffect(() => { segmentsRef.current = segments; }, [segments]);
+
   // Keep on-device tasks in sync with task changes that originate outside the
   // app (the voice device, other devices) in real time. No-op until logged in.
   useRemoteTaskSync(session?.user?.id ?? null);
@@ -116,7 +122,14 @@ export default function RootLayout() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false); // We now know the login state, so stop showing the loading screen.
-      if (session) flushOnboardingIfNeeded();
+      // Never auto-flush while still inside the onboarding flow itself: an
+      // audit (2026-07-06) found that when signUp() makes a session appear
+      // immediately (screen 9), this flush could fire before the user ever
+      // reached briefing-builder (screen 10) — consuming and clearing the
+      // pending answers before briefingModules was folded in, so that
+      // choice silently never reached Supabase. briefing-builder.tsx calls
+      // flushOnboardingIfNeeded() itself once it's actually done.
+      if (session && segmentsRef.current[0] !== '(onboarding)') flushOnboardingIfNeeded();
     });
 
     // onAuthStateChange fires whenever the user logs in or logs out.
@@ -125,8 +138,8 @@ export default function RootLayout() {
       setSession(session);
       // Covers the "email confirmation required" onboarding path: the first
       // login after confirming is where the cached answers finally get a
-      // userId to write against.
-      if (session) flushOnboardingIfNeeded();
+      // userId to write against. Same (onboarding) guard as above.
+      if (session && segmentsRef.current[0] !== '(onboarding)') flushOnboardingIfNeeded();
     });
 
     // When this component unmounts (app closes), stop listening to auth changes.
@@ -163,14 +176,25 @@ export default function RootLayout() {
       // to see. That screen calls router.replace('/(tabs)') itself once it's
       // done — see app/(onboarding)/briefing-builder.tsx.
       if (inAuth) router.replace('/(tabs)');
-    } else if (!onboardingDone && !inOnboarding) {
-      // Brand-new device, never onboarded (or explicitly skipped via "I
-      // already have an account") — the account wall is deliberately late
-      // (task 062), so this comes before login, not instead of it.
-      router.replace('/(onboarding)/welcome');
-    } else if (onboardingDone && !inAuth) {
-      // Already onboarded (or skipped) but logged out — the familiar path.
-      router.replace('/(auth)/login');
+    } else if (!inAuth) {
+      // Logged out and NOT already sitting on the login screen. Checking
+      // inAuth first (and doing nothing when true) fixes a real bug found in
+      // audit (2026-07-06): the account screen (screen 9) replaces to
+      // '/(auth)/login' when Supabase requires email confirmation (no
+      // session yet), but this effect used to re-evaluate on that navigation
+      // and — since onboardingDone was still false — immediately bounce the
+      // user straight back to '/(onboarding)/welcome', a dead end with no
+      // way to actually log in once they'd confirmed their email. Now,
+      // reaching (auth) by any path (this redirect, or an explicit
+      // router.replace from onboarding/welcome) always sticks.
+      if (!onboardingDone && !inOnboarding) {
+        // Brand-new device, never onboarded — the account wall is
+        // deliberately late (task 062), so this comes before login.
+        router.replace('/(onboarding)/welcome');
+      } else if (onboardingDone) {
+        // Already onboarded (or skipped) but logged out — the familiar path.
+        router.replace('/(auth)/login');
+      }
     }
   }, [session, segments, loading, fontsLoaded, dateKeysMigrated, onboardingDone]);
 
