@@ -18,6 +18,7 @@ import {
   type SleepLog, type PhoneLog,
 } from '@/lib/sleep-data';
 import { toDateKey } from '@/lib/dateKey';
+import ChatScreen from '@/components/ChatScreen';
 
 const ORANGE = '#FF4D00';
 const INK    = '#1A1714';
@@ -63,6 +64,7 @@ export default function SleepDetailModal() {
   const [phoneDownTime, setPhoneDownTime] = useState('');
   const [recentPhone, setRecentPhone] = useState<PhoneLog[]>([]);
   const [challengeStreak, setChallengeStreak] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const [log, week, t, phoneLogs] = await Promise.all([
@@ -104,7 +106,9 @@ export default function SleepDetailModal() {
           <MaterialCommunityIcons name="close" size={22} color={INK} />
         </TouchableOpacity>
         <Text style={styles.title}>SLEEP</Text>
-        <View style={{ width: 22 }} />
+        <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
+          <MaterialCommunityIcons name="chat-processing-outline" size={20} color={ORANGE} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -196,6 +200,13 @@ export default function SleepDetailModal() {
           )}
         </View>
       </ScrollView>
+
+      <ChatScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        companionType="sleep"
+        onTasksUpdated={refresh}
+      />
     </SafeAreaView>
   );
 }

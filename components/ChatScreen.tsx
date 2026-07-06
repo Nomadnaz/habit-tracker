@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
 import type { Task } from '@/lib/tasks-core';
 import { executeAction, type ProcessedAction } from '@/lib/actionExecutor';
+import { companions, type CompanionType } from '@/lib/companions';
 
 const ORANGE = '#FF4D00';
 const INK = '#1A1714';
@@ -25,18 +26,30 @@ interface ChatMessage {
 interface ChatScreenProps {
   visible: boolean;
   onClose: () => void;
-  selectedTasks: Task[];
-  selectedDate: string;
   onTasksUpdated: () => void;
+  /**
+   * Which companion this chat talks to (task 011, companion picker). Was
+   * hardcoded to 'habitCoach' everywhere — an audit (2026-07-06) found this
+   * meant 6 of the app's 9 companion configs (calorie/activity/sleep/goals/
+   * mood, all already wired into buildContext) had no chat UI reachable at
+   * all. Defaults to 'habitCoach' so the existing calendar-day call site's
+   * behavior is unchanged.
+   */
+  companionType?: CompanionType;
+  // selectedTasks/selectedDate are accepted for backward compatibility with
+  // the existing calendar/day.tsx call site but unused in this component —
+  // left optional rather than removed, out of scope for the companion-picker change.
+  selectedTasks?: Task[];
+  selectedDate?: string;
 }
 
 export default function ChatScreen({
   visible,
   onClose,
-  selectedTasks,
-  selectedDate,
   onTasksUpdated,
+  companionType = 'habitCoach',
 }: ChatScreenProps) {
+  const cfg = companions[companionType];
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -88,7 +101,7 @@ export default function ChatScreen({
       const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: {
           message: userMsg,
-          companionType: 'habitCoach',
+          companionType,
           conversationHistory: history,
           // Lets the server resolve TODAY/tomorrow in local time instead of
           // UTC — see supabase/functions/_shared/localDate.ts (audit 2026-07-06).
@@ -173,7 +186,7 @@ export default function ChatScreen({
         >
           <View style={styles.header}>
             <View style={styles.dragHandle} />
-            <Text style={styles.title}>✨ Task Coach</Text>
+            <Text style={styles.title}>✨ {cfg.defaultName}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <MaterialCommunityIcons name="close" size={28} color={INK} />
             </TouchableOpacity>
@@ -229,7 +242,7 @@ export default function ChatScreen({
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Ask Coach to reschedule, retitle, or reorganize..."
+              placeholder={`Ask ${cfg.defaultName} anything...`}
               placeholderTextColor={FAINT}
               value={userInput}
               onChangeText={setUserInput}

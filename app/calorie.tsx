@@ -24,6 +24,7 @@ import {
   type Meal, type MealType, type NutritionTargets,
 } from '@/lib/meals-data';
 import { estimateMealFromPhoto } from '@/lib/foodVision';
+import ChatScreen from '@/components/ChatScreen';
 
 // ── Design tokens (identical to BODY / STEPS pages) ─────────────────────────
 const ORANGE = '#FF4D00';
@@ -78,6 +79,7 @@ export default function CalorieScreen() {
   const [recent, setRecent] = useState<Meal[]>([]);
   const [editor, setEditor] = useState<EditorState>(EMPTY_EDITOR);
   const [busy, setBusy] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const [m, t, r] = await Promise.all([getMealsForDate(dk), getTargets(), getRecentMeals()]);
@@ -205,7 +207,9 @@ export default function CalorieScreen() {
           <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
         </TouchableOpacity>
         <Text style={styles.title}>FUEL</Text>
-        <View style={{ width: 26 }} />
+        <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <MaterialCommunityIcons name="chat-processing-outline" size={22} color={ORANGE} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -363,6 +367,13 @@ export default function CalorieScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ChatScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        companionType="calorie"
+        onTasksUpdated={refresh}
+      />
     </SafeAreaView>
   );
 }

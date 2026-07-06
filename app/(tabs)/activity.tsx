@@ -24,6 +24,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import Svg, { Polyline } from 'react-native-svg';
+import ChatScreen from '@/components/ChatScreen';
 
 import {
   saveActivity, getRecentActivities, computeDistanceM, computePacePerKm, segmentPaces,
@@ -81,6 +82,7 @@ function RouteLine({ waypoints }: { waypoints: Waypoint[] }) {
 export default function ActivityScreen() {
   const [type, setType] = useState<ActivityType>('run');
   const [recording, setRecording] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -146,6 +148,9 @@ export default function ActivityScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>ACTIVITY</Text>
+        <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <MaterialCommunityIcons name="chat-processing-outline" size={22} color={ORANGE} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -205,13 +210,20 @@ export default function ActivityScreen() {
           </View>
         ))}
       </ScrollView>
+
+      <ChatScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        companionType="activity"
+        onTasksUpdated={refresh}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   title: { fontFamily: BOLD, fontSize: 16, color: INK },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 14 },
   typeRow: { flexDirection: 'row', gap: 8 },

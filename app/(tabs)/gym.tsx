@@ -14,6 +14,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Polyline, Circle } from 'react-native-svg';
+import ChatScreen from '@/components/ChatScreen';
 
 import {
   loadBodyData, addWater, logWeight,
@@ -175,6 +176,7 @@ export default function BodyScreen() {
   const [weightInput, setWeightInput] = useState('');
   const [healthSyncing, setHealthSyncing] = useState(false);
   const [gymPlan, setGymPlanState] = useState<GymPlan | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const refreshWorkoutPreview = useCallback(async (movement: BodyMovement) => {
     await ensureSeeded();
     setWorkoutPreview(await getBodyWorkoutPreview(movement));
@@ -284,7 +286,9 @@ export default function BodyScreen() {
             <Text style={styles.subtitle}>BUILD YOUR CHARACTER</Text>
           </View>
           <View style={styles.headerIcons}>
-            <MaterialCommunityIcons name="information-outline" size={18} color={MUTED} />
+            <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={10}>
+              <MaterialCommunityIcons name="chat-processing-outline" size={18} color={ORANGE} />
+            </TouchableOpacity>
             <MaterialCommunityIcons name="chart-bar" size={18} color={MUTED} />
             <MaterialCommunityIcons name="dots-horizontal" size={18} color={MUTED} />
           </View>
@@ -623,6 +627,12 @@ export default function BodyScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <ChatScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        companionType="gym"
+        onTasksUpdated={() => loadBodyData().then(setData)}
+      />
     </SafeAreaView>
   );
 }

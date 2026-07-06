@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { getRecentMoodLogs, getTodayMood, logMood, TRIGGERS, type MoodLog } from '@/lib/mood-data';
+import ChatScreen from '@/components/ChatScreen';
 
 const ORANGE = '#FF4D00';
 const INK    = '#1A1714';
@@ -31,6 +32,7 @@ export default function MoodModal() {
   const [triggers, setTriggers] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [recent, setRecent] = useState<MoodLog[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const [today, week] = await Promise.all([getTodayMood(), getRecentMoodLogs(14)]);
@@ -57,7 +59,9 @@ export default function MoodModal() {
           <MaterialCommunityIcons name="close" size={22} color={INK} />
         </TouchableOpacity>
         <Text style={styles.title}>MOOD</Text>
-        <View style={{ width: 22 }} />
+        <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
+          <MaterialCommunityIcons name="chat-processing-outline" size={20} color={ORANGE} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -99,6 +103,13 @@ export default function MoodModal() {
           ))}
         </View>
       </ScrollView>
+
+      <ChatScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        companionType="mood"
+        onTasksUpdated={refresh}
+      />
     </SafeAreaView>
   );
 }

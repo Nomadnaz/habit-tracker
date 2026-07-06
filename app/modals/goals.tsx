@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import ChatScreen from '@/components/ChatScreen';
 
 import {
   getActiveGoals, addGoal, setGoalStatus, getMilestones, addMilestone, toggleMilestone,
@@ -40,6 +41,7 @@ export default function GoalsModal() {
   const [addVisible, setAddVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [milestoneInput, setMilestoneInput] = useState<Record<string, string>>({});
+  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const goals = await getActiveGoals();
@@ -81,9 +83,14 @@ export default function GoalsModal() {
           <MaterialCommunityIcons name="close" size={22} color={INK} />
         </TouchableOpacity>
         <Text style={styles.title}>GOALS</Text>
-        <TouchableOpacity onPress={() => setAddVisible(true)} hitSlop={12}>
-          <MaterialCommunityIcons name="plus" size={22} color={INK} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
+            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={INK} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setAddVisible(true)} hitSlop={12}>
+            <MaterialCommunityIcons name="plus" size={22} color={INK} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -151,6 +158,13 @@ export default function GoalsModal() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ChatScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        companionType="goals"
+        onTasksUpdated={refresh}
+      />
     </SafeAreaView>
   );
 }
