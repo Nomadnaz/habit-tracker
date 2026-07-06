@@ -62,24 +62,16 @@ The lean MVP spine, onboarding, AND minimal Settings are now code-complete. Two 
 (Phase-0 tasks/001–005 done; AI infra tasks 006/007/010/013 effectively done via the live deploy; briefing 018+019 done; onboarding 062 done; calorie tasks 028–030 done; action execution 012+039 substantially done, pending on-device verify; habits+medication 022–024 done, sleep 035–036 done, activity 031+032 partially done (foreground only), buildContext/companions extended to all 3 new domains (task 037) pending redeploy, all pending on-device verify + live migration runs; tasks/034 turned out to already be satisfied by the existing gym.tsx — see its task notes.) Before naming any new migration file, run `ls supabase/migrations/` — next free number is `014` (don't trust hardcoded numbers in task files; see "Migration numbers are hints" in CLAUDE.md).
 
 ## ⚠️ ACTION NEEDED BY YOU (cannot be done from this session)
-### ⚠️ Critical — do these two first, before anything else
+### ⚠️ Critical — do this first, before anything else
 1. **🔁 ROTATE THE ANTHROPIC KEY.** It was pasted into a chat transcript twice. Revoke at console.anthropic.com → API Keys, issue a new one, and set it via the **Supabase dashboard** (Settings → Edge Functions → Secrets) — NOT via chat, NOT in `app.json`. Confirmed not in git history, so revoking fully closes it.
-2. **NEVER run `supabase db push`** on this project — it re-runs the one-time-unsafe `002_date_key_format.sql` against live data. Paste individual migration files into the SQL editor instead.
+2. **NEVER run `supabase db push`** on this project — it re-runs the one-time-unsafe `002_date_key_format.sql` against live data. Paste individual migration files into the SQL editor instead (or use the Supabase MCP, now connected — see below).
 
-### Migrations — run in the SQL editor, in this order (all safe/additive except #1)
-1. `002_date_key_format.sql` — ⚠️ run ONCE, NOT safely re-runnable (see the warning inside the file). If already run in a prior session, skip.
-2. `003_gym_body_reconcile.sql`
-3. `007_nutrition.sql` (calorie/nutrition, tasks 028–030)
-4. `009_habits.sql` → `010_medications.sql` → `011_sleep.sql` → `012_activity.sql` (this session's core domains)
-5. `013_user_profiles.sql` (onboarding, task 062 — **do this before testing onboarding**)
-6. `014_user_api_keys.sql` (Settings BYOK, task 020)
-7. `015_badges.sql` → `016_cumulative_stats.sql` (task 014+063 — fixes a long-standing gap)
-8. `017_goals.sql` → `018_finance.sql` → `019_mental_health.sql` → `020_cycle.sql` → `021_library.sql` (this session's Phase-8 domains)
-9. `022_streak_freezes.sql` (one column on `habits`)
-10. `023_vault_files.sql` (schema only, task 057 — nothing uses it yet)
-11. `024_api_usage_increment.sql` (audit fix — adds `increment_api_usage`/`increment_briefing_usage` RPCs + `api_usage.briefing_count`; **`ai-chat`/`daily-briefing` will error without this** since they now call these RPCs)
+### Migrations — ✅ ALL 24 NOW LIVE (2026-07-06, run via the newly-connected Supabase MCP)
+Every migration `001`–`024` has been applied against the live project and verified against `list_tables`/`get_advisors`. See `supabase/migrations/APPLIED.md` for the full ledger. Two things worth knowing:
+- **Found and removed a landmine before running `009_habits.sql`**: the live DB already had `habits`/`habit_logs`/`profiles`/`bonsai` tables from an old pre-system-model.md prototype, with an incompatible schema (UUID PKs, wrong columns) that would have silently no-op'd `CREATE TABLE IF NOT EXISTS` and broken the Habits screen at runtime. All four were empty; dropped with explicit user confirmation. See `APPLIED.md`'s "Legacy table cleanup" section.
+- **Hardened `024`'s two new RPCs post-apply**: `increment_api_usage`/`increment_briefing_usage` were `SECURITY DEFINER` with no grant restriction — callable by `anon`/`authenticated` with an arbitrary `p_user_id`, letting anyone tamper with another user's usage row. Pinned `search_path`, revoked EXECUTE from `PUBLIC`/`anon`/`authenticated`, granted only to `service_role`. Confirmed via `get_advisors` — no new findings remain beyond one pre-existing, out-of-scope warning (`handle_new_user`).
 
-`006_ai_companions.sql` and `008_realtime_tasks.sql` are already live from a prior session.
+`supabase db push` still must never be run — that remains the standing rule for `002`.
 
 ### Edge Function deploys / secrets
 - `supabase functions deploy ai-chat` — picks up task 037's new contextSources, 5 new companion configs, tasks 040+041's precomputed flags + cross-wiring, **and the 2026-07-06 audit fixes** (timezone bug, decoupled flags, atomic api_usage RPC, FREE_DAILY_CAP now 25 not 500). **Requires migration `024` run first** or the RPC call will error.

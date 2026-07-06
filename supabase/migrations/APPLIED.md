@@ -15,25 +15,43 @@
 | Migration | Applied? | Date | Notes |
 |---|---|---|---|
 | 001_baseline.sql | ✅ yes | pre-2026-06-22 | Baseline schema, matches `run-this-once.sql` |
-| 002_date_key_format.sql | ❓ unconfirmed | — | ⚠️ NOT safely re-runnable. Confirm before running again. |
-| 003_gym_body_reconcile.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
+| 002_date_key_format.sql | ✅ yes | pre-2026-07-06 | Confirmed via Supabase migration history (`supabase_migrations.schema_migrations`) — do NOT re-run. |
+| 003_gym_body_reconcile.sql | ✅ yes | pre-2026-07-06 | Confirmed via Supabase migration history. |
 | 006_ai_companions.sql | ✅ yes | 2026-06-29 | Live — `ai-chat` depends on these tables |
-| 007_nutrition.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
+| 007_nutrition.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
 | 008_realtime_tasks.sql | ✅ yes | 2026-06-29 | Live — Realtime enabled on `tasks` |
-| 009_habits.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 010_medications.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 011_sleep.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 012_activity.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 013_user_profiles.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 014_user_api_keys.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 015_badges.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 016_cumulative_stats.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 017_goals.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 018_finance.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 019_mental_health.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 020_cycle.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 021_library.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 022_streak_freezes.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
-| 023_vault_files.sql | ❓ unconfirmed | — | Safe to re-run (additive) |
+| 009_habits.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session. **Blocked on a pre-existing incompatible `habits`/`habit_logs` schema from an old prototype — see "legacy table cleanup" below.** |
+| 010_medications.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 011_sleep.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 012_activity.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 013_user_profiles.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 014_user_api_keys.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 015_badges.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 016_cumulative_stats.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 017_goals.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 018_finance.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 019_mental_health.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 020_cycle.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 021_library.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 022_streak_freezes.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 023_vault_files.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
+| 024_api_usage_increment.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session. Also hardened post-apply (see below) — the audit that wrote this migration didn't lock down the new RPCs' grants. |
 
-"✅ yes" entries are taken from current-state.md's progress log (the only prior record). "❓ unconfirmed" means: written and committed, but no session has confirmed it was actually pasted into the SQL editor. Flip to ✅ with a date the moment you run one.
+All 24 numbered migrations are now live. `supabase/migrations/` and the live project are in sync.
+
+## Legacy table cleanup (2026-07-06)
+Before running `009_habits.sql`, discovered the live DB already had `habits`, `habit_logs`, `profiles`,
+and `bonsai` tables from an earlier, pre-system-model.md prototype — none referenced in `database.md`,
+none matching the current app code's expected columns (old `habits` used a UUID PK + `category`/`icon`/
+`is_active`/`requires_geo` columns; current code expects a TEXT PK + `frequency`/`reminder_time`/`active`).
+`bonsai` appears to be the dead "Tree" tab (`current-state.md` lists `app/(tabs)/tree.tsx` as a 16-line
+stub). All four were empty (0 rows) — dropped with user confirmation rather than left to silently
+no-op `CREATE TABLE IF NOT EXISTS` and break the Habits screen at runtime.
+
+## Post-apply hardening (2026-07-06)
+`024_api_usage_increment.sql`'s two new RPCs (`increment_api_usage`, `increment_briefing_usage`) were
+`SECURITY DEFINER` with no grant restriction — callable by `anon`/`authenticated` via the REST RPC
+endpoint with an arbitrary `p_user_id`, letting anyone tamper with another user's token/rate-limit
+accounting. Fixed post-apply: pinned `search_path`, revoked EXECUTE from `PUBLIC`/`anon`/`authenticated`,
+granted only to `service_role` (the role `ai-chat`/`daily-briefing` actually call with). Not written as
+a numbered migration file since it's a grant-only correction to `024`, not new schema — noted here.
