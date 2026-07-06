@@ -11,7 +11,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
-import { toDateKey } from './dateKey';
+import { toDateKey, addDaysToKey } from './dateKey';
 import { postWrite } from './postWrite';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
@@ -80,10 +80,10 @@ async function saveSleepMap(map: SleepMap): Promise<void> {
 
 export async function getRecentSleepLogs(days = 7): Promise<SleepLog[]> {
   const map = await loadSleepMap();
-  const now = new Date();
+  const today = toDateKey(new Date());
   const logs: SleepLog[] = [];
   for (let i = 0; i < days; i++) {
-    const key = toDateKey(new Date(now.getTime() - i * 86400000));
+    const key = addDaysToKey(today, -i);
     if (map[key]) logs.push(map[key]);
   }
   return logs.reverse(); // oldest first, for a chart
@@ -163,26 +163,33 @@ export function scoreChallenge(phoneDownTime: string, target: string): Challenge
 
 export async function getRecentPhoneLogs(days = 7): Promise<PhoneLog[]> {
   const map = await loadPhoneMap();
-  const now = new Date();
+  const today = toDateKey(new Date());
   const logs: PhoneLog[] = [];
   for (let i = 0; i < days; i++) {
-    const key = toDateKey(new Date(now.getTime() - i * 86400000));
+    const key = addDaysToKey(today, -i);
     if (map[key]) logs.push(map[key]);
   }
   return logs.reverse();
 }
 
-/** Streak of consecutive 'pass' days — separate from lib/habits-data.ts's habit streaks. */
+/**
+ * Streak of consecutive 'pass' days — separate from lib/habits-data.ts's habit
+ * streaks. An audit (2026-07-06) found the day-decrement here used to parse
+ * `cursor` (a date key) with `new Date(cursor)` — UTC midnight — then format
+ * back with toDateKey (local), silently stepping TWO local calendar days in
+ * any negative-offset timezone. Fixed via addDaysToKey, which never leaves
+ * local time. See lib/dateKey.ts's addDaysToKey doc comment for the full story.
+ */
 export function computeChallengeStreak(logs: PhoneLog[]): number {
   const passDates = new Set(logs.filter(l => l.challengeResult === 'pass').map(l => l.date));
   const today = toDateKey(new Date());
-  const yesterday = toDateKey(new Date(Date.now() - 86400000));
+  const yesterday = addDaysToKey(today, -1);
   let cursor = passDates.has(today) ? today : passDates.has(yesterday) ? yesterday : null;
   if (!cursor) return 0;
   let streak = 0;
   while (passDates.has(cursor)) {
     streak += 1;
-    cursor = toDateKey(new Date(new Date(cursor).getTime() - 86400000));
+    cursor = addDaysToKey(cursor, -1);
   }
   return streak;
 }

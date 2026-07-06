@@ -10,7 +10,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
-import { toDateKey } from './dateKey';
+import { toDateKey, addDaysToKey } from './dateKey';
 import { postWrite } from './postWrite';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
@@ -39,10 +39,10 @@ async function loadMap(): Promise<Record<string, MoodLog>> {
 
 export async function getRecentMoodLogs(days = 14): Promise<MoodLog[]> {
   const map = await loadMap();
-  const now = new Date();
+  const today = toDateKey(new Date());
   const out: MoodLog[] = [];
   for (let i = 0; i < days; i++) {
-    const key = toDateKey(new Date(now.getTime() - i * 86400000));
+    const key = addDaysToKey(today, -i);
     if (map[key]) out.push(map[key]);
   }
   return out.reverse();

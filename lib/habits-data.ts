@@ -15,7 +15,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
-import { toDateKey } from './dateKey';
+import { toDateKey, addDaysToKey } from './dateKey';
 import { postWrite } from './postWrite';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
@@ -210,13 +210,13 @@ export function computeStreak(logs: Array<{ date: string; completed: boolean }>)
   }
 
   const today = toDateKey(new Date());
-  const yesterday = toDateKey(new Date(Date.now() - 86400000));
+  const yesterday = addDaysToKey(today, -1);
   let current = 0;
   if (doneDates.has(today) || doneDates.has(yesterday)) {
     let cursor = doneDates.has(today) ? today : yesterday;
     while (doneDates.has(cursor)) {
       current += 1;
-      cursor = toDateKey(new Date(new Date(cursor).getTime() - 86400000));
+      cursor = addDaysToKey(cursor, -1);
     }
   }
 
@@ -244,18 +244,17 @@ export function computeFrozenDates(habit: Habit, logs: HabitLog[]): Set<string> 
   const createdKey = toDateKey(new Date(habit.createdAt));
   const today = toDateKey(new Date());
 
-  let cursor = new Date(createdKey);
+  let cursor = createdKey;
   let monthKey = '';
   let usedThisMonth = 0;
-  while (toDateKey(cursor) < today) {
-    const key = toDateKey(cursor);
-    const thisMonth = key.slice(0, 7);
+  while (cursor < today) {
+    const thisMonth = cursor.slice(0, 7);
     if (thisMonth !== monthKey) { monthKey = thisMonth; usedThisMonth = 0; }
-    if (!doneDates.has(key) && usedThisMonth < 2) {
-      frozen.add(key);
+    if (!doneDates.has(cursor) && usedThisMonth < 2) {
+      frozen.add(cursor);
       usedThisMonth += 1;
     }
-    cursor = new Date(cursor.getTime() + 86400000);
+    cursor = addDaysToKey(cursor, 1);
   }
   return frozen;
 }
@@ -275,9 +274,9 @@ export function buildHeatmap(habit: Habit, logs: HabitLog[], days = 35): Heatmap
   const frozenDates = computeFrozenDates(habit, logs);
   const createdKey = toDateKey(new Date(habit.createdAt));
   const cells: HeatmapCell[] = [];
-  const now = new Date();
+  const today = toDateKey(new Date());
   for (let i = days - 1; i >= 0; i--) {
-    const key = toDateKey(new Date(now.getTime() - i * 86400000));
+    const key = addDaysToKey(today, -i);
     const state: HeatmapCell['state'] =
       key < createdKey ? 'before' : doneDates.has(key) ? 'done' : frozenDates.has(key) ? 'frozen' : 'missed';
     cells.push({ date: key, state });

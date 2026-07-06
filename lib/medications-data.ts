@@ -11,7 +11,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
-import { toDateKey } from './dateKey';
+import { toDateKey, addDaysToKey, daysBetweenKeys } from './dateKey';
 import { postWrite } from './postWrite';
 import { computeStreak, type StreakInfo, type HeatmapCell } from './habits-data';
 
@@ -179,12 +179,12 @@ export function computeMedStreak(logs: MedicationLog[]): StreakInfo {
 export function computeAdherence30d(med: Medication, logs: MedicationLog[]): number {
   const takenDates = new Set(logs.filter(l => l.taken).map(l => l.date));
   const createdKey = toDateKey(new Date(med.createdAt));
-  const now = new Date();
+  const today = toDateKey(new Date());
 
   let windowDays = 0;
   let takenCount = 0;
   for (let i = 0; i < 30; i++) {
-    const key = toDateKey(new Date(now.getTime() - i * 86400000));
+    const key = addDaysToKey(today, -i);
     if (key < createdKey) break; // don't count days before the medication existed
     windowDays += 1;
     if (takenDates.has(key)) takenCount += 1;
@@ -193,11 +193,16 @@ export function computeAdherence30d(med: Medication, logs: MedicationLog[]): num
   return Math.round((takenCount / windowDays) * 100);
 }
 
-/** 'Day X of Y' when a course length is set, else null (ongoing/no course). */
+/**
+ * 'Day X of Y' when a course length is set, else null (ongoing/no course).
+ * Was computing elapsed time by diffing a UTC-midnight parse of courseStart
+ * against Date.now() directly — off by up to a day depending on the local
+ * offset. Now diffs local calendar days via daysBetweenKeys.
+ */
 export function courseProgress(med: Medication): { day: number; total: number } | null {
   if (!med.courseLength || !med.courseStart) return null;
-  const start = new Date(med.courseStart);
-  const elapsed = Math.floor((Date.now() - start.getTime()) / 86400000) + 1;
+  const today = toDateKey(new Date());
+  const elapsed = daysBetweenKeys(med.courseStart, today) + 1;
   return { day: Math.min(Math.max(elapsed, 1), med.courseLength), total: med.courseLength };
 }
 
@@ -206,9 +211,9 @@ export function buildMedHeatmap(med: Medication, logs: MedicationLog[], days = 3
   const takenDates = new Set(logs.filter(l => l.taken).map(l => l.date));
   const createdKey = toDateKey(new Date(med.createdAt));
   const cells: HeatmapCell[] = [];
-  const now = new Date();
+  const today = toDateKey(new Date());
   for (let i = days - 1; i >= 0; i--) {
-    const key = toDateKey(new Date(now.getTime() - i * 86400000));
+    const key = addDaysToKey(today, -i);
     const state: HeatmapCell['state'] = key < createdKey ? 'before' : takenDates.has(key) ? 'done' : 'missed';
     cells.push({ date: key, state });
   }
