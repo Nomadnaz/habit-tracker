@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -32,8 +33,10 @@ import { useAppleReminderSync } from '@/lib/use-apple-reminder-sync';
 import { defaultReminderTime } from '@/lib/reminder-time';
 import { TaskModalFields } from '@/components/TaskModalFields';
 import { DateTaskList } from '@/components/DateTaskList';
+import ChatScreen from '@/components/ChatScreen';
 import { buildDateOptions, findTaskDateKey, moveTaskInMap, parseDateKey } from '@/lib/task-schedule';
 import { taskToDbRow } from '@/lib/task-supabase';
+import { TASKS_CHANGED_EVENT } from '@/lib/use-remote-task-sync';
 
 const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 const MONTH_NAMES = [
@@ -74,6 +77,7 @@ export default function DayScreen() {
   const [sheetMinute, setSheetMinute] = useState(() => defaultReminderTime().minute);
   const [sheetDateIndex, setSheetDateIndex] = useState(0);
   const [sheetLocation, setSheetLocation] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
   const sheetHourRef = useRef(sheetHour);
   const sheetMinuteRef = useRef(sheetMinute);
   const sheetDateIndexRef = useRef(sheetDateIndex);
@@ -116,9 +120,29 @@ export default function DayScreen() {
 
   useAppleReminderSync(taskMap, setTaskMap, userId);
 
-  function persist(map: TaskMap) {
+  // Refresh when a task is synced in from outside the app (voice device, etc.).
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(TASKS_CHANGED_EVENT, () => {
+      AsyncStorage.getItem('@tasks').then(raw => {
+        if (raw) setTaskMap(JSON.parse(raw) as TaskMap);
+      });
+    });
+    return () => sub.remove();
+  }, []);
+
+  const loadTasks = async () => {
+    const stored = await AsyncStorage.getItem('@tasks');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      setTaskMap(parsed);
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) setUserId(user.id);
+  };
+
+  function persist(map: TaskMap): Promise<void> {
     setTaskMap(map);
-    void AsyncStorage.setItem('@tasks', JSON.stringify(map));
+    return AsyncStorage.setItem('@tasks', JSON.stringify(map)).then(() => undefined);
   }
 
   function openSheet(task: Task | null) {
@@ -200,26 +224,27 @@ export default function DayScreen() {
         ...taskMap,
         [targetKey]: [...insertNewActiveTask(dayActive, newTask), ...dayArchived],
       };
-      persist(newMap);
-      if (userId) {
-        void supabase.from('tasks').insert(taskToDbRow(newTask, targetKey, userId));
-      }
-      void syncNewTaskToApple({
-        label,
-        dateKey: targetKey,
-        mode: 'reminders-and-calendar',
-        hour: saveHour,
-        minute: saveMinute,
-        location,
-        priority: sheetPriority,
-      }).then(ids => {
+      void (async () => {
+        await persist(newMap);
+        if (userId) {
+          await supabase.from('tasks').insert(taskToDbRow(newTask, targetKey, userId));
+        }
+        const ids = await syncNewTaskToApple({
+          label,
+          dateKey: targetKey,
+          mode: 'reminders-and-calendar',
+          hour: saveHour,
+          minute: saveMinute,
+          location,
+          priority: sheetPriority,
+        });
         if (!ids.appleReminderId && !ids.appleEventId) return;
         setTaskMap(prev => {
           const next = mergeAppleIdsIntoTaskMap(prev, targetKey, id, ids);
-          AsyncStorage.setItem('@tasks', JSON.stringify(next));
+          void AsyncStorage.setItem('@tasks', JSON.stringify(next));
           return next;
         });
-      });
+      })();
     }
     closeSheet();
   }
@@ -284,6 +309,15 @@ export default function DayScreen() {
             {editMode ? 'DONE' : 'EDIT'}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setChatOpen(true)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={styles.askCoachBtn}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="lightbulb-on" size={18} color="#FF4D00" />
+          <Text style={styles.askCoachText}>ASK COACH</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.body}>
@@ -344,6 +378,14 @@ export default function DayScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ChatScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        selectedTasks={taskMap[dateKey] || []}
+        selectedDate={dateKey}
+        onTasksUpdated={loadTasks}
+      />
     </SafeAreaView>
   );
 }
@@ -484,6 +526,21 @@ const styles = StyleSheet.create({
     fontFamily: 'PixeloidSans_400Regular',
     fontSize: 10,
     color: '#FCFBF9',
+    letterSpacing: 1,
+  },
+  askCoachBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#FFF4F0',
+    borderRadius: 6,
+  },
+  askCoachText: {
+    fontFamily: 'PixeloidSans_700Bold',
+    fontSize: 9,
+    color: '#FF4D00',
     letterSpacing: 1,
   },
 });

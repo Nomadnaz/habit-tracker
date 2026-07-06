@@ -1,0 +1,197 @@
+// ─────────────────────────────────────────────────────────────────────────
+// supabase/functions/ai-chat/index.ts — companion chat Edge Function (task 013)
+//
+// Contract (the device + the app both call this):
+//   POST  Authorization: Bearer <user JWT>
+//   body: { message: string, companionType?: string, conversationHistory?: [] }
+//   → { response: string, actions: object[] }
+//
+// Pipeline: derive userId from JWT → rate-limit (api_usage) → buildContext →
+// buildSystemPrompt (persona + context, prompt-cached) → Claude → extractActions
+// → persist to companion_messages + increment api_usage.
+//
+// Model: Haiku 4.5 default (Sonnet 4.6 for complex) — current IDs, NOT the
+// retired claude-3-5-* strings. Prompt caching is mandatory (system-model.md).
+// The Anthropic key lives ONLY as a Supabase function secret; never client-side.
+// ─────────────────────────────────────────────────────────────────────────
+
+import { createClient } from '@supabase/supabase-js';
+import Anthropic from '@anthropic-ai/sdk';
+import { companions, MODEL_IDS, DEFAULT_COMPANION } from '../_shared/companions.ts';
+import { buildContext } from '../_shared/buildContext.ts';
+import { processActions, ACTION_SPECS, type CompanionAction } from '../_shared/actionExecutor.ts';
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
+
+// Server-side daily message ceiling. Configurable via the FREE_DAILY_CAP
+// function secret so it can be tuned without a redeploy; defaults high for
+// development. Lower it (e.g. 25) for a production free tier per system-model.md.
+const FREE_DAILY_CAP = Number(Deno.env.get('FREE_DAILY_CAP') ?? '500');
+
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Content-Type': 'application/json',
+};
+
+const todayKey = () => new Date().toISOString().slice(0, 10);
+
+function extractActions(text: string): CompanionAction[] {
+  const actions: CompanionAction[] = [];
+  const re = /<action>([\s\S]*?)<\/action>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(m[1].trim());
+      if (parsed && typeof parsed.type === 'string') actions.push(parsed as CompanionAction);
+    } catch { /* ignore malformed */ }
+  }
+  return actions;
+}
+
+// Strip the <action> blocks out of the user-visible text.
+const cleanText = (text: string) => text.replace(/<action>[\s\S]*?<\/action>/g, '').trim();
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+
+  try {
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: cors });
+    }
+
+    // 1. Derive (and validate) userId from the caller's JWT.
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !user) {
+      return new Response(JSON.stringify({ error: 'invalid token' }), { status: 401, headers: cors });
+    }
+    const userId = user.id;
+
+    const body = await req.json().catch(() => ({}));
+    const message: string = (body.message ?? '').toString().trim();
+    if (!message) {
+      return new Response(JSON.stringify({ error: 'message required' }), { status: 400, headers: cors });
+    }
+    const companionType: string = companions[body.companionType] ? body.companionType : DEFAULT_COMPANION;
+    const history: { role: 'user' | 'assistant'; content: string }[] =
+      Array.isArray(body.conversationHistory) ? body.conversationHistory.slice(-10) : [];
+
+    // Service-role client for context reads + persistence (bypasses RLS, scoped by userId).
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // 2. Server-side rate limit.
+    const day = todayKey();
+    const { data: usage } = await admin
+      .from('api_usage')
+      .select('message_count')
+      .eq('user_id', userId)
+      .eq('date', day)
+      .maybeSingle();
+    if ((usage?.message_count ?? 0) >= FREE_DAILY_CAP) {
+      return new Response(JSON.stringify({ error: 'daily limit reached' }), { status: 429, headers: cors });
+    }
+
+    // 3. buildContext — the grounding step.
+    const cfg = companions[companionType];
+    const ctx = await buildContext(admin, userId, cfg.contextSources);
+
+    // 4. buildSystemPrompt (persona + context + the actions this companion may
+    // emit). Inlined for v1; task 011 extracts it. Spelling out the exact action
+    // names/schema is what makes the model reliably emit a usable <action> block.
+    const allowedActions = (cfg.actions ?? []).map((a: string) => ACTION_SPECS[a]).filter(Boolean);
+    const actionGuide = allowedActions.length
+      ? `\n\nACTIONS YOU CAN TAKE (besides your normal reply, emit at most one <action> block per requested change, with the JSON on a single line):\n${allowedActions.map((s: string) => `- ${s}`).join('\n')}\n\nRules:\n- Only emit an action when the user clearly asks you to change their data.\n- For an explicit, unambiguous request (e.g. "add a task to call mum tomorrow at 6pm"), set "confidence": 0.95 so it happens immediately.\n- If you are unsure which task they mean or details are missing, use a lower "confidence" (0.6-0.8) so they can confirm first.\n- For reschedule_task / complete_task, use the exact id shown in TASKS.\n- Resolve relative dates against TODAY above.`
+      : '';
+    const systemPrompt = cfg.systemPromptTemplate
+      .replace('{name}', cfg.defaultName)
+      .replace('{user_nickname}', user.user_metadata?.name ?? 'there')
+      .replace('{context}', ctx.text) + actionGuide;
+
+    // 5. Claude call — prompt caching on the system+context prefix (mandatory).
+    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+    const modelId = MODEL_IDS[cfg.model];
+    const completion = await anthropic.messages.create({
+      model: modelId,
+      max_tokens: 1024,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        ...history.map((h) => ({ role: h.role, content: h.content })),
+        { role: 'user', content: message },
+      ],
+    });
+
+    const rawText = completion.content
+      .filter((b: { type: string }) => b.type === 'text')
+      .map((b: { text: string }) => b.text)
+      .join('');
+    let responseText = cleanText(rawText);
+    // 5b. Gate every emitted action (tasks 012/039). The app is LOCAL-FIRST, so
+    // it performs the actual writes itself (on-device store + Supabase + Apple);
+    // here we only return each action's gate decision ('auto' / 'preview' /
+    // 'clarify' / 'unsupported'). Server-side execution is available via
+    // { execute: true } in the body for clients with no local store.
+    const parsedActions = extractActions(rawText);
+    // Diagnostic: surfaces in Supabase dashboard → Edge Functions → Logs.
+    console.log('[ai-chat] parsed actions:', JSON.stringify(parsedActions));
+    const actions = parsedActions.length
+      ? await processActions(admin, userId, parsedActions, { execute: body.execute === true })
+      : [];
+
+    // The model sometimes replies with ONLY an <action> block (no prose), which
+    // would leave the device's ASK screen showing "...". Always give the caller
+    // a human sentence by summarising what happened.
+    if (!responseText && actions.length) {
+      responseText = actions
+        .map((a) => {
+          const label = (a.result?.label as string) ?? (a.data?.label as string) ?? (a.data?.title as string);
+          const date = (a.result?.date as string) ?? (a.data?.date as string);
+          if (a.status === 'executed' || a.status === 'auto') {
+            if (a.type === 'create_task' && label) return `Added "${label}"${date ? ` for ${date}` : ''}.`;
+            return 'Done.';
+          }
+          if (a.status === 'preview') return `Tap to confirm: ${a.type.replace(/_/g, ' ')}.`;
+          if (a.status === 'clarify') return a.message ?? 'Can you give me a bit more detail?';
+          return '';
+        })
+        .filter(Boolean)
+        .join(' ');
+    }
+    if (!responseText) responseText = 'Done.';
+
+    const tokensIn = completion.usage?.input_tokens ?? null;
+    const tokensOut = completion.usage?.output_tokens ?? null;
+
+    // 6. Persist the exchange + increment usage (best-effort; never block the reply).
+    const now = new Date().toISOString();
+    await Promise.allSettled([
+      admin.from('companion_messages').insert([
+        { id: crypto.randomUUID(), user_id: userId, companion_type: companionType, role: 'user', content: message, created_at: now },
+        {
+          id: crypto.randomUUID(), user_id: userId, companion_type: companionType, role: 'assistant',
+          content: responseText, actions_json: actions.length ? actions : null,
+          model_used: modelId, tokens_in: tokensIn, tokens_out: tokensOut, created_at: now,
+        },
+      ]),
+      admin.from('api_usage').upsert({
+        user_id: userId,
+        date: day,
+        message_count: (usage?.message_count ?? 0) + 1,
+        tokens_in: tokensIn ?? 0,
+        tokens_out: tokensOut ?? 0,
+        last_message_at: now,
+      }, { onConflict: 'user_id,date' }),
+    ]);
+
+    return new Response(JSON.stringify({ response: responseText, actions }), { status: 200, headers: cors });
+  } catch (err) {
+    console.error('ai-chat error:', err);
+    return new Response(JSON.stringify({ error: 'server error' }), { status: 500, headers: cors });
+  }
+});

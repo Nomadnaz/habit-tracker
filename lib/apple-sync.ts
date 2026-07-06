@@ -6,6 +6,12 @@ import { toDateKey, fromDateKey } from '@/lib/dateKey';
 
 const LEGACY_REMINDER_NOTES = new Set(['habit-tracker', 'habit tracker']);
 
+// The app stamps every reminder/event it creates with a priority note. Used to
+// match app-managed reminders when appleReminderId isn't stored locally.
+const APP_MANAGED_NOTES = new Set(['high priority', 'medium priority', 'low priority']);
+const isAppManagedNote = (notes?: string | null): boolean =>
+  APP_MANAGED_NOTES.has((notes ?? '').trim().toLowerCase());
+
 /** Shown in Reminders notes — task title stays in the title field. */
 export function reminderNotesForPriority(priority?: Priority): string {
   switch (priority) {
@@ -153,7 +159,10 @@ export async function syncNewTaskToApple(opts: {
   const location = opts.location?.trim() || undefined;
 
   try {
-    if (await ensureReminderAccess()) {
+    const existingReminderId = await findAppManagedReminderId(title, opts.dateKey);
+    if (existingReminderId) {
+      out.appleReminderId = existingReminderId;
+    } else if (await ensureReminderAccess()) {
       const listId = await getWritableReminderListId();
       if (listId) {
         out.appleReminderId = await Calendar.createReminderAsync(listId, {
@@ -166,17 +175,22 @@ export async function syncNewTaskToApple(opts: {
       }
     }
 
-    if (opts.mode === 'reminders-and-calendar' && (await ensureCalendarAccess())) {
-      const calId = await getWritableEventCalendarId();
-      if (calId) {
-        out.appleEventId = await Calendar.createEventAsync(calId, {
-          title,
-          startDate: window.start,
-          endDate: window.end,
-          allDay: false,
-          notes,
-          location,
-        });
+    if (opts.mode === 'reminders-and-calendar') {
+      const existingEventId = await findAppManagedEventId(title, opts.dateKey);
+      if (existingEventId) {
+        out.appleEventId = existingEventId;
+      } else if (await ensureCalendarAccess()) {
+        const calId = await getWritableEventCalendarId();
+        if (calId) {
+          out.appleEventId = await Calendar.createEventAsync(calId, {
+            title,
+            startDate: window.start,
+            endDate: window.end,
+            allDay: false,
+            notes,
+            location,
+          });
+        }
       }
     }
   } catch (e) {
@@ -211,11 +225,8 @@ export async function syncTaskScheduleToApple(
   try {
     if (task.appleReminderId && (await ensureReminderAccess())) {
       await Calendar.updateReminderAsync(task.appleReminderId, {
-        title,
-        dueDate: window.start,
-        notes,
+        ...reminderUpdateForDone(task.done, { title, dueDate: window.start, notes }),
         location,
-        completed: task.done,
       });
     }
     if (task.appleEventId && (await ensureCalendarAccess())) {
@@ -271,8 +282,94 @@ async function reminderPayloadForTask(
   return { title, dueDate, notes };
 }
 
+/** Public helper — find an app-managed reminder by label + date. */
+export async function findExistingAppleReminder(
+  label: string,
+  dateKey: string,
+): Promise<string | undefined> {
+  return findAppManagedReminderId(label, dateKey);
+}
+
+async function findAppManagedReminderId(label: string, dateKey: string): Promise<string | undefined> {
+  if (Platform.OS !== 'ios') return undefined;
+  if (!(await ensureReminderAccess())) return undefined;
+
+  const targetTitle = label.trim().toLowerCase();
+  if (!targetTitle || !dateKey) return undefined;
+
+  const listIds = await getReminderListIds();
+  if (!listIds.length) return undefined;
+
+  const today = startOfToday();
+  const all = await fetchAllIosReminders(listIds);
+  for (const r of all) {
+    if (!r.id) continue;
+    if (!isAppManagedNote(r.notes)) continue;
+    const title = (r.title ?? '').trim().toLowerCase();
+    if (title !== targetTitle) continue;
+    if (dateKeyForReminder(r, today) === dateKey) return r.id;
+  }
+  return undefined;
+}
+
+/** Find an app-created calendar event matching label + date. */
+async function findAppManagedEventId(label: string, dateKey: string): Promise<string | undefined> {
+  if (Platform.OS !== 'ios') return undefined;
+  if (!(await ensureCalendarAccess())) return undefined;
+
+  const targetTitle = label.trim().toLowerCase();
+  if (!targetTitle || !dateKey) return undefined;
+
+  const calendarIds = await getUserOwnedEventCalendarIds();
+  if (!calendarIds.length) return undefined;
+
+  const allowed = new Set(calendarIds);
+  const events = await fetchIosCalendarEvents(calendarIds);
+  for (const e of events) {
+    if (!e.id || !allowed.has(e.calendarId)) continue;
+    if (!isAppManagedNote(e.notes)) continue;
+    const title = (e.title ?? '').trim().toLowerCase();
+    if (title !== targetTitle) continue;
+    if (dateKeyForEvent(e) === dateKey) return e.id;
+  }
+  return undefined;
+}
+
+/** Find an app-created reminder matching this task when appleReminderId is missing. */
+async function findReminderIdForTask(
+  task: Task,
+  context?: AppleReminderSyncContext,
+): Promise<string | undefined> {
+  const dateKey = context?.dateKey;
+  if (!task.label?.trim() || !dateKey) return undefined;
+  return findAppManagedReminderId(task.label, dateKey);
+}
+
+function reminderUpdateForDone(
+  done: boolean,
+  payload: { title: string; dueDate: Date; notes: string },
+): Calendar.Reminder {
+  if (done) {
+    return {
+      title: payload.title,
+      dueDate: payload.dueDate,
+      notes: payload.notes,
+      completed: true,
+      completionDate: new Date(),
+    };
+  }
+  return {
+    title: payload.title,
+    dueDate: payload.dueDate,
+    notes: payload.notes,
+    completed: false,
+    completionDate: undefined,
+  };
+}
+
 /**
- * Sync done state to the linked iOS Reminder. Returns a new reminder id if one was recreated.
+ * Sync done state to the linked iOS Reminder. Returns the reminder id (existing or
+ * discovered) so callers can persist appleReminderId when it was missing.
  */
 export async function syncTaskDoneToApple(
   task: Task,
@@ -287,32 +384,44 @@ export async function syncTaskDoneToApple(
     const payload = await reminderPayloadForTask(task, context);
     if (!payload) return task.appleReminderId;
 
-    if (task.appleReminderId) {
+    let reminderId = task.appleReminderId ?? (await findReminderIdForTask(task, context));
+
+    if (!reminderId) {
+      // No linked reminder — only recreate when marking un-done (legacy path).
+      if (done) return undefined;
+      const listId = await getWritableReminderListId();
+      if (!listId) return undefined;
+      return Calendar.createReminderAsync(listId, {
+        title: payload.title,
+        dueDate: payload.dueDate,
+        notes: payload.notes,
+        completed: false,
+      });
+    }
+
+    if (done) {
       try {
-        await Calendar.updateReminderAsync(task.appleReminderId, {
-          title: payload.title,
-          dueDate: payload.dueDate,
-          notes: payload.notes,
-          completed: done,
-        });
-        return task.appleReminderId;
+        await Calendar.deleteReminderAsync(reminderId);
+        return undefined;
       } catch {
-        // Fall through — recreate when the old reminder row is gone or unreadable.
+        // Delete failed (e.g. already gone) — keep the id so a later sync can retry.
+        return task.appleReminderId;
       }
     }
 
-    if (done) return task.appleReminderId;
-
-    const listId = await getWritableReminderListId();
-    if (!listId) return task.appleReminderId;
-
-    const newId = await Calendar.createReminderAsync(listId, {
-      title: payload.title,
-      dueDate: payload.dueDate,
-      notes: payload.notes,
-      completed: false,
-    });
-    return newId;
+    try {
+      await Calendar.updateReminderAsync(reminderId, reminderUpdateForDone(done, payload));
+      return reminderId;
+    } catch {
+      const listId = await getWritableReminderListId();
+      if (!listId) return task.appleReminderId;
+      return Calendar.createReminderAsync(listId, {
+        title: payload.title,
+        dueDate: payload.dueDate,
+        notes: payload.notes,
+        completed: false,
+      });
+    }
   } catch (e) {
     console.warn('[apple-sync] reminder update failed:', e);
     return task.appleReminderId;
@@ -649,20 +758,28 @@ function upsertImportedItem(
   const archived = dayTasks.filter(t => t.archived);
   const active = dayTasks.filter(t => !t.archived);
 
-  const orphanMatch = active.find(t => {
-    if (t.label.trim().toLowerCase() !== title.toLowerCase()) return false;
-    if (kind === 'reminder') return !t.appleReminderId;
-    return !t.appleEventId;
-  });
+  const normalizedTitle = title.trim().toLowerCase();
+  const existingByLabel = active.find(t => t.label.trim().toLowerCase() === normalizedTitle);
 
-  if (orphanMatch) {
+  if (existingByLabel) {
     if (kind === 'reminder') linkedReminderIds.add(externalId);
     else linkedEventIds.add(externalId);
-    if (orphanMatch.done !== done) {
-      doneUpdates.push({ dateKey, taskId: orphanMatch.id, done });
+
+    const linkedId =
+      kind === 'reminder' ? existingByLabel.appleReminderId : existingByLabel.appleEventId;
+    if (linkedId) {
+      if (linkedId !== externalId) {
+        if (kind === 'reminder') void Calendar.deleteReminderAsync(externalId).catch(() => {});
+        else void Calendar.deleteEventAsync(externalId).catch(() => {});
+      }
+      return map;
+    }
+
+    if (existingByLabel.done !== done) {
+      doneUpdates.push({ dateKey, taskId: existingByLabel.id, done });
     }
     const nextActive = active.map(t => {
-      if (t.id !== orphanMatch.id) return t;
+      if (t.id !== existingByLabel.id) return t;
       return {
         ...t,
         done,
@@ -679,7 +796,7 @@ function upsertImportedItem(
 
   const task: Task = {
     id: genTaskId(),
-    label: title,
+    label: title.toUpperCase(),
     done,
     priority,
     ...(schedule ?? {}),
@@ -687,7 +804,7 @@ function upsertImportedItem(
   };
   if (kind === 'reminder') linkedReminderIds.add(externalId);
   else linkedEventIds.add(externalId);
-  imports.push({ dateKey, taskId: task.id, label: title, done, priority });
+  imports.push({ dateKey, taskId: task.id, label: title.toUpperCase(), done, priority });
   return {
     ...map,
     [dateKey]: [...sortActiveTasks([...active, task]), ...archived],
@@ -811,6 +928,8 @@ export async function pullAppleCalendarEventsIntoTaskMap(
 
     const title = (event.title ?? '').trim();
     if (!title) continue;
+    // Only import calendar rows the app created (same note stamp as Reminders).
+    if (!isAppManagedNote(event.notes)) continue;
 
     map = upsertImportedItem(map, {
       kind: 'event',
@@ -854,6 +973,93 @@ export async function syncTaskMapFromAppleReminders(taskMap: TaskMap): Promise<{
     imports: [...reminderImports, ...eventImports],
     removals,
   };
+}
+
+/**
+ * One-time cleanup: delete duplicate Apple Reminders/Events that were created by
+ * the earlier device-sync bug. Conservative — only collapses entries with the
+ * SAME normalized title on the SAME day, within the app's own reminder lists /
+ * the user's editable calendars, keeping the earliest of each set.
+ */
+export async function deleteDuplicateAppleEntries(): Promise<{ reminders: number; events: number }> {
+  if (Platform.OS !== 'ios') return { reminders: 0, events: 0 };
+  let reminders = 0;
+  let events = 0;
+
+  try {
+    if (await ensureReminderAccess()) {
+      const listIds = await getReminderListIds();
+      if (listIds.length) {
+        const all = await fetchAllIosReminders(listIds);
+        const groups = new Map<string, Calendar.Reminder[]>();
+        for (const r of all) {
+          if (!r.id) continue;
+          if (!isAppManagedNote(r.notes)) continue; // only de-dup app-created reminders
+          const title = (r.title ?? '').trim().toLowerCase();
+          if (!title) continue;
+          const due = reminderDueDate(r);
+          const key = `${title}|${due ? dateKeyFromDate(due) : 'nodate'}`;
+          const arr = groups.get(key) ?? [];
+          arr.push(r);
+          groups.set(key, arr);
+        }
+        for (const arr of groups.values()) {
+          if (arr.length < 2) continue;
+          arr.sort((a, b) => {
+            const ca = a.creationDate ? new Date(a.creationDate).getTime() : 0;
+            const cb = b.creationDate ? new Date(b.creationDate).getTime() : 0;
+            return ca - cb;
+          });
+          for (const dup of arr.slice(1)) {
+            try {
+              await Calendar.deleteReminderAsync(dup.id!);
+              reminders++;
+            } catch {
+              /* ignore individual delete failures */
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[dedupe] reminder cleanup failed:', e);
+  }
+
+  try {
+    if (await ensureCalendarAccess()) {
+      const calIds = await getUserOwnedEventCalendarIds();
+      if (calIds.length) {
+        const all = await fetchIosCalendarEvents(calIds);
+        const groups = new Map<string, Calendar.Event[]>();
+        for (const ev of all) {
+          if (!ev.id) continue;
+          if (!isAppManagedNote(ev.notes)) continue; // only de-dup app-created events
+          const title = (ev.title ?? '').trim().toLowerCase();
+          if (!title) continue;
+          const key = `${title}|${dateKeyFromDate(new Date(ev.startDate))}`;
+          const arr = groups.get(key) ?? [];
+          arr.push(ev);
+          groups.set(key, arr);
+        }
+        for (const arr of groups.values()) {
+          if (arr.length < 2) continue;
+          // Keep the first encountered; delete the remaining copies.
+          for (const dup of arr.slice(1)) {
+            try {
+              await Calendar.deleteEventAsync(dup.id!);
+              events++;
+            } catch {
+              /* ignore individual delete failures */
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[dedupe] event cleanup failed:', e);
+  }
+
+  return { reminders, events };
 }
 
 export async function syncTaskRemovedFromApple(task: Task): Promise<void> {

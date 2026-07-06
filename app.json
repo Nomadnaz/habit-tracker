@@ -13,8 +13,11 @@
         "NSCalendarsUsageDescription": "Add tasks you create from the calendar to Apple Calendar.",
         "NSRemindersUsageDescription": "Sync your daily tasks with Apple Reminders.",
         "NSHealthShareUsageDescription": "Read your steps, walking distance, activity, sleep, and weight to show progress on the Body and Today screens.",
-        "NSHealthUpdateUsageDescription": "This app does not write health data; permission is only requested for compatibility with HealthKit."
-      }
+        "NSHealthUpdateUsageDescription": "This app does not write health data; permission is only requested for compatibility with HealthKit.",
+        "NSBluetoothAlwaysUsageDescription": "Connect to your Companion HUD device to relay voice commands to the AI.",
+        "NSSpeechRecognitionUsageDescription": "Transcribe voice questions from your Companion HUD device (unused — cloud transcription is used instead)."
+      },
+      "bundleIdentifier": "com.nova.habittracker"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +25,11 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,6 +49,14 @@
         {
           "healthSharePermission": "Read your steps, walking distance, activity, sleep, and weight to show progress on the Body and Today screens.",
           "healthUpdatePermission": "This app does not write health data to Apple Health."
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": [],
+          "bluetoothAlwaysPermission": "Connect to your Companion HUD device to relay voice commands to the AI."
         }
       ]
     ]
