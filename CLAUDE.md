@@ -121,6 +121,9 @@ See `system-model.md` for the full picture (data layer / intelligence layer / su
 ## Migration numbers in task files are hints, not guarantees
 Task files were generated in dependency order before any of them ran, so each one's suggested `supabase/migrations/0NN_*.sql` filename assumes the numbers before it landed exactly as planned. They don't always — `tasks/005` claimed `003` for a reconciliation task that wasn't in the original numbering, bumping everything after it. Before naming a new migration file, always run `ls supabase/migrations/` and use the next number actually on disk, not the number written in the task file.
 
+## Never deploy uncommitted code
+An audit (2026-07-06) found the live `ai-chat` Edge Function and its dependencies had gone uncommitted since 2026-06-29 despite being in production — a fresh clone couldn't reproduce the running system. Rule: **nothing is deployed — no `supabase functions deploy`, no migration pasted into the SQL editor — unless the exact files are committed to git first.** After running a migration, update `supabase/migrations/APPLIED.md` immediately (that file is the source of truth for what's actually live; don't rely on prose in current-state.md for this).
+
 ## Rules specific to this project
 - Never feed the full master spec into context — the three docs above plus one task file is the intended working set.
 - One feature/task per session.
