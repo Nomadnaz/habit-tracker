@@ -212,9 +212,7 @@ export default function ChatScreen({
                   <View key={i} style={styles.actionCard}>
                     <View style={styles.actionHeader}>
                       <Text style={styles.actionType}>{action.type.replace(/_/g, ' ').toUpperCase()}</Text>
-                      {typeof action.confidence === 'number' && (
-                        <Text style={styles.confidence}>{Math.round(action.confidence * 100)}%</Text>
-                      )}
+                      <Text style={styles.confidence}>NEEDS REVIEW</Text>
                     </View>
                     <Text style={styles.explanation}>
                       {action.message ?? `Confirm to ${action.type.replace(/_/g, ' ')}?`}
