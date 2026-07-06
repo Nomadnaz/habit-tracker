@@ -124,24 +124,36 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     if (num(data.minute) !== undefined) patch.minute = num(data.minute);
     if (str(data.priority)) patch.priority = str(data.priority);
     if (Object.keys(patch).length === 0) throw new Error('reschedule_task needs a new date, time, or priority');
-    const { error } = await supabase
+    // The model reads taskId out of TASKS in its own context, but nothing
+    // stops it hallucinating one — the .eq('user_id', ...) filter already
+    // makes a wrong id a no-op rather than a cross-user write, but a plain
+    // update() returns no error for 0-rows-affected, so a hallucinated id
+    // silently "succeeded" with nothing changed (audit 2026-07-06). Selecting
+    // the updated row back turns that into a real failure the caller sees.
+    const { data: updated, error } = await supabase
       .from('tasks')
       .update(patch)
       .eq('id', taskId)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .select('id')
+      .maybeSingle();
     if (error) throw new Error(error.message);
+    if (!updated) throw new Error(`reschedule_task: no task found with id ${taskId}`);
     return { id: taskId, table: 'tasks', ...patch };
   },
 
   complete_task: async (supabase, userId, data, _tzOffsetMinutes) => {
     const taskId = str(data.taskId) ?? str(data.id);
     if (!taskId) throw new Error('complete_task needs a taskId');
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from('tasks')
       .update({ done: true })
       .eq('id', taskId)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .select('id')
+      .maybeSingle();
     if (error) throw new Error(error.message);
+    if (!updated) throw new Error(`complete_task: no task found with id ${taskId}`);
     return { id: taskId, table: 'tasks', done: true };
   },
 
@@ -160,6 +172,28 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     if (error) throw new Error(error.message);
     return { table: 'pb_log', exercise_id: exerciseId, weight_kg: weightKg };
   },
+
+  // Calorie companion's only declared action (used to return 'unsupported'
+  // unconditionally — audit 2026-07-06 found it was never wired).
+  log_meal: async (supabase, userId, data, tzOffsetMinutes) => {
+    const name = str(data.name) ?? str(data.label) ?? 'Meal';
+    const calories = num(data.calories) ?? 0;
+    const row = {
+      id: crypto.randomUUID(),
+      user_id: userId,
+      date: resolveDateKey(data.date, tzOffsetMinutes),
+      meal_type: str(data.mealType) ?? str(data.meal_type) ?? 'snack',
+      name,
+      calories,
+      protein_g: num(data.proteinG) ?? num(data.protein_g) ?? 0,
+      carbs_g: num(data.carbsG) ?? num(data.carbs_g) ?? 0,
+      fat_g: num(data.fatG) ?? num(data.fat_g) ?? 0,
+      logged_via: 'manual',
+    };
+    const { error } = await supabase.from('meals').insert(row);
+    if (error) throw new Error(error.message);
+    return { id: row.id, table: 'meals', date: row.date, name: row.name, calories: row.calories };
+  },
 };
 
 /** True for action types the app/device can run as internal Supabase writes. */
@@ -177,6 +211,8 @@ export const ACTION_SPECS: Record<string, string> = {
     'complete_task — mark a task done. data: { "taskId": string (the id shown in TASKS) }',
   log_pb:
     'log_pb — record a personal best. data: { "exerciseId": string, "weightKg": number, "reps"?: number, "date"?: "YYYY-MM-DD" }',
+  log_meal:
+    'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }',
 };
 
 /** Pure gate: the action's decision BEFORE anyone writes anything. */

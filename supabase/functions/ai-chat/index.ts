@@ -20,6 +20,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { companions, MODEL_IDS, DEFAULT_COMPANION } from '../_shared/companions.ts';
 import { buildContext } from '../_shared/buildContext.ts';
 import { processActions, ACTION_SPECS, type CompanionAction } from '../_shared/actionExecutor.ts';
+import { getUserApiKey } from '../_shared/byok.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -110,6 +111,19 @@ Deno.serve(async (req: Request) => {
     const cfg = companions[companionType];
     const ctx = await buildContext(admin, userId, cfg.contextSources, tzOffsetMinutes);
 
+    // 3b. Per-user persona customisation (companion_personas, task 020's
+    // Settings screen writes to this table) — previously fetched-but-ignored,
+    // so a custom name set in Settings never showed up in chat (audit
+    // 2026-07-06: the template always used cfg.defaultName).
+    const { data: persona } = await admin
+      .from('companion_personas')
+      .select('name, user_nickname')
+      .eq('user_id', userId)
+      .eq('companion_type', companionType)
+      .maybeSingle();
+    const companionName = persona?.name || cfg.defaultName;
+    const nickname = persona?.user_nickname || user.user_metadata?.name || 'there';
+
     // 4. buildSystemPrompt (persona + context + the actions this companion may
     // emit). Inlined for v1; task 011 extracts it. Spelling out the exact action
     // names/schema is what makes the model reliably emit a usable <action> block.
@@ -118,12 +132,16 @@ Deno.serve(async (req: Request) => {
       ? `\n\nACTIONS YOU CAN TAKE (besides your normal reply, emit at most one <action> block per requested change, with the JSON on a single line):\n${allowedActions.map((s: string) => `- ${s}`).join('\n')}\n\nRules:\n- Only emit an action when the user clearly asks you to change their data.\n- For an explicit, unambiguous request (e.g. "add a task to call mum tomorrow at 6pm"), set "confidence": 0.95 so it happens immediately.\n- If you are unsure which task they mean or details are missing, use a lower "confidence" (0.6-0.8) so they can confirm first.\n- For reschedule_task / complete_task, use the exact id shown in TASKS.\n- Resolve relative dates against TODAY above.`
       : '';
     const systemPrompt = cfg.systemPromptTemplate
-      .replace('{name}', cfg.defaultName)
-      .replace('{user_nickname}', user.user_metadata?.name ?? 'there')
+      .replace('{name}', companionName)
+      .replace('{user_nickname}', nickname)
       .replace('{context}', ctx.text) + actionGuide;
 
     // 5. Claude call — prompt caching on the system+context prefix (mandatory).
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+    // BYOK: use the user's own saved Anthropic key when present (task 020),
+    // falling back to the app's shared key. Previously saved-but-never-read
+    // (audit 2026-07-06: the Settings toggle silently did nothing).
+    const userKey = await getUserApiKey(admin, userId);
+    const anthropic = new Anthropic({ apiKey: userKey ?? ANTHROPIC_API_KEY });
     const modelId = MODEL_IDS[cfg.model];
     const completion = await anthropic.messages.create({
       model: modelId,
