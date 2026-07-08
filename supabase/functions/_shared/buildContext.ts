@@ -27,6 +27,10 @@ export async function buildContext(
   userId: string,
   contextSources: string[],
   tzOffsetMinutes = 0,
+  // The user's message, for relevance-ranked sources (currently only
+  // 'vault' FTS). Optional so existing callers (daily-briefing) are
+  // untouched; without it the vault source is skipped.
+  userMessage = '',
 ): Promise<ContextResult> {
   const raw: Record<string, unknown> = {};
   const lines: string[] = [];
@@ -331,6 +335,30 @@ export async function buildContext(
         const own = (milestones ?? []).filter((m: { goal_id: string }) => m.goal_id === g.id);
         const pct = own.length ? Math.round((own.filter((m: { completed: boolean }) => m.completed).length / own.length) * 100) : null;
         lines.push(`- ${g.title}${g.target_date ? ` (by ${g.target_date})` : ''}${pct !== null ? `: ${pct}% of milestones done` : ''}`);
+      }
+    })());
+  }
+
+  if (want('vault') && userMessage) {
+    jobs.push((async () => {
+      // FTS over the Obsidian-synced notes (tools/vault-agent populates
+      // vault_files; GIN index from migration 023). Top 3 matches, trimmed
+      // -- enough to ground an answer without blowing the prompt budget.
+      const { data } = await supabase
+        .from('vault_files')
+        .select('path, content')
+        .eq('user_id', userId)
+        .is('deleted_at', null)
+        .textSearch('content', userMessage, { type: 'websearch', config: 'english' })
+        .limit(3);
+      raw.vault = data ?? [];
+      if (data?.length) {
+        lines.push('YOUR NOTES (second brain, most relevant to this message):');
+        for (const f of data) {
+          const title = String(f.path).split('/').pop()?.replace(/\.md$/, '') ?? f.path;
+          const body = String(f.content).replace(/^---[\s\S]*?---\s*/, ''); // drop frontmatter
+          lines.push(`- ${title}: ${body.slice(0, 300).replace(/\s+/g, ' ').trim()}`);
+        }
       }
     })());
   }

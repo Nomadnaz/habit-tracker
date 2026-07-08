@@ -1,0 +1,15 @@
+{
+  "name": "vault-agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Syncs the local Obsidian vault to Supabase vault_files and materialises device voice captures (vault_inbox) as Inbox/*.md notes.",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "chokidar": "^3.6.0"
+  }
+}

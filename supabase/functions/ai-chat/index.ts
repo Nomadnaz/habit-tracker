@@ -109,7 +109,7 @@ Deno.serve(async (req: Request) => {
 
     // 3. buildContext — the grounding step.
     const cfg = companions[companionType];
-    const ctx = await buildContext(admin, userId, cfg.contextSources, tzOffsetMinutes);
+    const ctx = await buildContext(admin, userId, cfg.contextSources, tzOffsetMinutes, message);
 
     // 3b. Per-user persona customisation (companion_personas, task 020's
     // Settings screen writes to this table) — previously fetched-but-ignored,

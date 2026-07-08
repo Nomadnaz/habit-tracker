@@ -61,14 +61,14 @@ Today's context:
 export const companions: Record<string, CompanionConfig> = {
   habitCoach: {
     defaultName: 'Coach',
-    contextSources: ['tasks', 'user_focus', 'habit_logs', 'user_context_summary'],
+    contextSources: ['tasks', 'user_focus', 'habit_logs', 'user_context_summary', 'vault'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'habit & task'),
     actions: ['create_task', 'reschedule_task', 'complete_task'],
   },
   life: {
     defaultName: 'Assistant',
-    contextSources: ['tasks', 'user_focus', 'user_context_summary'],
+    contextSources: ['tasks', 'user_focus', 'user_context_summary', 'vault'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'schedule & tasks'),
     // Calendar/email actions are future + always-preview; none auto-run in v1.

@@ -78,6 +78,7 @@ class BleBridgeManager {
   private realtimeDebounce: ReturnType<typeof setTimeout> | null = null;
   private realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
   private syncInFlight = false;
+  private noteMode = false; // next audio session is a vault capture, not a question
   private adpcmState: AdpcmState = makeAdpcmState();
   private samples: number[] = [];
   private history: Array<{ role: string; content: string }> = [];
@@ -246,6 +247,8 @@ class BleBridgeManager {
     const captured = this.samples.slice();
     this.samples = [];
     this.adpcmState = makeAdpcmState();
+    const isNote = this.noteMode;
+    this.noteMode = false;
 
     if (captured.length < 1600) return; // < 0.1s — likely silence, skip
 
@@ -253,12 +256,33 @@ class BleBridgeManager {
 
     try {
       const base64Wav = pcmToWavBase64(captured, SAMPLE_RATE_HZ);
-      const question = await transcribeViaSupabase(base64Wav);
-      if (!question) {
+      const transcript = await transcribeViaSupabase(base64Wav);
+      if (!transcript) {
         this.emit({ status: 'connected' });
         return;
       }
 
+      // Vault capture: either the BRAIN screen started this session in note
+      // mode, or the user said "note ..." to the ASK screen. Either way the
+      // transcript is saved, not asked.
+      const spokenNote = /^note[:,]?\s+/i.exec(transcript);
+      if (isNote || spokenNote) {
+        const text = spokenNote ? transcript.slice(spokenNote[0].length) : transcript;
+        this.emit({ lastQuestion: transcript });
+        if (this.device) await writeCmd(this.device, BLE_CMD_SET_QUESTION, transcript);
+        const { error } = await supabase.functions.invoke('device-state', {
+          body: {
+            actions: [{ op: 'capture_note', text }],
+            tzOffsetMinutes: new Date().getTimezoneOffset(),
+          },
+        });
+        const confirm = error ? 'Could not save the note.' : 'Saved to vault.';
+        this.emit({ lastAnswer: confirm });
+        if (this.device) await writeCmd(this.device, BLE_CMD_SET_ANSWER, confirm);
+        return;
+      }
+
+      const question = transcript;
       this.emit({ lastQuestion: question });
       if (this.device) await writeCmd(this.device, BLE_CMD_SET_QUESTION, question);
 
@@ -412,11 +436,17 @@ class BleBridgeManager {
    *  then push a fresh snapshot so the device reconciles its optimistic UI. */
   private async _onDeviceAction(base64: string) {
     const text = new TextDecoder().decode(base64ToBytes(base64));
-    let action: unknown;
+    let action: any;
     try {
       action = JSON.parse(text);
     } catch {
       console.warn('[ble-bridge] malformed device action:', text);
+      return;
+    }
+    // Local control message, not a server write: the BRAIN screen flags the
+    // NEXT audio session as a vault capture rather than an ASK question.
+    if (action?.op === 'capture_start') {
+      this.noteMode = true;
       return;
     }
     const { error } = await supabase.functions.invoke('device-state', {
