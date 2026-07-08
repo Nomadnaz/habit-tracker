@@ -449,6 +449,18 @@ class BleBridgeManager {
       this.noteMode = true;
       return;
     }
+    // Context injection: the device says which tab the question came from;
+    // route it to the matching companion (each companion already reads the
+    // right contextSources, so this IS the context bias — no server change).
+    if (action?.op === 'ask_context') {
+      const tabToCompanion: Record<string, string> = {
+        HUB: 'habitCoach', TIMER: 'focus', TASKS: 'life', GYM: 'gym',
+        HABITS: 'habitCoach', RUN: 'activity', BRAIN: 'habitCoach',
+      };
+      const mapped = tabToCompanion[String(action.tab ?? '')];
+      if (mapped) this._companionType = mapped;
+      return;
+    }
     const { error } = await supabase.functions.invoke('device-state', {
       body: { actions: [action], tzOffsetMinutes: new Date().getTimezoneOffset() },
     });
