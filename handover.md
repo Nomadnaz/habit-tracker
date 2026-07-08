@@ -1,107 +1,97 @@
 # handover.md — start here
 
-> Fresh hand-off, written 2026-07-07 after connecting the Supabase MCP and running all outstanding
-> migrations live.
-> Supersedes the 2026-07-06 audit-fix-pass handover (kept below in spirit — its context is still
-> accurate, just the "immediate priorities" have moved on).
-> Second Brain: `~/esp/SecondBrain/Projects/Habit Tracker/Habit Tracker.md` — this session's
-> full log is `~/esp/SecondBrain/Conversations/2026-07-07-migrations-live-via-supabase-mcp.md`.
+> Fresh hand-off, written 2026-07-08 after the Companion HUD market-ready build session.
+> Supersedes the 2026-07-07 migrations-live handover (committed just before this one —
+> `git log handover.md` to read it; its migration/RPC context is still accurate).
+> Second Brain: this session's full log is
+> `~/esp/SecondBrain/Conversations/2026-07-08-companion-hud-market-ready-build.md`.
 
 ## 30-second orientation
-Local-first React Native (Expo SDK 54) app, Supabase backend, one config-driven AI companion layer
-(9 of 14 companions configured, 7 reachable via chat). ~90 tables across ~16 domains. The lean MVP
-spine is code-complete and **the database now matches the code** — all 24 migrations are live in
-production. **The two Edge Functions (`ai-chat`, `daily-briefing`) still need a redeploy** to pick
-up this session's and last session's fixes; that's the single biggest open item, followed by
-on-device verification.
+Local-first React Native (Expo SDK 54) app, Supabase backend, one config-driven AI companion
+layer. All 24 original migrations are live (07-07 session); **two new ones (026, 027) are
+written but NOT applied**. The big change this session: the **Companion HUD ESP32 device**
+(`~/esp/projects/companion-hud`) went from a 2-real-tab demo to a code-complete market-ready
+surface — all 8 device pages wired to real backends through a new `device-state` Edge Function,
+Wi-Fi standalone mode with in-app pairing, spoken answers (TTS), voice capture into the
+Obsidian vault, and OTA. **None of it is hardware-verified: the device was unplugged all
+session.** Everything builds (`idf.py build`, `tsc` clean for touched files) and is committed
+on both repos.
 
 ## Read in this order
 1. `system-model.md` — canonical architecture, wins every conflict.
 2. `database.md` — schema reference.
-3. `current-state.md` — what's built, the progress log, the "ACTION NEEDED BY YOU" section.
+3. `current-state.md` — NOTE: not updated this session; this handover + the Second Brain log
+   are the accurate record for the device surface. App-side state in it is still valid.
 4. This file.
-5. Then the next `tasks/NNN-*.md` per `current-state.md`'s "NEXT TASK" section.
 
-Never load the full master spec — it's outside this repo and too large; the task files are
-distilled from it.
+## What just happened (2026-07-08, this repo)
+- **`supabase/functions/device-state/`** (new): GET → compact JSON snapshot (today's tasks,
+  habits+streaks, gym plan/check-in, last run + week km, hub next-event, brain stats);
+  POST `{actions:[…]}` → `complete_task`, `toggle_habit`, `gym_checkin` (sentinel template
+  `device-checkin`), `log_focus_session`, `capture_note`. JWT-auth'd, tz-aware.
+- **`supabase/functions/tts/`** (new): Groq PlayAI proxy (reuses `GROQ_API_KEY`), JWT-gated,
+  streams WAV. The device speaks answers through it in Wi-Fi mode.
+- **Migrations `026_focus_sessions.sql` + `027_vault_inbox.sql`** (new, ⚠️ NOT applied).
+- **`_shared/buildContext.ts`**: new optional `userMessage` param + `vault` contextSource —
+  FTS top-3 snippets from `vault_files` ranked against the message. Wired into `habitCoach`
+  and `life` in `_shared/companions.ts`; `ai-chat/index.ts` passes the message through.
+  ⚠️ This means **`ai-chat` needs a redeploy** (on top of the already-pending one from 07-07).
+- **`lib/ble-bridge.ts`**: relays device-state snapshots to the ESP32 (on connect / 60s /
+  tasks Realtime) as chunked writes; relays device JSON actions back to device-state; routes
+  vault captures ("note …" or device capture mode) to `capture_note`; maps the device's
+  active tab to a companionType (`ask_context`).
+- **`app/pair-device.tsx`** (new): pairing flow — BLE connect → home Wi-Fi creds → account
+  password mints a **separate, revocable device session** (raw password grant, doesn't touch
+  the phone's session) → single encrypted TLV write provisions the device for standalone mode.
+- **`tools/vault-agent/`** (new): Node daemon syncing `~/esp/SecondBrain` → `vault_files`
+  (chokidar, hash-skip, soft-delete) and `vault_inbox` → `Inbox/*.md` notes. launchd plist
+  included. Run: `cd tools/vault-agent && npm install && HABIT_USER_EMAIL=… HABIT_USER_PASSWORD=… npm start`.
 
-## What just happened (2026-07-07)
-The Supabase MCP got connected this session (OAuth flow via `mcp__supabase__authenticate`) — this
-means migrations and Edge Function deploys can now be run directly from a Claude Code session
-instead of requiring a human to paste SQL into the dashboard. Used it to:
-- **Ran all 17 outstanding migrations** (`007`, `009`–`024`) against the live project, verified with
-  `list_tables`/`get_advisors` after. Combined with `002`/`003`/`006`/`008` already live, **all 24
-  numbered migrations are now applied** — see `supabase/migrations/APPLIED.md` for the full ledger.
-- **Found and removed a real landmine before running `009_habits.sql`**: the live DB already had
-  `habits`/`habit_logs`/`profiles`/`bonsai` tables from an old pre-system-model.md prototype, with an
-  incompatible schema (UUID PKs, wrong columns — e.g. `is_active`/`category`/`icon` instead of
-  `active`/`frequency`/`reminder_time`). `CREATE TABLE IF NOT EXISTS` would have silently no-op'd
-  and broken the Habits screen at runtime the first time it wrote a column that didn't exist. All
-  four tables were empty (0 rows); dropped after explicit user confirmation.
-- **Hardened `024`'s two new RPCs post-apply**: `increment_api_usage`/`increment_briefing_usage` were
-  `SECURITY DEFINER` with no grant restriction — callable by `anon`/`authenticated` with an arbitrary
-  `p_user_id`, letting anyone tamper with another user's token/rate-limit accounting. Pinned
-  `search_path`, revoked EXECUTE from `PUBLIC`/`anon`/`authenticated`, granted only to `service_role`.
-- **Attempted to redeploy `ai-chat` and deploy `daily-briefing`** (both fully committed, verified
-  against git first) — **blocked by auto mode's production-deploy safety classifier**, which denied
-  the action and then refused a retry of the same call. This needs either a human to run
-  `supabase functions deploy ai-chat` / `supabase functions deploy daily-briefing` directly, or a
-  permission-settings change to let a future session do it via the Supabase MCP.
-
-## What changed in the canonical docs
-- **`supabase/migrations/APPLIED.md`** — all 24 migrations now marked ✅ live, with the legacy-table
-  cleanup and RPC-hardening notes appended.
-- **`current-state.md`** — "ACTION NEEDED BY YOU" migrations checklist replaced with a short
-  "✅ ALL 24 NOW LIVE" section; the Edge Function redeploy step is still outstanding and called out
-  separately.
+## What happened in the firmware repo (`~/esp/projects/companion-hud`)
+Five commits (f9831f42 → c6ac7807): RTC (PCF85063) + IMU (QMI8658, runtime-probed, raise-to-
+wake / flip-to-focus) drivers; OTA partition layout + `esp_https_ota` client + `tools/release_ota.sh`;
+`state.c`/`sync.c` snapshot store with NVS cache + offline action queue; all 8 screens live;
+`wifi.c`/`auth.c`/`net.c` Wi-Fi-direct transport (refresh-token auth with atomic rotation);
+encrypted BLE provisioning char + Just Works bonding; TTS speaker streaming; BRAIN voice
+capture; `docs/SMOKE-TEST.md` (the hardware verification gate — read it before trusting
+anything device-side).
 
 ## Immediate priorities, in order
-1. **Deploy `ai-chat` and `daily-briefing`.** Everything needed is committed to git already
-   (`git log` shows the last `ai-chat`/`_shared/*` commit as `63f83d1`). Run from the repo root:
-   ```
-   supabase functions deploy ai-chat
-   supabase functions deploy daily-briefing
-   ```
-   `daily-briefing` is a brand-new function (never deployed) and needs the same `ANTHROPIC_API_KEY`
-   secret already set for `ai-chat`, plus migration `024` (now live) for its rate limit. Confirm
-   `ANTHROPIC_API_KEY` and `API_KEY_ENCRYPTION_SECRET` are actually set as function secrets — this
-   session had no tool to list/verify secret values, only to deploy code.
-2. **On-device verification, starting with onboarding.** It rewrites the auth-entry routing and
-   is the single riskiest unverified change in the whole backlog. `current-state.md`'s
-   "On-device verification" section has a full checklist once you're on a device — work through it
-   in order, onboarding first. This can now actually be tested end-to-end since the schema is live.
-3. **Decide the nav restructure** (`tasks/078-nav-restructure.md`): enforce the 5-tab plan or
-   formally revise `system-model.md` to match the shipped 7-tab reality.
-4. **🔁 Rotate the Anthropic key** if not already done — flagged last session (pasted into a
-   transcript twice), still open as far as this session could tell (no tool to verify secret
-   rotation status).
+1. **Apply migrations 026 + 027** (SQL editor or Supabase MCP `apply_migration` — never
+   `db push`), then update `supabase/migrations/APPLIED.md`.
+2. **Deploy Edge Functions**: `device-state` (new), `tts` (new), `ai-chat` (redeploy — vault
+   contextSource), `daily-briefing` (still pending from 07-07). All committed; deploys were
+   blocked by the auto-mode production classifier two sessions running — run them by hand or
+   adjust permissions.
+3. **Create a public Storage bucket named `firmware`** (OTA manifest + binaries).
+4. **When the device is plugged in**: first reflash MUST be `idf.py erase-flash flash`
+   (partition table changed), then run `~/esp/projects/companion-hud/docs/SMOKE-TEST.md`
+   top to bottom. IMU gesture thresholds/axis signs in `buttons.c` will need calibration.
+5. **EAS dev build** of the app (BLE needs it; no new native deps were added).
+6. **Start the vault agent** on the Mac (env creds above; launchd plist for persistence).
+7. **🔁 Rotate the Anthropic key** — still open since 06-29.
 
-## Known follow-ups that were surfaced but deliberately not done
-- Confidence-gate architectural rewrite (numeric float → categorical intent labels).
-- Consolidating 13 duplicate `genId()` implementations into one `crypto.randomUUID()`-backed helper.
-- Wiring `focus` and `life` companions into chat.
-- The nav restructure itself (only the decision-record exists, `tasks/078`).
-- Edge Function deploys (see priority 1 above — blocked by auto mode this session, not by anything
-  in the code).
+## Known follow-ups deliberately not done
+- MITM-protected pairing (numeric-comparison popup on the round display); SYNC/ACTION chars
+  are not encryption-gated yet (provisioning char is).
+- BLE-relayed TTS (Wi-Fi-only for now); flash encryption / secure boot; embeddings vault
+  search (FTS only); multi-user vault agent (hardcoded to this Mac); IMU deep-sleep wake.
+- `current-state.md` refresh for the device surface (this handover is the stopgap).
+- Everything from the 07-07 handover's follow-up list (confidence-gate rewrite, genId
+  consolidation, nav restructure decision, wiring focus/life companions into in-app chat).
 
-## Working rules (from CLAUDE.md, still current)
-- One task per session; enrich → implement → verify (`tsc`) → update `current-state.md` → commit
-  + push the specific files changed.
-- Migration numbers in task files are hints, not guarantees — always `ls supabase/migrations/`
-  before naming a new one. (Moot for now — all 24 are live; this matters again once a new domain
-  needs migration `025`.)
-- Every domain write goes through `lib/postWrite.ts` — never touch `cumulative_stats`, badges,
-  friend-feed, or Obsidian directly from a screen.
-- Nothing gets deployed — no `supabase functions deploy`, no migration pasted into the SQL
-  editor — unless the exact files are committed to git first. (Migrations can now also go through
-  the Supabase MCP's `apply_migration`/`deploy_edge_function` tools once authenticated — same rule
-  applies: verify against git before deploying.)
+## Working rules (unchanged)
+- One task per session; verify → update `current-state.md` → commit + push specific files.
+- `ls supabase/migrations/` before naming a new migration (next is 028).
+- Every domain write goes through `lib/postWrite.ts`.
+- Nothing deploys unless the exact files are committed to git first.
 
 ## Copy-paste prompt to start the next session
 ```
-Read handover.md, then system-model.md, database.md, and current-state.md in the habit-tracker
-repo (~/esp/habit-tracker), in that order. Confirm the current state back to me — especially
-whether ai-chat/daily-briefing have been redeployed since migrations went live — then let's
-deploy those functions if not done yet, or move to on-device verification of onboarding if they
-have. Tell me if something needs me first.
+Read handover.md in ~/esp/habit-tracker, then system-model.md and current-state.md. The
+Companion HUD device surface is code-complete but nothing is deployed or hardware-verified.
+Confirm back to me: are migrations 026/027 applied, and are device-state/tts/ai-chat/
+daily-briefing deployed? Then either walk me through the deploys, or — if the device is
+plugged in — start the smoke test at ~/esp/projects/companion-hud/docs/SMOKE-TEST.md
+(first flash must be erase-flash). Tell me if something needs me first.
 ```
