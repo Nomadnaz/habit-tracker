@@ -3,10 +3,14 @@
 // ─────────────────────────────────────────────────────────────────────────
 // estimateMealFromPhoto() calls the dedicated `food-vision` Edge Function,
 // which runs a Claude Haiku vision call server-side (the Anthropic key never
-// leaves the server). If the function isn't deployed yet, or anything fails,
-// we return a clearly-labeled MOCK estimate so the whole capture → confirm →
-// save flow is demoable immediately. Converging onto the shared `ai-chat`
-// function later is a one-line change to the invoke() target below.
+// leaves the server).
+//
+// An audit (2026-07-07) found this used to silently fall back to a
+// hardcoded 520-calorie "Meal (estimate)" plate on ANY failure (network,
+// undeployed function, bad JSON) — indistinguishable from a real result
+// except a small banner label. That's gone: on failure this now returns
+// `null`, and the confirm screen shows a blank, editable form with the
+// photo attached instead of inventing numbers nobody generated.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { supabase } from './supabase';
@@ -17,23 +21,8 @@ export type MealEstimate = {
   proteinG: number;
   carbsG: number;
   fatG: number;
-  isEstimate: true;          // always an estimate — the UI must say so
-  source: 'ai' | 'mock';     // 'mock' => backend not wired; surface this to the user
+  isEstimate: true; // always an estimate — the UI must say so
 };
-
-// A deliberately generic, plausible plate. Labeled source:'mock' so the UI can
-// tell the user this isn't a real vision result yet.
-function mockEstimate(): MealEstimate {
-  return {
-    name: 'Meal (estimate)',
-    calories: 520,
-    proteinG: 30,
-    carbsG: 45,
-    fatG: 22,
-    isEstimate: true,
-    source: 'mock',
-  };
-}
 
 function coerceNumber(v: unknown, fallback = 0): number {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
@@ -42,13 +31,15 @@ function coerceNumber(v: unknown, fallback = 0): number {
 
 /**
  * @param base64Jpeg compressed (<1MB) JPEG image as a base64 string (no data: prefix)
+ * @returns the AI estimate, or `null` if the function isn't reachable/deployed
+ *          or returned something unusable — never a fabricated placeholder.
  */
-export async function estimateMealFromPhoto(base64Jpeg: string): Promise<MealEstimate> {
+export async function estimateMealFromPhoto(base64Jpeg: string): Promise<MealEstimate | null> {
   try {
     const { data, error } = await supabase.functions.invoke('food-vision', {
       body: { image: base64Jpeg },
     });
-    if (error || !data) return mockEstimate();
+    if (error || !data) return null;
 
     return {
       name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : 'Meal',
@@ -57,10 +48,9 @@ export async function estimateMealFromPhoto(base64Jpeg: string): Promise<MealEst
       carbsG: Math.round(coerceNumber(data.carbs_g)),
       fatG: Math.round(coerceNumber(data.fat_g)),
       isEstimate: true,
-      source: 'ai',
     };
   } catch {
-    // Function not deployed / network error / bad JSON — degrade to the mock.
-    return mockEstimate();
+    // Function not deployed / network error / bad JSON — no fabricated fallback.
+    return null;
   }
 }

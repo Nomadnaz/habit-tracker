@@ -100,6 +100,33 @@ async function writeObsidian(entity: Entity, record: any): Promise<void> {
   console.log('writeObsidian stub:', entity);
 }
 
+export type CumulativeStats = {
+  total_steps: number;
+  total_distance_walked_m: number;
+  total_distance_run_m: number;
+  total_gym_sessions: number;
+  total_focus_secs: number;
+  total_habits_completed: number;
+  total_books_finished: number;
+  total_movies_watched: number;
+  longest_streak_ever: number;
+};
+
+const EMPTY_CUMULATIVE_STATS: CumulativeStats = {
+  total_steps: 0, total_distance_walked_m: 0, total_distance_run_m: 0, total_gym_sessions: 0,
+  total_focus_secs: 0, total_habits_completed: 0, total_books_finished: 0, total_movies_watched: 0,
+  longest_streak_ever: 0,
+};
+
+/** Read-only view of the row incrementCumulativeStats() above writes — for the profile/stats page. */
+export async function getCumulativeStats(): Promise<CumulativeStats> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) return EMPTY_CUMULATIVE_STATS;
+  const { data } = await supabase.from('cumulative_stats').select('*').eq('user_id', userId).maybeSingle();
+  return data ? { ...EMPTY_CUMULATIVE_STATS, ...data } : EMPTY_CUMULATIVE_STATS;
+}
+
 // updateUserContextSummary USED to live here, running on every domain write
 // — a sip of water triggered a 130-row Supabase fetch (100 tasks + 30
 // workouts) to regenerate a 5-line summary. An audit (2026-07-06) called

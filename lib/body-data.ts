@@ -1,19 +1,43 @@
 // ─────────────────────────────────────────────────────────────────────────
 // BODY PAGE — LOCAL DATA LAYER
 // ─────────────────────────────────────────────────────────────────────────
-// This is the single source of truth for everything shown on the BODY screen.
-// It follows the same "local-first" pattern as the TODAY screen: everything
-// lives in AsyncStorage so the UI is instant and works offline. (Cloud sync to
-// the Supabase tables described in the spec is a later step — this layer is
-// structured so that adding it later is a drop-in.)
+// Single source of truth for everything shown on the BODY screen. Local-first
+// (AsyncStorage), same pattern as the rest of the app.
 //
-// On first launch we SEED realistic data so the page looks exactly like the
-// design mock. Water and weight are fully interactive — logging them writes
-// back here and the page recomputes live.
+// An audit (2026-07-07) found this file's first-launch seedData() fabricated
+// steps/training history, headline lifts, a "weakest muscle," a strength
+// trend, sleep, and protein — and PERSISTED it, making fake data
+// indistinguishable from real after first launch. All of that is gone.
+// Every field below is either read from real user data (water/weight logs,
+// workout-data.ts's exercises/PB log/done log/gym plan, lib/sleep-data.ts,
+// lib/meals-data.ts) or an honest empty/`null` state when no real data
+// exists yet. Nothing here is fabricated.
 // ─────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { toDateKey as dateKey, addDaysToKey } from './dateKey';
+export { dateKey };
+import {
+  getExercises, getPBLog, getDoneLog, getGymPlan, getTemplateExercises,
+  type GymPlan,
+} from './workout-data';
+import { computeStreak } from './habits-data';
+import { getRecentSleepLogs } from './sleep-data';
+import { getMealsForDate, dailyTotals, getTargets } from './meals-data';
+import {
+  stepsThisYearFromHistory, trainingDayTypeFor, computeHeadlineLiftsFromData,
+  computeStrengthTrendFromLifts, computeLeastTrainedMuscleFromData, computeMuscleGroupTalliesFromData,
+  computeNextSessionFromPlan, goalStatus as goalStatusPure, formatSleep as formatSleepPure,
+  type DayType, type HeadlineLift, type LeastTrainedMuscle, type StrengthTrend, type NextSession,
+  type MuscleGroupTally,
+} from './bodyFormulas';
+export {
+  stepsThisYearFromHistory, trainingDayTypeFor, computeHeadlineLiftsFromData,
+  computeStrengthTrendFromLifts, computeLeastTrainedMuscleFromData, computeNextSessionFromPlan,
+  type DayType, type HeadlineLift, type LeastTrainedMuscle, type StrengthTrend, type NextSession,
+  type MuscleGroupTally,
+};
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -26,39 +50,8 @@ const BODY_KEY = '@body';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
-// A single day's square in the steps heatmap is derived from count vs goal.
 export type SquareState = 'hit' | 'partial' | 'missed' | 'empty';
-
-// A training day is one of four kinds (drives the training heatmap squares).
-export type DayType = 'trained' | 'rest' | 'cheat' | 'missed';
-
-// Movement categories used by the PUSH/PULL/LEGS/UPPER/LOWER filter pills.
 export type Movement = 'push' | 'pull' | 'legs' | 'upper' | 'lower';
-
-export type ExerciseSet = { weightKg: number; reps: number };
-
-export type Exercise = {
-  name: string;
-  icon: string;            // MaterialCommunityIcons name
-  sets: ExerciseSet[];
-  pbDeltaKg?: number;      // if present, shows a "PB +Xkg" badge
-};
-
-export type WorkoutTemplate = {
-  id: string;
-  name: string;            // e.g. "PULL DAY"
-  movement: Movement;
-  exercises: Exercise[];
-  extraCount: number;      // "+ N MORE EXERCISES" shown under the list
-};
-
-export type HeadlineLift = {
-  name: string;            // "BENCH PRESS"
-  icon: string;
-  oneRmKg: number;         // 100
-  deltaKg: number;         // +5 (vs last month)
-  history: number[];       // sparkline points (oldest → newest)
-};
 
 export type WeightLog = { weightKg: number; at: string };
 export type WaterLog = { amountMl: number; at: string };
@@ -78,24 +71,23 @@ export type BodyData = {
 
   // 1.2 Steps
   stepsGoal: number;
-  stepsHistory: Record<string, number>;   // dateKey → step count
+  stepsHistory: Record<string, number>; // dateKey → step count
 
   // 1.3 Training
-  nextSession: { name: string; when: string; time: string };
+  nextSession: NextSession | null;
   trainingHistory: Record<string, DayType>;
   activeMovement: Movement;
-  templates: WorkoutTemplate[];
 
-  // 1.5 Strength (3 headline lifts)
+  // 1.5 Strength (real headline lifts — omitted if the user hasn't created that exercise yet)
   headlineLifts: HeadlineLift[];
 
   // Body metrics row
   weightLogs: WeightLog[];
-  weakestMuscle: { name: string; pct: number };       // pct is negative, e.g. -12
-  strengthTrend: { pct: number; history: number[] };  // overall strength +18%
+  leastTrainedMuscle: LeastTrainedMuscle | null;
+  strengthTrend: StrengthTrend | null;
 
   // 1.10 Recovery
-  sleepMins: number;            // 462 = 7h 42m
+  sleepMins: number | null;
   waterLogs: WaterLog[];
   waterGoalMl: number;
   proteinTodayG: number;
@@ -108,11 +100,6 @@ export type BodyData = {
 };
 
 // ── Date helpers ───────────────────────────────────────────────────────────
-// Canonical date-key format (zero-padded YYYY-MM-DD) lives in lib/dateKey.ts.
-// Re-exported under the old name so existing importers (steps-data.ts,
-// apple-health.ts) don't need to change.
-import { toDateKey as dateKey } from './dateKey';
-export { dateKey };
 
 function startOfToday(): Date {
   const d = new Date();
@@ -126,154 +113,145 @@ function addDays(base: Date, delta: number): Date {
   return d;
 }
 
-// ── Seed (first-launch demo data that matches the design mock) ──────────────
+// ── I/O wrappers (fetch real data, then call the pure functions in bodyFormulas.ts) ─────
 
-function seedStepsHistory(goal: number): Record<string, number> {
-  const out: Record<string, number> = {};
+async function computeTrainingHistory(days = 42): Promise<Record<string, DayType>> {
+  const [doneLog, gymPlan] = await Promise.all([getDoneLog(), getGymPlan()]);
+  const doneDates = new Set(doneLog.map(e => e.date));
   const today = startOfToday();
-  // 56 days of history so the heatmap has plenty to draw.
-  for (let i = 0; i < 56; i++) {
-    const d = addDays(today, -i);
-    let count: number;
-    if (i === 0) {
-      count = 16842;                          // today's headline number
-    } else {
-      const r = (i * 37) % 100;               // deterministic pseudo-pattern
-      if (r < 62)      count = goal + (r * 28);          // hit goal
-      else if (r < 84) count = Math.round(goal * 0.62);  // partial
-      else             count = Math.round(goal * 0.28);  // missed
-    }
-    out[dateKey(d)] = count;
-  }
-  return out;
-}
-
-function seedTrainingHistory(): Record<string, DayType> {
   const out: Record<string, DayType> = {};
-  const today = startOfToday();
-  // 42 days (6 weeks) of attendance.
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < days; i++) {
     const d = addDays(today, -i);
-    const r = (i * 29) % 100;
-    let type: DayType;
-    if (r < 55)      type = 'trained';
-    else if (r < 78) type = 'rest';
-    else if (r < 88) type = 'cheat';
-    else             type = 'missed';
-    out[dateKey(d)] = type;
+    out[dateKey(d)] = trainingDayTypeFor(d, doneDates, gymPlan);
   }
   return out;
 }
 
-function seedWaterLogs(): WaterLog[] {
-  // Today's intake summing to 2.8 L, spread across a few entries.
-  const now = new Date();
-  const at = (hoursAgo: number) => new Date(now.getTime() - hoursAgo * 3600_000).toISOString();
-  return [
-    { amountMl: 750, at: at(6) },
-    { amountMl: 500, at: at(4) },
-    { amountMl: 750, at: at(2) },
-    { amountMl: 500, at: at(1) },
-    { amountMl: 300, at: at(0) },
-  ];
+async function computeHeadlineLifts(): Promise<HeadlineLift[]> {
+  const [exercises, pbLog] = await Promise.all([getExercises(), getPBLog()]);
+  return computeHeadlineLiftsFromData(exercises, pbLog, dateKey(new Date()));
 }
 
-function seedWeightLogs(): WeightLog[] {
-  // 8 weekly points trending down to 72.4 kg (latest = headline value).
-  const today = startOfToday();
-  const series = [74.8, 74.3, 73.9, 73.6, 73.1, 72.9, 72.6, 72.4];
-  return series.map((weightKg, i) => ({
-    weightKg,
-    at: addDays(today, -(series.length - 1 - i) * 7).toISOString(),
-  }));
+async function fetchRecentTemplateExercises(): Promise<{ recentTemplateExercises: { muscleGroups: import('./workout-data').MuscleGroup[] }[][]; allExercises: { muscleGroups: import('./workout-data').MuscleGroup[] }[] }> {
+  const cutoff = addDaysToKey(dateKey(new Date()), -28);
+  const [doneLog, allExercises] = await Promise.all([getDoneLog(), getExercises()]);
+  const recent = doneLog.filter(e => e.date >= cutoff);
+  const recentTemplateExercises = await Promise.all(recent.map(e => getTemplateExercises(e.templateId)));
+  return { recentTemplateExercises, allExercises };
 }
 
-function seedData(): BodyData {
-  const stepsGoal = 20000;
-  return {
-    workoutsTotal: 142,
-    stepsThisYear: 3_400_000,
-    streak: 18,
+async function computeLeastTrainedMuscle(): Promise<LeastTrainedMuscle | null> {
+  const { recentTemplateExercises, allExercises } = await fetchRecentTemplateExercises();
+  return computeLeastTrainedMuscleFromData(recentTemplateExercises, allExercises);
+}
 
-    stepsGoal,
-    stepsHistory: seedStepsHistory(stepsGoal),
+/** Full per-muscle-group trailing-28-day breakdown for the strength detail page. */
+export async function getMuscleGroupBreakdown(): Promise<MuscleGroupTally[]> {
+  const { recentTemplateExercises, allExercises } = await fetchRecentTemplateExercises();
+  return computeMuscleGroupTalliesFromData(recentTemplateExercises, allExercises);
+}
 
-    nextSession: { name: 'PULL DAY', when: 'TOMORROW', time: '18:00' },
-    trainingHistory: seedTrainingHistory(),
-    activeMovement: 'pull',
-    templates: [
-      {
-        id: 'pull',
-        name: 'PULL DAY',
-        movement: 'pull',
-        extraCount: 3,
-        exercises: [
-          {
-            name: 'LAT PULLDOWN',
-            icon: 'weight-lifter',
-            pbDeltaKg: 5,
-            sets: [
-              { weightKg: 60, reps: 10 },
-              { weightKg: 65, reps: 8 },
-              { weightKg: 70, reps: 6 },
-            ],
-          },
-          {
-            name: 'SEATED ROW',
-            icon: 'rowing',
-            sets: [
-              { weightKg: 65, reps: 12 },
-              { weightKg: 65, reps: 10 },
-              { weightKg: 60, reps: 10 },
-            ],
-          },
-          {
-            name: 'SINGLE ARM ROW',
-            icon: 'arm-flex',
-            sets: [
-              { weightKg: 22.5, reps: 12 },
-              { weightKg: 22.5, reps: 10 },
-              { weightKg: 20, reps: 10 },
-            ],
-          },
-        ],
-      },
-      { id: 'push',  name: 'PUSH DAY',  movement: 'push',  extraCount: 0, exercises: [] },
-      { id: 'legs',  name: 'LEG DAY',   movement: 'legs',  extraCount: 0, exercises: [] },
-      { id: 'upper', name: 'UPPER DAY', movement: 'upper', extraCount: 0, exercises: [] },
-      { id: 'lower', name: 'LOWER DAY', movement: 'lower', extraCount: 0, exercises: [] },
-    ],
+async function computeNextSession(): Promise<NextSession | null> {
+  const gymPlan = await getGymPlan();
+  return computeNextSessionFromPlan(gymPlan, addDays(startOfToday(), 1));
+}
 
-    headlineLifts: [
-      { name: 'BENCH PRESS', icon: 'weight-lifter', oneRmKg: 100, deltaKg: 5,    history: [88, 90, 92, 94, 95, 97, 99, 100] },
-      { name: 'SQUAT',       icon: 'human-handsdown', oneRmKg: 140, deltaKg: 7.5, history: [120, 124, 128, 130, 133, 136, 138, 140] },
-      { name: 'DEADLIFT',    icon: 'weight',          oneRmKg: 180, deltaKg: 10,  history: [155, 160, 163, 167, 170, 173, 176, 180] },
-    ],
+async function computeSleepMins(): Promise<number | null> {
+  const logs = await getRecentSleepLogs(7);
+  const last = logs[logs.length - 1];
+  return last?.totalHours ? Math.round(last.totalHours * 60) : null;
+}
 
-    weightLogs: seedWeightLogs(),
-    weakestMuscle: { name: 'CHEST', pct: -12 },
-    strengthTrend: { pct: 18, history: [100, 103, 106, 108, 111, 114, 116, 118] },
+async function computeProteinToday(): Promise<{ today: number; goal: number }> {
+  const [meals, targets] = await Promise.all([getMealsForDate(dateKey(new Date())), getTargets()]);
+  return { today: Math.round(dailyTotals(meals).proteinG), goal: targets.proteinG };
+}
 
-    sleepMins: 7 * 60 + 42,
-    waterLogs: seedWaterLogs(),
-    waterGoalMl: 3000,
-    proteinTodayG: 148,
-    proteinGoalG: 160,
-  };
+async function computeGymStreak(): Promise<number> {
+  const doneLog = await getDoneLog();
+  const uniqueDates = [...new Set(doneLog.map(e => e.date))];
+  return computeStreak(uniqueDates.map(date => ({ date, completed: true }))).current;
+}
+
+// ── Core (persisted) state — real empty defaults, no seed ──────────────────
+
+type CoreBodyData = Pick<
+  BodyData,
+  | 'stepsGoal' | 'stepsHistory' | 'activeMovement' | 'weightLogs' | 'waterLogs'
+  | 'waterGoalMl' | 'workoutsTotal' | 'appleHealthConnected' | 'appleHealthLastSync'
+  | 'activityToday' | 'sleepMins'
+>;
+
+// stepsGoal/waterGoalMl are user-configurable GOALS (sane defaults), not
+// fabricated history — everything else here is a genuine empty state.
+const EMPTY_CORE: CoreBodyData = {
+  stepsGoal: 10000,
+  stepsHistory: {},
+  activeMovement: 'pull',
+  weightLogs: [],
+  waterLogs: [],
+  waterGoalMl: 3000,
+  workoutsTotal: 0,
+  appleHealthConnected: false,
+  appleHealthLastSync: undefined,
+  activityToday: undefined,
+  sleepMins: null,
+};
+
+async function loadCore(): Promise<CoreBodyData> {
+  try {
+    const raw = await AsyncStorage.getItem(BODY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        stepsGoal: parsed.stepsGoal ?? EMPTY_CORE.stepsGoal,
+        stepsHistory: parsed.stepsHistory ?? {},
+        activeMovement: parsed.activeMovement ?? 'pull',
+        weightLogs: parsed.weightLogs ?? [],
+        waterLogs: parsed.waterLogs ?? [],
+        waterGoalMl: parsed.waterGoalMl ?? 3000,
+        workoutsTotal: parsed.workoutsTotal ?? 0,
+        appleHealthConnected: parsed.appleHealthConnected ?? false,
+        appleHealthLastSync: parsed.appleHealthLastSync,
+        activityToday: parsed.activityToday,
+        sleepMins: parsed.sleepMins ?? null,
+      };
+    }
+  } catch { /* fall through */ }
+  return EMPTY_CORE;
 }
 
 // ── Load / save ─────────────────────────────────────────────────────────────
 
 export async function loadBodyData(): Promise<BodyData> {
-  try {
-    const raw = await AsyncStorage.getItem(BODY_KEY);
-    if (raw) return JSON.parse(raw) as BodyData;
-  } catch {
-    // fall through to seed
-  }
-  const seeded = seedData();
-  await AsyncStorage.setItem(BODY_KEY, JSON.stringify(seeded));
-  return seeded;
+  const core = await loadCore();
+  const [trainingHistory, headlineLifts, leastTrainedMuscle, nextSession, sleepFromLog, protein, streak] =
+    await Promise.all([
+      computeTrainingHistory(),
+      computeHeadlineLifts(),
+      computeLeastTrainedMuscle(),
+      computeNextSession(),
+      computeSleepMins(),
+      computeProteinToday(),
+      computeGymStreak(),
+    ]);
+  const strengthTrend = computeStrengthTrendFromLifts(headlineLifts);
+
+  return {
+    ...core,
+    stepsThisYear: stepsThisYearFromHistory(core.stepsHistory),
+    streak,
+    nextSession,
+    trainingHistory,
+    headlineLifts,
+    leastTrainedMuscle,
+    strengthTrend,
+    // Prefer the explicit sleep-domain log; fall back to whatever Apple
+    // Health last synced onto the core blob; else honest null.
+    sleepMins: sleepFromLog ?? core.sleepMins,
+    proteinTodayG: protein.today,
+    proteinGoalG: protein.goal,
+  };
 }
 
 async function save(data: BodyData): Promise<void> {
@@ -381,17 +359,8 @@ export function weightHistory(d: BodyData, n = 8): number[] {
   return d.weightLogs.slice(-n).map(l => l.weightKg);
 }
 
-// Status label driven by % of goal hit (shared by water / protein / sleep).
-export function goalStatus(pct: number): string {
-  if (pct >= 1)    return 'GOOD';
-  if (pct >= 0.8)  return 'ALMOST';
-  if (pct >= 0.5)  return 'OK';
-  return 'LOW';
-}
-
-export function formatSleep(mins: number): string {
-  return `${Math.floor(mins / 60)}H ${mins % 60}M`;
-}
+export const goalStatus = goalStatusPure;
+export const formatSleep = formatSleepPure;
 
 function formatActiveTimeHrs(mins: number): string {
   if (mins <= 0) return '0:00';

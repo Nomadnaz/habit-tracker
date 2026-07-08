@@ -13,13 +13,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Svg, { Polyline, Circle } from 'react-native-svg';
 import ChatScreen from '@/components/ChatScreen';
+import { GymHeatmap, GymHeatmapLegend } from '@/components/GymHeatmap';
+import { Spark } from '@/components/Spark';
 
 import {
   loadBodyData, addWater, logWeight,
   todaySteps, todayWaterMl, latestWeight, weightHistory,
-  buildDayGrid, stepsSquareState, trainingDayType,
+  stepsSquareState, trainingDayType,
   goalStatus, formatSleep, refreshAppleHealthIfConnected,
   type BodyData,
 } from '@/lib/body-data';
@@ -50,113 +51,6 @@ const GREEN    = '#4CAF50';
 const NUM_FONT = 'PixeloidSans_400Regular';
 
 const MOVEMENTS: BodyMovement[] = ['push', 'pull', 'legs', 'upper', 'lower'];
-
-// ── Small line chart used for every sparkline / strength graph ──────────────
-function Spark({
-  points, width = 72, height = 26, color = ORANGE, dots = false,
-}: { points: number[]; width?: number; height?: number; color?: string; dots?: boolean }) {
-  if (points.length < 2) return <View style={{ width, height }} />;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const stepX = width / (points.length - 1);
-  const coords = points.map((p, i) => ({
-    x: i * stepX,
-    // When every point is equal (a flat series), draw a centred horizontal line.
-    y: max === min ? height / 2 : height - 2 - ((p - min) / range) * (height - 4),
-  }));
-  return (
-    <Svg width={width} height={height}>
-      <Polyline
-        points={coords.map(c => `${c.x},${c.y}`).join(' ')}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.6}
-      />
-      {dots && coords.map((c, i) => (
-        <Circle key={i} cx={c.x} cy={c.y} r={1.9} fill={color} />
-      ))}
-    </Svg>
-  );
-}
-
-// ── One heatmap square ──────────────────────────────────────────────────────
-type SquareKind = 'hit' | 'partial' | 'missed' | 'empty' | 'trained' | 'rest' | 'cheat';
-
-const SQ = 13;
-const DITHER_TILES = 4;
-
-function HeatSquare({ kind }: { kind: SquareKind }) {
-  if (kind === 'empty') return <View style={[hs.sq, hs.invisible]} />;
-  if (kind === 'hit' || kind === 'trained') return <View style={[hs.sq, hs.solid]} />;
-  if (kind === 'partial' || kind === 'rest') return <View style={[hs.sq, hs.dotted]} />;
-  if (kind === 'cheat') {
-    const tile = SQ / DITHER_TILES;
-    return (
-      <View style={[hs.sq, { flexDirection: 'row', flexWrap: 'wrap', overflow: 'hidden' }]}>
-        {Array.from({ length: DITHER_TILES * DITHER_TILES }).map((_, i) => {
-          const row = Math.floor(i / DITHER_TILES);
-          const col = i % DITHER_TILES;
-          const on = (row + col) % 2 === 0;
-          return (
-            <View
-              key={i}
-              style={{
-                width: tile,
-                height: tile,
-                backgroundColor: on ? ORANGE : '#FCFBF9',
-              }}
-            />
-          );
-        })}
-      </View>
-    );
-  }
-  return <View style={[hs.sq, hs.missed]} />;
-}
-
-function Heatmap({
-  weeks,
-  getKind,
-}: {
-  weeks: number;
-  getKind: (d: Date | null) => SquareKind;
-}) {
-  const grid = buildDayGrid(weeks);
-  const headerDates = grid[grid.length - 1] ?? [];
-
-  return (
-    <View>
-      <View style={hm.headerRow}>
-        {headerDates.map((day, i) => (
-          <Text key={i} style={hm.headerDate}>
-            {day ? String(day.getDate()) : ''}
-          </Text>
-        ))}
-      </View>
-      {grid.map((row, r) => (
-        <View key={r} style={hm.row}>
-          {row.map((day, c) => (
-            <HeatSquare key={c} kind={getKind(day)} />
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function Legend({ items }: { items: { kind: SquareKind; label: string }[] }) {
-  return (
-    <View style={hm.legend}>
-      {items.map(it => (
-        <View key={it.label} style={hm.legendItem}>
-          <HeatSquare kind={it.kind} />
-          <Text style={hm.legendText}>{it.label}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function formatBig(n: number): string {
@@ -222,7 +116,7 @@ export default function BodyScreen() {
   const waterPct  = waterMl / data.waterGoalMl;
   const weight    = latestWeight(data);
   const proteinPct = data.proteinTodayG / data.proteinGoalG;
-  const sleepPct   = data.sleepMins / (8 * 60);
+  const sleepPct   = data.sleepMins != null ? data.sleepMins / (8 * 60) : null;
 
   const preview = workoutPreview;
 
@@ -390,8 +284,8 @@ export default function BodyScreen() {
           </View>
 
           <View style={styles.heatRight}>
-            <Heatmap weeks={4} getKind={day => stepsSquareState(data, day)} />
-            <Legend items={[
+            <GymHeatmap weeks={4} getKind={day => stepsSquareState(data, day)} />
+            <GymHeatmapLegend items={[
               { kind: 'hit', label: 'GOAL HIT' },
               { kind: 'partial', label: 'PARTIAL' },
               { kind: 'missed', label: 'MISSED' },
@@ -409,23 +303,25 @@ export default function BodyScreen() {
             <View style={styles.nextCardRow}>
               <View style={styles.nextCardBody}>
                 <Text style={styles.nextLabel}>NEXT SESSION</Text>
-                <Text style={styles.nextTitle}>{data.nextSession.name}</Text>
-                <View style={styles.nextMeta}>
-                  <MaterialCommunityIcons name="calendar-blank-outline" size={12} color={MUTED} />
-                  <Text style={styles.nextMetaText}>{data.nextSession.when}</Text>
-                </View>
-                <View style={styles.nextMeta}>
-                  <MaterialCommunityIcons name="clock-outline" size={12} color={MUTED} />
-                  <Text style={styles.nextMetaText}>{data.nextSession.time}</Text>
-                </View>
+                {data.nextSession ? (
+                  <>
+                    <Text style={styles.nextTitle}>{data.nextSession.name}</Text>
+                    <View style={styles.nextMeta}>
+                      <MaterialCommunityIcons name="calendar-blank-outline" size={12} color={MUTED} />
+                      <Text style={styles.nextMetaText}>{data.nextSession.when}</Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.nextTitle}>NOT PLANNED</Text>
+                )}
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={MUTED} />
             </View>
           </TouchableOpacity>
 
           <View style={styles.heatRight}>
-            <Heatmap weeks={3} getKind={day => trainingDayType(data, day) as SquareKind} />
-            <Legend items={[
+            <GymHeatmap weeks={3} getKind={day => trainingDayType(data, day)} />
+            <GymHeatmapLegend items={[
               { kind: 'trained', label: 'TRAINED' },
               { kind: 'rest', label: 'REST' },
               { kind: 'cheat', label: 'CHEAT' },
@@ -516,26 +412,13 @@ export default function BodyScreen() {
           )}
         </View>
 
-        {/* ── Strength (headline lifts — live from workout engine) ── */}
+        {/* ── Strength (compact — full detail lives on /strength) ── */}
         <View style={styles.strengthHeader}>
           <Text style={styles.sectionLabel}>STRENGTH</Text>
-          <TouchableOpacity onPress={() => router.push('/workouts')}>
-            <Text style={styles.viewLinkText}>VIEW WORKOUTS ›</Text>
+          <TouchableOpacity onPress={() => router.push('/strength')}>
+            <Text style={styles.viewLinkText}>VIEW DETAILS ›</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.cardRow}>
-          {data.headlineLifts.map(lift => (
-            <View key={lift.name} style={styles.liftCard}>
-              <Text style={styles.liftName}>{lift.name}</Text>
-              <Text style={styles.liftValue}>{lift.oneRmKg}<Text style={styles.liftUnit}>KG</Text></Text>
-              <Text style={styles.lift1rm}>1RM</Text>
-              <Spark points={lift.history} dots width={86} height={26} />
-              <Text style={styles.liftDelta} numberOfLines={1}>+{lift.deltaKg}KG vs last month</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* ── Body metrics row ───────────────────────────── */}
         <View style={styles.cardRow}>
           <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => setWeightOpen(true)}>
             <MaterialCommunityIcons name="scale-bathroom" size={22} color={INK} />
@@ -544,22 +427,31 @@ export default function BodyScreen() {
             <Spark points={weightHistory(data)} dots width={90} height={24} />
           </TouchableOpacity>
 
-          <View style={styles.metricCard}>
-            <MaterialCommunityIcons name="arm-flex" size={22} color={INK} />
-            <Text style={styles.metricLabel}>WEAKEST MUSCLE</Text>
-            <Text style={styles.metricValue}>{data.weakestMuscle.name}</Text>
-            <Text style={styles.metricSub}>{data.weakestMuscle.pct}%</Text>
-            <Spark points={[1, 1, 1, 1, 1]} color={FAINT} width={90} height={24} />
-            <Text style={styles.metricSubTiny}>vs other muscles</Text>
-          </View>
+          <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => router.push('/strength')}>
+            <MaterialCommunityIcons name="dumbbell" size={22} color={INK} />
+            <Text style={styles.metricLabel}>TOP LIFT</Text>
+            {data.headlineLifts.length > 0 ? (
+              <>
+                <Text style={styles.metricValue}>{data.headlineLifts[0].topSetKg}KG</Text>
+                <Text style={styles.metricSub}>{data.headlineLifts[0].name}</Text>
+              </>
+            ) : (
+              <Text style={styles.metricValue}>—</Text>
+            )}
+          </TouchableOpacity>
 
-          <View style={styles.metricCard}>
+          <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => router.push('/strength')}>
             <MaterialCommunityIcons name="trending-up" size={22} color={INK} />
             <Text style={styles.metricLabel}>STRENGTH</Text>
-            <Text style={[styles.metricValue, { color: ORANGE }]}>+{data.strengthTrend.pct}%</Text>
-            <Spark points={data.strengthTrend.history} dots width={90} height={24} />
-            <Text style={styles.metricSubTiny}>vs last month</Text>
-          </View>
+            {data.strengthTrend ? (
+              <Text style={[styles.metricValue, { color: ORANGE }]}>
+                {data.strengthTrend.pct >= 0 ? '+' : ''}{data.strengthTrend.pct}%
+              </Text>
+            ) : (
+              <Text style={styles.metricValue}>—</Text>
+            )}
+            <Text style={styles.metricSubTiny}>vs 90d ago</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Recovery ───────────────────────────────────── */}
@@ -568,7 +460,7 @@ export default function BodyScreen() {
           <TouchableOpacity style={styles.recoveryItem} activeOpacity={0.85} onPress={() => router.push('/modals/sleep-detail')}>
             <MaterialCommunityIcons name="moon-waning-crescent" size={22} color={ORANGE} />
             <Text style={styles.recoveryValue}>{formatSleep(data.sleepMins)}</Text>
-            <Text style={styles.recoveryStatus}>{goalStatus(sleepPct)}</Text>
+            <Text style={styles.recoveryStatus}>{sleepPct != null ? goalStatus(sleepPct) : '—'}</Text>
           </TouchableOpacity>
           <View style={styles.statDivider} />
           <TouchableOpacity style={styles.recoveryItem} activeOpacity={0.85} onPress={() => setWaterOpen(true)}>
@@ -658,33 +550,10 @@ function Recovery({ icon, label, value, status }: { icon: string; label: string;
   );
 }
 
-// ── Heatmap square styles ────────────────────────────────────────────────────
-const hs = StyleSheet.create({
-  sq: { width: SQ, height: SQ, borderRadius: 0, marginRight: 3, marginBottom: 3, overflow: 'hidden' },
-  invisible: {},
-  solid: { backgroundColor: ORANGE },
-  dotted: { borderWidth: 1.5, borderColor: ORANGE, borderStyle: 'dotted' },
-  missed: { borderWidth: 1.5, borderColor: '#D8D2C8' },
-});
-
-const hm = StyleSheet.create({
-  headerRow: { flexDirection: 'row', marginBottom: 4 },
-  headerDate: {
-    width: SQ + 3,
-    textAlign: 'center',
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 7,
-    color: FAINT,
-  },
-  row: { flexDirection: 'row' },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 8 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  legendText: { fontFamily: 'PixeloidSans_400Regular', fontSize: 7, color: MUTED },
-});
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F2ED' },
   scroll: { paddingBottom: 48 },
+  empty: { fontFamily: 'PixeloidSans_400Regular', fontSize: 11, color: '#8C857B', paddingVertical: 12 },
 
   // Header
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },

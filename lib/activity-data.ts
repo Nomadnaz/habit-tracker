@@ -13,6 +13,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { postWrite } from './postWrite';
 import { withStorageLock } from './storageLock';
+import {
+  computeDistanceM, computeElevationGainM, computePacePerKm, segmentPaces,
+  toGeoJSON, computeSplits, type Waypoint, type Split,
+} from './activityFormulas';
+export {
+  computeDistanceM, computeElevationGainM, computePacePerKm, segmentPaces,
+  toGeoJSON, computeSplits, type Waypoint, type Split,
+};
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -24,8 +32,6 @@ function bg(fn: () => Promise<unknown>) { fn().catch(() => {}); }
 const ACTIVITIES_KEY = '@activities';
 
 export type ActivityType = 'hike' | 'run' | 'walk';
-
-export type Waypoint = { lat: number; lng: number; altitude?: number | null; timestamp: number };
 
 export type Activity = {
   id: string;
@@ -40,54 +46,6 @@ export type Activity = {
   createdAt: string;
 };
 
-// ── Geometry helpers ──────────────────────────────────────────────────────────
-
-const EARTH_RADIUS_M = 6371000;
-
-function haversineM(a: Waypoint, b: Waypoint): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(s));
-}
-
-export function computeDistanceM(waypoints: Waypoint[]): number {
-  let total = 0;
-  for (let i = 1; i < waypoints.length; i++) total += haversineM(waypoints[i - 1], waypoints[i]);
-  return Math.round(total);
-}
-
-export function computeElevationGainM(waypoints: Waypoint[]): number {
-  let gain = 0;
-  for (let i = 1; i < waypoints.length; i++) {
-    const a = waypoints[i - 1].altitude, b = waypoints[i].altitude;
-    if (a != null && b != null && b > a) gain += b - a;
-  }
-  return Math.round(gain);
-}
-
-/** Seconds per km, or undefined if distance is negligible. */
-export function computePacePerKm(distanceM: number, durationSecs: number): number | undefined {
-  if (distanceM < 10) return undefined;
-  return Math.round(durationSecs / (distanceM / 1000));
-}
-
-/** Per-segment pace (secs/km) between consecutive waypoints, for pace-coloured route drawing. */
-export function segmentPaces(waypoints: Waypoint[]): number[] {
-  const paces: number[] = [];
-  for (let i = 1; i < waypoints.length; i++) {
-    const dist = haversineM(waypoints[i - 1], waypoints[i]);
-    const secs = (waypoints[i].timestamp - waypoints[i - 1].timestamp) / 1000;
-    paces.push(dist > 0.5 && secs > 0 ? secs / (dist / 1000) : paces[paces.length - 1] ?? 0);
-  }
-  return paces;
-}
-
-export function toGeoJSON(waypoints: Waypoint[]): { type: 'LineString'; coordinates: [number, number][] } {
-  return { type: 'LineString', coordinates: waypoints.map(w => [w.lng, w.lat]) };
-}
-
 // ── Load / save ───────────────────────────────────────────────────────────────
 
 async function loadActivities(): Promise<Activity[]> {
@@ -100,6 +58,17 @@ async function loadActivities(): Promise<Activity[]> {
 
 async function saveActivities(list: Activity[]): Promise<void> {
   await AsyncStorage.setItem(ACTIVITIES_KEY, JSON.stringify(list));
+}
+
+/** All activities with startTime within [fromIso, toIso) — for real weekly/monthly rollups. */
+export async function getActivitiesInRange(fromIso: string, toIso: string): Promise<Activity[]> {
+  const list = await loadActivities();
+  return list.filter(a => a.startTime >= fromIso && a.startTime < toIso);
+}
+
+export async function getActivityById(id: string): Promise<Activity | null> {
+  const list = await loadActivities();
+  return list.find(a => a.id === id) ?? null;
 }
 
 export async function getRecentActivities(limit = 10): Promise<Activity[]> {

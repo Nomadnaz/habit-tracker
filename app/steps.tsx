@@ -4,7 +4,7 @@
 // source). Distance, runs, elevation and run tracking come from steps-data.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, Pressable,
   useWindowDimensions,
@@ -20,11 +20,12 @@ import {
   dateKey, type BodyData,
 } from '@/lib/body-data';
 import {
-  loadStepsData, startRun, endRun,
+  loadStepsWeeklyStats,
   weekStepBars, recentStepPins, daysLeftInWeek, daysLeftInMonth,
-  formatDuration, formatPace, formatActiveTime, formatRunDate,
-  type StepsData, type GoalStatus,
+  formatDuration, formatPace, formatRunDate,
+  type StepsWeeklyStats,
 } from '@/lib/steps-data';
+import { formatDistance } from '@/lib/activity-data';
 
 // ── Design tokens (identical to BODY page) ─────────────────────────────────
 const ORANGE = '#FF4D00';
@@ -100,36 +101,22 @@ export default function StepsScreen() {
   const { width } = useWindowDimensions();
 
   const [body, setBody] = useState<BodyData | null>(null);
-  const [steps, setSteps] = useState<StepsData | null>(null);
+  const [stats, setStats] = useState<StepsWeeklyStats | null>(null);
   const [selectedPin, setSelectedPin] = useState<number | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useFocusEffect(useCallback(() => {
     loadBodyData().then(setBody);
-    loadStepsData().then(setSteps);
+    loadStepsWeeklyStats().then(setStats);
   }, []));
 
-  // Live timer while a run is active.
-  useEffect(() => {
-    if (steps?.activeRunStart) {
-      const start = new Date(steps.activeRunStart).getTime();
-      const update = () => setElapsed(Math.round((Date.now() - start) / 1000));
-      update();
-      tickRef.current = setInterval(update, 1000);
-      return () => { if (tickRef.current) clearInterval(tickRef.current); };
-    }
-    setElapsed(0);
-  }, [steps?.activeRunStart]);
-
-  if (!body || !steps) {
+  if (!body || !stats) {
     return <SafeAreaView style={s.container} edges={['top']} />;
   }
 
   const stepCount = todaySteps(body);
   const stepPct   = Math.min(1, stepCount / body.stepsGoal);
-  const distPct   = Math.min(1, steps.weeklyDistanceKm / steps.weeklyDistanceGoalKm);
-  const elevPct   = Math.min(1, steps.monthlyElevationKm / steps.monthlyElevationGoalKm);
+  const distPct   = Math.min(1, stats.weeklyDistanceKm / stats.weeklyDistanceGoalKm);
+  const elevPct   = Math.min(1, stats.monthlyElevationKm / stats.monthlyElevationGoalKm);
 
   const BAR_SQUARES = 16;
   const filled = Math.round(stepPct * BAR_SQUARES);
@@ -137,7 +124,8 @@ export default function StepsScreen() {
   const bars = weekStepBars(body);
   const maxBar = Math.max(...bars.map(b => b.steps), 1);
   const pins = recentStepPins(body, 4);
-  const recentRun = steps.runs[0] ?? null;
+  const recentRun = stats.recentActivity;
+  const act = body.activityToday; // real Apple Health today-so-far, or undefined
 
   // Mountain render size.
   const mtnW = width - 32 - 28;          // screen − card margins − card padding
@@ -147,19 +135,10 @@ export default function StepsScreen() {
   // Pin positions: START (t=0), milestones spread, SUMMIT (t=1).
   const milestoneTs = pins.map((_, i) => 0.22 + (i * 0.6) / Math.max(1, pins.length - 1 || 1));
 
-  async function toggleRun() {
+  function goToActivityTab() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (steps!.activeRunStart) {
-      const d = await endRun();
-      setSteps({ ...d });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else {
-      const d = await startRun();
-      setSteps({ ...d });
-    }
+    router.push('/(tabs)/activity');
   }
-
-  const running = !!steps.activeRunStart;
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
@@ -207,12 +186,15 @@ export default function StepsScreen() {
           <View style={s.colDivider} />
 
           <View style={s.statsCol}>
-            <Text style={s.colLabel}>DISTANCE</Text>
-            <Text style={s.bigNum}>{steps.todayDistanceKm.toFixed(2)}<Text style={s.bigNumUnit}> KM</Text></Text>
+            <Text style={s.colLabel}>DISTANCE TODAY</Text>
+            <Text style={s.bigNum}>
+              {act ? (act.distanceM / 1000).toFixed(2) : '—'}
+              <Text style={s.bigNumUnit}> KM</Text>
+            </Text>
             <Text style={s.colUnit}>WEEKLY DISTANCE GOAL</Text>
             <View style={s.goalLine}>
               <Text style={s.goalText}>
-                <Text style={{ color: ORANGE }}>{steps.weeklyDistanceKm}</Text> / {steps.weeklyDistanceGoalKm} KM
+                <Text style={{ color: ORANGE }}>{stats.weeklyDistanceKm}</Text> / {stats.weeklyDistanceGoalKm} KM
               </Text>
               <Text style={s.goalPct}>{Math.round(distPct * 100)}%</Text>
             </View>
@@ -314,30 +296,30 @@ export default function StepsScreen() {
           <View style={s.pillsRow}>
             <View style={s.pill}>
               <Text style={s.pillLabel}>ELEVATION GAINED</Text>
-              <Text style={s.pillValue}>{steps.todayElevationM}</Text>
+              <Text style={s.pillValue}>{act ? Math.round(act.flightsClimbed * 3) : '—'}</Text>
               <Text style={s.pillUnit}>M</Text>
             </View>
             <View style={s.pillDivider} />
             <View style={s.pill}>
               <Text style={s.pillLabel}>ACTIVE TIME</Text>
-              <Text style={s.pillValue}>{formatActiveTime(steps.todayActiveMins)}</Text>
+              <Text style={s.pillValue}>{act ? `${Math.floor(act.activeMinutes / 60)}:${String(act.activeMinutes % 60).padStart(2, '0')}` : '—'}</Text>
               <Text style={s.pillUnit}>HRS</Text>
             </View>
             <View style={s.pillDivider} />
             <View style={s.pill}>
               <Text style={s.pillLabel}>CALORIES</Text>
-              <Text style={s.pillValue}>{steps.todayCalories.toLocaleString()}</Text>
+              <Text style={s.pillValue}>{act ? act.caloriesKcal.toLocaleString() : '—'}</Text>
               <Text style={s.pillUnit}>KCAL</Text>
             </View>
           </View>
         </View>
 
-        {/* ── START RUN ──────────────────────────────────── */}
-        <TouchableOpacity style={[s.runBtn, running && s.runBtnActive]} activeOpacity={0.85} onPress={toggleRun}>
-          <MaterialCommunityIcons name={running ? 'stop' : 'play'} size={18} color="#FFFFFF" />
-          <Text style={s.runBtnText}>{running ? `STOP RUN  ${formatDuration(elapsed)}` : 'START RUN'}</Text>
+        {/* ── START A RUN ─────────────────────────────────── */}
+        <TouchableOpacity style={s.runBtn} activeOpacity={0.85} onPress={goToActivityTab}>
+          <MaterialCommunityIcons name="play" size={18} color="#FFFFFF" />
+          <Text style={s.runBtnText}>START A RUN</Text>
         </TouchableOpacity>
-        <Text style={s.runCaption}>TRACK A RUN TO LOG PACE, SPEED, TIME & DISTANCE</Text>
+        <Text style={s.runCaption}>OPENS THE ACTIVITY TAB TO TRACK A REAL GPS RUN</Text>
 
         {/* ── Recent run ─────────────────────────────────── */}
         {recentRun && (
@@ -356,18 +338,18 @@ export default function StepsScreen() {
                 </Svg>
               </View>
               <View style={s.recentStats}>
-                <Text style={s.recentDate}>{formatRunDate(recentRun.startedAt)}</Text>
+                <Text style={s.recentDate}>{formatRunDate(recentRun.startTime)}</Text>
                 <View style={s.recentTop}>
                   <View>
-                    <Text style={s.recentBig}>{recentRun.distanceKm.toFixed(2)}<Text style={s.recentBigUnit}> KM</Text></Text>
+                    <Text style={s.recentBig}>{formatDistance(recentRun.distanceM)}</Text>
                   </View>
                   <View style={s.recentTopRight}>
                     <View style={s.recentMini}>
-                      <Text style={s.recentMiniVal}>{formatDuration(recentRun.durationSec)}</Text>
+                      <Text style={s.recentMiniVal}>{formatDuration(recentRun.durationSecs)}</Text>
                       <Text style={s.recentMiniLbl}>TIME</Text>
                     </View>
                     <View style={s.recentMini}>
-                      <Text style={s.recentMiniVal}>{formatPace(recentRun.avgPaceSecPerKm)}</Text>
+                      <Text style={s.recentMiniVal}>{formatPace(recentRun.avgPacePerKm)}</Text>
                       <Text style={s.recentMiniLbl}>/KM</Text>
                     </View>
                   </View>
@@ -375,9 +357,13 @@ export default function StepsScreen() {
               </View>
             </View>
             <View style={s.recentFooter}>
-              <RecentStat icon="speedometer-slow" value={`${formatPace(recentRun.bestPaceSecPerKm)} /KM`} label="BEST PACE" />
-              <RecentStat icon="speedometer" value={`${recentRun.avgSpeedKph} KM/H`} label="AVG SPEED" />
-              <RecentStat icon="fire" value={`${recentRun.calories}`} label="KCAL" />
+              <RecentStat
+                icon="speedometer"
+                value={`${recentRun.durationSecs > 0 ? ((recentRun.distanceM / 1000) / (recentRun.durationSecs / 3600)).toFixed(1) : '0.0'} KM/H`}
+                label="AVG SPEED"
+              />
+              <RecentStat icon="image-filter-hdr" value={`${recentRun.elevationGainM}M`} label="ELEVATION" />
+              <RecentStat icon="map-marker-distance" value={recentRun.type.toUpperCase()} label="TYPE" />
             </View>
           </View>
         )}
@@ -430,14 +416,14 @@ export default function StepsScreen() {
         <GoalRow
           icon="image-filter-hdr"
           name="WEEKLY DISTANCE GOAL"
-          value={`${steps.weeklyDistanceKm} / ${steps.weeklyDistanceGoalKm} KM`}
+          value={`${stats.weeklyDistanceKm} / ${stats.weeklyDistanceGoalKm} KM`}
           pct={distPct}
           endsIn={`ENDS IN ${daysLeftInWeek()} DAYS`}
         />
         <GoalRow
           icon="flag-variant"
           name="MONTHLY ELEVATION GOAL"
-          value={`${steps.monthlyElevationKm} / ${steps.monthlyElevationGoalKm} KM`}
+          value={`${stats.monthlyElevationKm} / ${stats.monthlyElevationGoalKm} KM`}
           pct={elevPct}
           endsIn={`ENDS IN ${daysLeftInMonth()} DAYS`}
         />

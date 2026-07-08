@@ -1,55 +1,24 @@
 // ─────────────────────────────────────────────────────────────────────────
 // STEPS PAGE — LOCAL DATA LAYER
 // ─────────────────────────────────────────────────────────────────────────
-// The actual STEP COUNT, STEP GOAL, weekly bars and heatmap all come from the
-// existing body-data store (single source of truth — no duplication).
-// This module only adds the steps-page-specific extras that don't exist yet:
-// distance, calories, active time, elevation, the weekly-distance / monthly-
-// elevation goals, and the runs log. Local-first (AsyncStorage), same pattern
-// as body-data.
+// Step count / goal / weekly bars / heatmap come from body-data (single
+// source of truth). Weekly distance / monthly elevation are real rollups
+// over lib/activity-data.ts's saved GPS activities — no local run-tracking
+// system lives here anymore.
+//
+// An audit (2026-07-07) found this file used to have its OWN, independent,
+// fully-fake run tracker: startRun()/endRun() fabricated distance/pace from
+// elapsed time at a hardcoded 9.6 km/h with zero GPS, entirely bypassing the
+// real GPS-based tracker in lib/activity-data.ts + app/(tabs)/activity.tsx.
+// That's gone — the STEPS screen's "start a run" action now routes to the
+// real Activity tab, and its "recent run" card reads real saved activities.
 // ─────────────────────────────────────────────────────────────────────────
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getActivitiesInRange, getRecentActivities, type Activity } from './activity-data';
 import { loadBodyData, dateKey, type BodyData } from './body-data';
 
-const STEPS_KEY = '@steps';
-
-function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
-
-// ── Types ────────────────────────────────────────────────────────────────
-
-export type Run = {
-  id: string;
-  startedAt: string;          // ISO
-  distanceKm: number;
-  durationSec: number;
-  avgPaceSecPerKm: number;
-  bestPaceSecPerKm: number;
-  avgSpeedKph: number;
-  calories: number;
-};
-
-export type StepsData = {
-  // Today's activity headline metrics (mock-matched on first launch)
-  todayDistanceKm: number;
-  todayCalories: number;
-  todayActiveMins: number;
-  todayElevationM: number;
-
-  // Weekly distance goal
-  weeklyDistanceKm: number;
-  weeklyDistanceGoalKm: number;
-
-  // Monthly elevation goal (in km of cumulative climb)
-  monthlyElevationKm: number;
-  monthlyElevationGoalKm: number;
-
-  // Runs (newest first)
-  runs: Run[];
-
-  // ISO timestamp while a run is being tracked; null when idle
-  activeRunStart: string | null;
-};
+const WEEKLY_DISTANCE_GOAL_KM = 20;      // sane default goal, not fabricated history
+const MONTHLY_ELEVATION_GOAL_KM = 5;     // ditto
 
 // ── Status helper (hit / partial / missed) ─────────────────────────────────
 export type GoalStatus = 'hit' | 'partial' | 'missed';
@@ -60,94 +29,48 @@ export function getGoalStatus(value: number, goal: number): GoalStatus {
   return 'missed';
 }
 
-// ── Seed (matches the design mock exactly) ─────────────────────────────────
-function seed(): StepsData {
+// ── Real rollups over saved activities ──────────────────────────────────────
+
+function startOfWeek(d: Date): Date {
+  const out = new Date(d); out.setHours(0, 0, 0, 0);
+  const mondayIdx = (out.getDay() + 6) % 7;
+  out.setDate(out.getDate() - mondayIdx);
+  return out;
+}
+
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+export type StepsWeeklyStats = {
+  weeklyDistanceKm: number;
+  weeklyDistanceGoalKm: number;
+  monthlyElevationKm: number;
+  monthlyElevationGoalKm: number;
+  recentActivity: Activity | null;
+};
+
+export async function loadStepsWeeklyStats(): Promise<StepsWeeklyStats> {
   const now = new Date();
-  const may14 = new Date(now.getFullYear(), 4, 14, 7, 32, 0); // MAY 14, 07:32
+  const [weekActivities, monthActivities, recent] = await Promise.all([
+    getActivitiesInRange(startOfWeek(now).toISOString(), now.toISOString()),
+    getActivitiesInRange(startOfMonth(now).toISOString(), now.toISOString()),
+    getRecentActivities(1),
+  ]);
+
+  const weeklyDistanceKm = weekActivities.reduce((sum, a) => sum + a.distanceM, 0) / 1000;
+  const monthlyElevationKm = monthActivities.reduce((sum, a) => sum + a.elevationGainM, 0) / 1000;
+
   return {
-    todayDistanceKm: 4.32,
-    todayCalories: 1126,
-    todayActiveMins: 134,        // 2:14
-    todayElevationM: 612,
-
-    weeklyDistanceKm: 22.4,
-    weeklyDistanceGoalKm: 35,
-
-    monthlyElevationKm: 12.6,
-    monthlyElevationGoalKm: 20,
-
-    runs: [
-      {
-        id: genId(),
-        startedAt: may14.toISOString(),
-        distanceKm: 5.21,
-        durationSec: 28 * 60 + 47,      // 28:47
-        avgPaceSecPerKm: 5 * 60 + 31,   // 5:31 /km
-        bestPaceSecPerKm: 5 * 60 + 21,  // 5:21 /km
-        avgSpeedKph: 10.9,
-        calories: 312,
-      },
-    ],
-    activeRunStart: null,
+    weeklyDistanceKm: Math.round(weeklyDistanceKm * 100) / 100,
+    weeklyDistanceGoalKm: WEEKLY_DISTANCE_GOAL_KM,
+    monthlyElevationKm: Math.round(monthlyElevationKm * 100) / 100,
+    monthlyElevationGoalKm: MONTHLY_ELEVATION_GOAL_KM,
+    recentActivity: recent[0] ?? null,
   };
 }
 
-// ── Load / save ─────────────────────────────────────────────────────────────
-export async function loadStepsData(): Promise<StepsData> {
-  try {
-    const raw = await AsyncStorage.getItem(STEPS_KEY);
-    if (raw) return JSON.parse(raw) as StepsData;
-  } catch { /* fall through */ }
-  const seeded = seed();
-  await AsyncStorage.setItem(STEPS_KEY, JSON.stringify(seeded));
-  return seeded;
-}
-
-async function save(data: StepsData): Promise<void> {
-  await AsyncStorage.setItem(STEPS_KEY, JSON.stringify(data));
-}
-
-// ── Run tracking (START RUN button) ─────────────────────────────────────────
-export async function startRun(): Promise<StepsData> {
-  const data = await loadStepsData();
-  data.activeRunStart = new Date().toISOString();
-  await save(data);
-  return data;
-}
-
-// Ends the active run, derives plausible stats from elapsed time (no GPS in
-// Expo Go), saves it to the top of the runs list.
-export async function endRun(): Promise<StepsData> {
-  const data = await loadStepsData();
-  if (!data.activeRunStart) return data;
-
-  const start = new Date(data.activeRunStart);
-  const durationSec = Math.max(1, Math.round((Date.now() - start.getTime()) / 1000));
-
-  const speedKph = 9.6;                                  // ~6:15/km easy pace
-  const distanceKm = +(durationSec / 3600 * speedKph).toFixed(2);
-  const avgPace = distanceKm > 0 ? Math.round(durationSec / distanceKm) : 0;
-
-  const run: Run = {
-    id: genId(),
-    startedAt: data.activeRunStart,
-    distanceKm,
-    durationSec,
-    avgPaceSecPerKm: avgPace,
-    bestPaceSecPerKm: Math.round(avgPace * 0.96),
-    avgSpeedKph: +speedKph.toFixed(1),
-    calories: Math.round(distanceKm * 62),
-  };
-
-  data.runs = [run, ...data.runs];
-  data.activeRunStart = null;
-  // Roll today's distance forward so the headline reflects the run.
-  data.todayDistanceKm = +(data.todayDistanceKm + distanceKm).toFixed(2);
-  await save(data);
-  return data;
-}
-
-// ── Derived helpers ─────────────────────────────────────────────────────────
+// ── Derived helpers (real, from body-data's real stepsHistory) ─────────────
 
 // Last 7 calendar days (Mon→Sun of the current week) of step counts, for bars.
 export function weekStepBars(body: BodyData): { day: string; steps: number; isToday: boolean }[] {
@@ -204,9 +127,10 @@ export function formatDuration(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function formatPace(secPerKm: number): string {
+export function formatPace(secPerKm?: number): string {
+  if (!secPerKm) return '--:--';
   const m = Math.floor(secPerKm / 60);
-  const s = secPerKm % 60;
+  const s = Math.round(secPerKm % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
@@ -223,3 +147,6 @@ export function formatRunDate(iso: string): string {
   const min = String(d.getMinutes()).padStart(2, '0');
   return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} AT ${h}:${min} ${ampm}`;
 }
+
+// Re-exported so app/steps.tsx doesn't need a second import for the body layer.
+export { loadBodyData, dateKey, type BodyData };

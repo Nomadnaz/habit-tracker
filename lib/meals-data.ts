@@ -15,6 +15,11 @@ import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
 import { postWrite } from './postWrite';
 import { withStorageLock } from './storageLock';
+import {
+  computeTargets, DEFAULT_TARGETS,
+  type NutritionTargets, type ProfileForTargets,
+} from './nutritionFormulas';
+export { computeTargets, type NutritionTargets, type ProfileForTargets };
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -41,19 +46,6 @@ export type Meal = {
   photoUrl?: string;     // local file URI for MVP (Storage upload is a later step)
   loggedVia: 'manual' | 'photo' | 'quick_add';
   createdAt: string;     // ISO timestamp
-};
-
-export type NutritionTargets = {
-  calories: number;
-  proteinG: number;
-  carbsG: number;
-  fatG: number;
-  waterMl: number;
-};
-
-// Sensible defaults until onboarding (task 060) seeds real targets.
-const DEFAULT_TARGETS: NutritionTargets = {
-  calories: 2000, proteinG: 150, carbsG: 200, fatG: 65, waterMl: 3000,
 };
 
 export type DailyTotals = { calories: number; proteinG: number; carbsG: number; fatG: number };
@@ -90,6 +82,30 @@ function toDbRow(m: Meal, userId: string) {
   };
 }
 
+// Uploads a local photo (file:// URI) to the private meal-photos bucket
+// (migration 025) and returns a long-lived signed URL — the local file URI
+// keeps working as the instant, offline AsyncStorage value; only the
+// SYNCED copy becomes a real, durable URL, which is what actually needs
+// to survive a reinstall.
+async function uploadMealPhoto(userId: string, mealId: string, localUri: string): Promise<string | null> {
+  try {
+    const blob = await (await fetch(localUri)).blob();
+    const path = `${userId}/${mealId}.jpg`;
+    const { error: uploadError } = await supabase.storage
+      .from('meal-photos')
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+    if (uploadError) return null;
+
+    const { data, error: signError } = await supabase.storage
+      .from('meal-photos')
+      .createSignedUrl(path, 60 * 60 * 24 * 365 * 10); // 10 years
+    if (signError || !data) return null;
+    return data.signedUrl;
+  } catch {
+    return null;
+  }
+}
+
 export async function addMeal(input: Omit<Meal, 'id' | 'createdAt'>): Promise<Meal> {
   const meal: Meal = { ...input, id: genId(), createdAt: new Date().toISOString() };
   await withStorageLock(MEALS_KEY, async () => {
@@ -102,6 +118,10 @@ export async function addMeal(input: Omit<Meal, 'id' | 'createdAt'>): Promise<Me
     const userId = await getUid();
     if (!userId) return;
     await supabase.from('meals').insert(toDbRow(meal, userId));
+    if (meal.photoUrl?.startsWith('file://')) {
+      const signedUrl = await uploadMealPhoto(userId, meal.id, meal.photoUrl);
+      if (signedUrl) await supabase.from('meals').update({ photo_url: signedUrl }).eq('id', meal.id).eq('user_id', userId);
+    }
   });
   // Fan-out (cumulative stats / streaks / Obsidian, all behind flags for now).
   postWrite('meal', meal, 'create');
@@ -120,6 +140,10 @@ export async function updateMeal(meal: Meal): Promise<void> {
     const userId = await getUid();
     if (!userId) return;
     await supabase.from('meals').update(toDbRow(meal, userId)).eq('id', meal.id).eq('user_id', userId);
+    if (meal.photoUrl?.startsWith('file://')) {
+      const signedUrl = await uploadMealPhoto(userId, meal.id, meal.photoUrl);
+      if (signedUrl) await supabase.from('meals').update({ photo_url: signedUrl }).eq('id', meal.id).eq('user_id', userId);
+    }
   });
   postWrite('meal', meal, 'update');
 }

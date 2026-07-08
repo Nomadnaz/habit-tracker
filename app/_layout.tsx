@@ -29,6 +29,11 @@ import * as SplashScreen from 'expo-splash-screen';
 // Our Supabase client — the connection to our backend/database.
 import { supabase } from '@/lib/supabase';
 
+// Registers the background-location TaskManager task at module scope (must
+// happen on cold start, not inside a component) — see that file's header
+// for the unverified-on-device caveat (task 010/032).
+import '@/lib/locationTask';
+
 // Live sync of tasks created OUTSIDE the app (e.g. by the voice device via
 // ai-chat) into the on-device store + Apple Calendar — see lib/use-remote-task-sync.ts.
 import { useRemoteTaskSync } from '@/lib/use-remote-task-sync';

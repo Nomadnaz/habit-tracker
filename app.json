@@ -15,7 +15,10 @@
         "NSHealthShareUsageDescription": "Read your steps, walking distance, activity, sleep, and weight to show progress on the Body and Today screens.",
         "NSHealthUpdateUsageDescription": "This app does not write health data; permission is only requested for compatibility with HealthKit.",
         "NSBluetoothAlwaysUsageDescription": "Connect to your Companion HUD device to relay voice commands to the AI.",
-        "NSSpeechRecognitionUsageDescription": "Transcribe voice questions from your Companion HUD device (unused — cloud transcription is used instead)."
+        "NSSpeechRecognitionUsageDescription": "Transcribe voice questions from your Companion HUD device (unused — cloud transcription is used instead).",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Keep tracking your hike, run, or walk in the background if you lock your phone or switch apps mid-activity.",
+        "NSLocationWhenInUseUsageDescription": "Track your route, distance, and pace while recording a hike, run, or walk.",
+        "UIBackgroundModes": ["location"]
       },
       "bundleIdentifier": "com.nova.habittracker"
     },
@@ -28,7 +31,8 @@
       },
       "permissions": [
         "android.permission.READ_CALENDAR",
-        "android.permission.WRITE_CALENDAR"
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "web": {
@@ -57,6 +61,13 @@
           "isBackgroundEnabled": false,
           "modes": [],
           "bluetoothAlwaysPermission": "Connect to your Companion HUD device to relay voice commands to the AI."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Keep tracking your hike, run, or walk in the background if you lock your phone or switch apps mid-activity.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ]
