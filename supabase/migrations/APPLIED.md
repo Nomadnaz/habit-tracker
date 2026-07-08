@@ -36,8 +36,12 @@
 | 022_streak_freezes.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
 | 023_vault_files.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session |
 | 024_api_usage_increment.sql | ✅ yes | 2026-07-06 | Applied via Supabase MCP this session. Also hardened post-apply (see below) — the audit that wrote this migration didn't lock down the new RPCs' grants. |
+| 025_meal_photo_storage.sql | ✅ yes | 2026-07-08 | Was already live (confirmed via `list_migrations` + `meal-photos` bucket present); this ledger just hadn't been updated for it. |
+| 026_focus_sessions.sql | ✅ yes | 2026-07-08 | Applied via Supabase MCP. `focus_sessions` table confirmed live. |
+| 027_vault_inbox.sql | ✅ yes | 2026-07-08 | Applied via Supabase MCP. `vault_inbox` table confirmed live. |
+| 028_firmware_storage.sql | ✅ yes | 2026-07-08 | Applied via Supabase MCP (public `firmware` bucket for OTA — user explicitly confirmed the public-bucket tradeoff). Bucket confirmed live via `storage.buckets`. |
 
-All 24 numbered migrations are now live. `supabase/migrations/` and the live project are in sync.
+All 28 numbered migrations are now live. `supabase/migrations/` and the live project are in sync.
 
 ## Legacy table cleanup (2026-07-06)
 Before running `009_habits.sql`, discovered the live DB already had `habits`, `habit_logs`, `profiles`,
