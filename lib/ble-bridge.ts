@@ -11,7 +11,7 @@
  */
 
 import { BleManager, type Device, type Subscription } from 'react-native-ble-plx';
-import { supabase } from '@/lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { adpcmDecode, makeAdpcmState, type AdpcmState } from '@/lib/adpcm';
 
 // ── BLE constants (must match main/ble_svc.h) ────────────────────────────────
@@ -20,14 +20,23 @@ const SERVICE_UUID = '0112b649-c9b8-4c88-9c4a-e50e24dcca9e';
 const AUDIO_CHAR_UUID = '0212b649-c9b8-4c88-9c4a-e50e24dcca9e';
 const CMD_CHAR_UUID = '0312b649-c9b8-4c88-9c4a-e50e24dcca9e';
 // RESPONSE_CHAR_UUID added in Part 2 (PreviewCard): '0412b649-...'
+// Device → phone JSON actions, relayed to the device-state Edge Function:
+const ACTION_CHAR_UUID = '0612b649-c9b8-4c88-9c4a-e50e24dcca9e';
 
 const BLE_CMD_SET_TIME = 0x03;
 const BLE_CMD_SET_QUESTION = 0x04;
 const BLE_CMD_SET_ANSWER = 0x05;
+// Snapshot relay (device-state GET response, chunked to the device):
+const BLE_CMD_SYNC_BEGIN = 0x08; // payload: total byte length, u16 LE
+const BLE_CMD_SYNC_CHUNK = 0x09;
+const BLE_CMD_SYNC_END = 0x0a;
 
 const SAMPLE_RATE_HZ = 16000; // must match MIC_SAMPLE_RATE_HZ in main/mic.c
 const MAX_TEXT_BYTES = 200;   // matches gatt_svr.c write buffer
 const TIME_RESYNC_MS = 5 * 60 * 1000;
+const SNAPSHOT_RESYNC_MS = 60 * 1000;
+const SYNC_CHUNK_BYTES = 180;      // opcode + 180 stays under the firmware's 220B write buffer
+const REALTIME_DEBOUNCE_MS = 2000; // Realtime bursts (multi-row edits) collapse to one push
 
 // ── State ─────────────────────────────────────────────────────────────────────
 export type BridgeStatus =
@@ -44,6 +53,8 @@ export interface BridgeState {
   lastQuestion: string;
   lastAnswer: string;
   error: string | null;
+  /** ms epoch of the last snapshot successfully pushed to the device */
+  lastSyncAt: number | null;
 }
 
 type Listener = (state: BridgeState) => void;
@@ -53,7 +64,12 @@ class BleBridgeManager {
   private manager: BleManager | null = null;
   private device: Device | null = null;
   private audioSub: Subscription | null = null;
+  private actionSub: Subscription | null = null;
   private timerId: ReturnType<typeof setInterval> | null = null;
+  private syncTimerId: ReturnType<typeof setInterval> | null = null;
+  private realtimeDebounce: ReturnType<typeof setTimeout> | null = null;
+  private realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+  private syncInFlight = false;
   private adpcmState: AdpcmState = makeAdpcmState();
   private samples: number[] = [];
   private history: Array<{ role: string; content: string }> = [];
@@ -64,6 +80,7 @@ class BleBridgeManager {
     lastQuestion: '',
     lastAnswer: '',
     error: null,
+    lastSyncAt: null,
   };
   private _stopping = false;
 
@@ -102,7 +119,12 @@ class BleBridgeManager {
     this._stopping = true;
     this.audioSub?.remove();
     this.audioSub = null;
+    this.actionSub?.remove();
+    this.actionSub = null;
     if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
+    if (this.syncTimerId) { clearInterval(this.syncTimerId); this.syncTimerId = null; }
+    if (this.realtimeDebounce) { clearTimeout(this.realtimeDebounce); this.realtimeDebounce = null; }
+    if (this.realtimeChannel) { supabase.removeChannel(this.realtimeChannel); this.realtimeChannel = null; }
     this.device?.cancelConnection().catch(() => {});
     this.device = null;
     this.samples = [];
@@ -149,7 +171,10 @@ class BleBridgeManager {
         if (this._stopping) return;
         this.audioSub?.remove();
         this.audioSub = null;
+        this.actionSub?.remove();
+        this.actionSub = null;
         if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
+        if (this.syncTimerId) { clearInterval(this.syncTimerId); this.syncTimerId = null; }
         this.device = null;
         this.samples = [];
         this.adpcmState = makeAdpcmState();
@@ -164,10 +189,28 @@ class BleBridgeManager {
         }
       );
 
+      // Device-emitted actions (task/habit taps, gym check-in, focus logs).
+      // Subscribing also triggers the device to drain its offline queue.
+      this.actionSub = connected.monitorCharacteristicForService(
+        SERVICE_UUID, ACTION_CHAR_UUID, (err, char) => {
+          if (err || !char?.value) return;
+          this._onDeviceAction(char.value).catch(e =>
+            console.warn('[ble-bridge] action relay error:', e?.message));
+        }
+      );
+
       await this._syncTime(connected);
       this.timerId = setInterval(() => {
         if (this.device) this._syncTime(this.device).catch(() => {});
       }, TIME_RESYNC_MS);
+
+      // Snapshot push: on connect, then every minute, plus Realtime-triggered
+      // pushes when the user's tasks change in the app.
+      this._pushSnapshot().catch(() => {});
+      this.syncTimerId = setInterval(() => {
+        this._pushSnapshot().catch(() => {});
+      }, SNAPSHOT_RESYNC_MS);
+      this._startRealtimeTrigger().catch(() => {});
 
       this.emit({ status: 'connected' });
     } catch (e: any) {
@@ -254,6 +297,108 @@ class BleBridgeManager {
     await device.writeCharacteristicWithResponseForService(
       SERVICE_UUID, CMD_CHAR_UUID, bytesToBase64(payload)
     );
+  }
+
+  // ── device-state sync relay ────────────────────────────────────────────────
+
+  /** Fetch the device-state snapshot. supabase-js functions.invoke is
+   *  POST-only, and GET-with-query is the shared contract with the future
+   *  Wi-Fi-direct firmware path, so this uses raw fetch. */
+  private async _fetchSnapshot(): Promise<string | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+    const tz = new Date().getTimezoneOffset();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/device-state?tz=${tz}`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    if (!res.ok) {
+      console.warn('[ble-bridge] device-state GET failed:', res.status);
+      return null;
+    }
+    return await res.text();
+  }
+
+  /** Push a fresh snapshot to the device as SYNC_BEGIN/CHUNK.../END writes. */
+  private async _pushSnapshot() {
+    if (!this.device || this.syncInFlight) return;
+    this.syncInFlight = true;
+    try {
+      const json = await this._fetchSnapshot();
+      const device = this.device;
+      if (!json || !device) return;
+
+      const bytes = new TextEncoder().encode(json);
+      if (bytes.length > 4096) { // firmware SYNC_BUF_MAX — should never happen (~1-2KB)
+        console.warn('[ble-bridge] snapshot too large:', bytes.length);
+        return;
+      }
+
+      const begin = new Uint8Array([BLE_CMD_SYNC_BEGIN, bytes.length & 0xff, bytes.length >> 8]);
+      await device.writeCharacteristicWithResponseForService(
+        SERVICE_UUID, CMD_CHAR_UUID, bytesToBase64(begin));
+
+      for (let off = 0; off < bytes.length; off += SYNC_CHUNK_BYTES) {
+        const slice = bytes.slice(off, off + SYNC_CHUNK_BYTES);
+        const chunk = new Uint8Array(1 + slice.length);
+        chunk[0] = BLE_CMD_SYNC_CHUNK;
+        chunk.set(slice, 1);
+        await device.writeCharacteristicWithResponseForService(
+          SERVICE_UUID, CMD_CHAR_UUID, bytesToBase64(chunk));
+      }
+
+      await device.writeCharacteristicWithResponseForService(
+        SERVICE_UUID, CMD_CHAR_UUID, bytesToBase64(new Uint8Array([BLE_CMD_SYNC_END])));
+      this.emit({ lastSyncAt: Date.now() });
+    } catch (e: any) {
+      console.warn('[ble-bridge] snapshot push failed:', e?.message);
+    } finally {
+      this.syncInFlight = false;
+    }
+  }
+
+  /** One notify = one JSON action from the device. Relay it to device-state,
+   *  then push a fresh snapshot so the device reconciles its optimistic UI. */
+  private async _onDeviceAction(base64: string) {
+    const text = new TextDecoder().decode(base64ToBytes(base64));
+    let action: unknown;
+    try {
+      action = JSON.parse(text);
+    } catch {
+      console.warn('[ble-bridge] malformed device action:', text);
+      return;
+    }
+    const { error } = await supabase.functions.invoke('device-state', {
+      body: { actions: [action], tzOffsetMinutes: new Date().getTimezoneOffset() },
+    });
+    if (error) {
+      console.warn('[ble-bridge] device-state POST failed:', error.message);
+      return;
+    }
+    await this._pushSnapshot();
+  }
+
+  /** Re-push the snapshot when the user's tasks change in the app (same
+   *  Realtime pattern as lib/use-remote-task-sync.ts). Habit/gym edits ride
+   *  the 60s poll — only `tasks` is in the realtime publication. */
+  private async _startRealtimeTrigger() {
+    if (this.realtimeChannel) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    supabase.realtime.setAuth(session.access_token);
+    this.realtimeChannel = supabase
+      .channel(`device-sync-${session.user.id}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `user_id=eq.${session.user.id}` },
+        () => {
+          if (this.realtimeDebounce) clearTimeout(this.realtimeDebounce);
+          this.realtimeDebounce = setTimeout(() => {
+            this._pushSnapshot().catch(() => {});
+          }, REALTIME_DEBOUNCE_MS);
+        })
+      .subscribe();
   }
 }
 

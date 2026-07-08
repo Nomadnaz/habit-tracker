@@ -45,6 +45,7 @@ export default function BleBridgeScreen() {
     lastQuestion: '',
     lastAnswer: '',
     error: null,
+    lastSyncAt: null,
   }));
   const [companion, setCompanion] = useState('habitCoach');
 
@@ -86,6 +87,12 @@ export default function BleBridgeScreen() {
         </View>
 
         {state.error ? <Text style={styles.errorText}>{state.error}</Text> : null}
+
+        {isActive && state.lastSyncAt ? (
+          <Text style={styles.hint}>
+            Pages synced {new Date(state.lastSyncAt).toLocaleTimeString()}
+          </Text>
+        ) : null}
 
         {/* Companion selector (only when not connected) */}
         {!isActive && (

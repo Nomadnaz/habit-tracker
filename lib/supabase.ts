@@ -14,8 +14,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // The URL is like the address of your database server.
 // The anon key is a public key that tells Supabase which project is making the request.
 // It's safe to leave this in the code — it only allows what your Row Level Security rules permit.
-const SUPABASE_URL = 'https://dnbdjjrjudrzugxkpeeh.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuYmRqanJqdWRyenVneGtwZWVoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzQ2NjAsImV4cCI6MjA5NTYxMDY2MH0.w-s4KT7vKH_yUkpAV8wc47o4EjrdFhPfDiCxqDcvj1Q';
+// Exported for callers that need raw fetch access to Edge Functions with
+// query params (supabase-js functions.invoke is POST-only) — see lib/ble-bridge.ts.
+export const SUPABASE_URL = 'https://dnbdjjrjudrzugxkpeeh.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuYmRqanJqdWRyenVneGtwZWVoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzQ2NjAsImV4cCI6MjA5NTYxMDY2MH0.w-s4KT7vKH_yUkpAV8wc47o4EjrdFhPfDiCxqDcvj1Q';
 
 // Create the Supabase client and export it so every other file in the app can import
 // and use it to talk to the database or handle authentication.
