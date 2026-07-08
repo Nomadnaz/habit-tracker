@@ -160,6 +160,10 @@ export default function BleBridgeScreen() {
             This requires a dev build — not Expo Go.
           </Text>
         )}
+
+        <TouchableOpacity onPress={() => router.push('/pair-device')}>
+          <Text style={styles.linkText}>SET UP STANDALONE WI-FI →</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -206,4 +210,5 @@ const styles = StyleSheet.create({
   bubbleAi: { borderColor: '#FF4D00', backgroundColor: '#0F0800' },
   bubbleText: { color: '#EEE', fontFamily: 'SpaceMono_400Regular', fontSize: 12, lineHeight: 18 },
   hint: { color: '#444', fontFamily: 'SpaceMono_400Regular', fontSize: 11, lineHeight: 16 },
+  linkText: { color: '#FF4D00', fontFamily: 'SpaceMono_400Regular', fontSize: 11, letterSpacing: 1 },
 });

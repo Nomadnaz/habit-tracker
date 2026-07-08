@@ -234,6 +234,7 @@ export default function RootLayout() {
         <Stack.Screen name="focus-timer" />
         <Stack.Screen name="calorie" />
         <Stack.Screen name="ble-bridge" />
+        <Stack.Screen name="pair-device" />
         <Stack.Screen name="modals/sleep-detail" options={{ presentation: 'modal' }} />
         <Stack.Screen name="modals/goals" options={{ presentation: 'modal' }} />
         <Stack.Screen name="modals/finance" options={{ presentation: 'modal' }} />

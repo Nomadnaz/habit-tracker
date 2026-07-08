@@ -22,6 +22,14 @@ const CMD_CHAR_UUID = '0312b649-c9b8-4c88-9c4a-e50e24dcca9e';
 // RESPONSE_CHAR_UUID added in Part 2 (PreviewCard): '0412b649-...'
 // Device → phone JSON actions, relayed to the device-state Edge Function:
 const ACTION_CHAR_UUID = '0612b649-c9b8-4c88-9c4a-e50e24dcca9e';
+// Pairing/provisioning TLV (encrypted-link-only on the device side; writing
+// it triggers the OS bonding prompt):
+const PROV_CHAR_UUID = '0712b649-c9b8-4c88-9c4a-e50e24dcca9e';
+
+const PROV_TLV_SSID = 0x01;
+const PROV_TLV_PSK = 0x02;
+const PROV_TLV_REFRESH_TOKEN = 0x03;
+const PROV_TLV_TZ_OFFSET = 0x04;
 
 const BLE_CMD_SET_TIME = 0x03;
 const BLE_CMD_SET_QUESTION = 0x04;
@@ -297,6 +305,47 @@ class BleBridgeManager {
     await device.writeCharacteristicWithResponseForService(
       SERVICE_UUID, CMD_CHAR_UUID, bytesToBase64(payload)
     );
+  }
+
+  // ── pairing / provisioning ─────────────────────────────────────────────────
+
+  /** Write Wi-Fi credentials + a device-owned Supabase refresh token to the
+   *  provisioning characteristic. Requires an active connection (call
+   *  start() first). The characteristic is encrypted-write-only on the
+   *  device, so the OS raises its bonding prompt on first use. */
+  async provisionDevice(opts: { ssid: string; psk: string; refreshToken: string }) {
+    if (!this.device) throw new Error('Not connected — connect to the device first.');
+
+    const enc = new TextEncoder();
+    const parts: Array<{ t: number; v: Uint8Array }> = [
+      { t: PROV_TLV_SSID, v: enc.encode(opts.ssid) },
+      { t: PROV_TLV_PSK, v: enc.encode(opts.psk) },
+      { t: PROV_TLV_REFRESH_TOKEN, v: enc.encode(opts.refreshToken) },
+      {
+        t: PROV_TLV_TZ_OFFSET,
+        v: (() => {
+          const tz = new Date().getTimezoneOffset();
+          return new Uint8Array([tz & 0xff, (tz >> 8) & 0xff]);
+        })(),
+      },
+    ];
+    for (const p of parts) {
+      if (p.v.length > 255) throw new Error('Provisioning field too long');
+    }
+    const total = parts.reduce((s, p) => s + 2 + p.v.length, 0);
+    if (total > 220) throw new Error('Provisioning payload exceeds device write buffer');
+
+    const tlv = new Uint8Array(total);
+    let off = 0;
+    for (const p of parts) {
+      tlv[off++] = p.t;
+      tlv[off++] = p.v.length;
+      tlv.set(p.v, off);
+      off += p.v.length;
+    }
+
+    await this.device.writeCharacteristicWithResponseForService(
+      SERVICE_UUID, PROV_CHAR_UUID, bytesToBase64(tlv));
   }
 
   // ── device-state sync relay ────────────────────────────────────────────────
