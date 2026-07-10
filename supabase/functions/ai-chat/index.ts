@@ -21,6 +21,7 @@ import { companions, MODEL_IDS, DEFAULT_COMPANION } from '../_shared/companions.
 import { buildContext } from '../_shared/buildContext.ts';
 import { processActions, ACTION_SPECS, type CompanionAction } from '../_shared/actionExecutor.ts';
 import { getUserApiKey } from '../_shared/byok.ts';
+import { localDateKey } from '../_shared/localDate.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -41,8 +42,6 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, content-type',
   'Content-Type': 'application/json',
 };
-
-const todayKey = () => new Date().toISOString().slice(0, 10);
 
 function extractActions(text: string): CompanionAction[] {
   const actions: CompanionAction[] = [];
@@ -96,7 +95,7 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     // 2. Server-side rate limit.
-    const day = todayKey();
+    const day = localDateKey(tzOffsetMinutes);
     const { data: usage } = await admin
       .from('api_usage')
       .select('message_count')

@@ -95,8 +95,6 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['meals', 'gym_plan', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'nutrition'),
-    // log_meal isn't wired to a real write yet (tasks/039) — declared here so
-    // the model can emit it; actionExecutor.ts returns 'unsupported' for now.
     actions: ['log_meal'],
   },
   activity: {
