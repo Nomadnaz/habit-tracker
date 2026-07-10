@@ -174,7 +174,7 @@ export default function BodyScreen() {
           <View style={styles.titleBlock}>
             <View style={styles.titleWrap}>
               <View style={[styles.corner, styles.cornerTL]} />
-              <Text style={styles.title}>BODY</Text>
+              <Text style={styles.title}>FITNESS</Text>
               <View style={[styles.corner, styles.cornerBR]} />
             </View>
             <Text style={styles.subtitle}>BUILD YOUR CHARACTER</Text>
@@ -183,12 +183,22 @@ export default function BodyScreen() {
             <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={10}>
               <MaterialCommunityIcons name="chat-processing-outline" size={18} color={ORANGE} />
             </TouchableOpacity>
-            <MaterialCommunityIcons name="chart-bar" size={18} color={MUTED} />
-            <MaterialCommunityIcons name="dots-horizontal" size={18} color={MUTED} />
+            <TouchableOpacity onPress={() => router.push('/(tabs)/progress')} hitSlop={10}>
+              <MaterialCommunityIcons name="chart-bar" size={18} color={ORANGE} />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── Log workout button ─────────────────────────── */}
+        {/* ── Record activity + log workout buttons ──────── */}
+        <TouchableOpacity
+          style={styles.recordBtn}
+          activeOpacity={0.85}
+          onPress={() => router.push('/(tabs)/activity')}
+        >
+          <MaterialCommunityIcons name="run" size={16} color="#FFFFFF" />
+          <Text style={styles.logWorkoutText}>RECORD ACTIVITY</Text>
+          <MaterialCommunityIcons name="chevron-right" size={16} color="#FFFFFF" />
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.logWorkoutBtn}
           activeOpacity={0.85}
@@ -567,6 +577,7 @@ const styles = StyleSheet.create({
   headerIcons: { flexDirection: 'row', gap: 14, paddingTop: 6 },
 
   // Stats bar
+  recordBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: INK, marginHorizontal: 16, marginTop: 4, marginBottom: 10, borderRadius: 12, paddingVertical: 14 },
   logWorkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: ORANGE, marginHorizontal: 16, marginBottom: 16, borderRadius: 12, paddingVertical: 14 },
   logWorkoutText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 12, color: '#FFFFFF', letterSpacing: 2 },
   statsBar: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 20, paddingVertical: 4 },

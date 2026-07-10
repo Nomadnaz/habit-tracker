@@ -1177,56 +1177,21 @@ export default function TodayScreen() {
           >
             <MaterialCommunityIcons name="calendar-month-outline" size={18} color="#FF4D00" />
           </TouchableOpacity>
+          {/* Calorie/bluetooth/goals/finance/mood/library icons moved to the
+              HEALTH and LIFE hubs (Code Audit v2 fix plan P1) — header cut
+              down to the 4 things TODAY itself owns: search, calendar,
+              profile, settings. Sign-out moved to the PROFILE screen. */}
           <TouchableOpacity
-            onPress={() => router.push('/calorie')}
+            onPress={() => router.push('/(tabs)/profile')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <MaterialCommunityIcons name="food-apple-outline" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/ble-bridge')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="bluetooth" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/modals/goals')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="flag-checkered" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/modals/finance')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="cash-multiple" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/modals/mood')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="emoticon-outline" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/modals/library')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="book-outline" size={18} color="#FF4D00" />
+            <MaterialCommunityIcons name="account-circle-outline" size={18} color="#FF4D00" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.push('/settings')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <MaterialCommunityIcons name="cog-outline" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={async () => {
-              await supabase.auth.signOut();
-              router.replace('/(auth)/login');
-            }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="logout" size={18} color="#FF4D00" />
           </TouchableOpacity>
           <View style={[styles.corner, styles.cornerBR]} />{/* Bottom-right orange corner line. */}
         </View>

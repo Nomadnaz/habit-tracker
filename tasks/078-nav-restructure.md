@@ -1,7 +1,7 @@
 # Task 078: Nav restructure — reconcile 7 tabs + 10 header icons against the 5-tab decision
 
 **Phase:** 8 — Polish
-**Status:** pending
+**Status:** DONE (2026-07-10, Code Audit v2 fix plan P1)
 **Depends on:** 001
 
 ## Why this task exists
@@ -35,3 +35,13 @@ A candidate 5-tab mapping (not binding — the point of this task is to make and
 
 ## Read first
 system-model.md, database.md, current-state.md — in that order. Update current-state.md when this task is verified done, then commit and push.
+
+## Decision (2026-07-10)
+Chose **(a) enforce the 5-tab plan**, per the Code Audit v2 fix plan's P1 phase. Shipped mapping:
+- **TODAY** → `index.tsx`, unchanged content; header cut from 10 icons to 4 (search, calendar, profile, settings) — calorie/bluetooth/goals/finance/mood/library moved out, sign-out moved to the new Profile-screen icon.
+- **HABITS** → `habits.tsx`, unchanged.
+- **HEALTH** → new `health.tsx`, a pure card-grid hub (`router.push` to existing routes, no new logic): calories, sleep, mood, steps, body-log (routes to Fitness tab's water/weight modals — not duplicated), cycle tracking.
+- **FITNESS** → `gym.tsx` retitled from "BODY", unchanged content plus a new RECORD ACTIVITY button (→ hidden `activity` tab route) and a wired progress icon (→ hidden `progress` tab route, previously dead in the header).
+- **LIFE** → new `life.tsx`, a pure card-grid hub: goals, finance, library, focus timer, calendar. This is the `life` companion's first real entry point (Code Audit v2 §1.5 flagged it as configured-but-unreachable).
+
+`tree.tsx` deleted (dead — its `bonsai` table was dropped from prod 07-06). `activity`, `progress`, `profile` stay registered in `_layout.tsx` with `options={{ href: null }}` — reachable via `router.push` (from Fitness/Today headers) but no tab-bar slot, avoiding a rebuild of any of their working internals. Bluetooth icon moved from Today's header into Settings → Connected Devices. Verified every formerly-icon-reached route still has a live `router.push` call after the change (grepped); `tsc`/`vitest` held at the pre-existing baseline (no new errors/failures).

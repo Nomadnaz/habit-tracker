@@ -131,6 +131,13 @@ export default function Settings() {
           </TouchableOpacity>
         ))}
 
+        <Text style={styles.sectionLabel}>CONNECTED DEVICES</Text>
+        <TouchableOpacity style={styles.companionRow} onPress={() => router.push('/ble-bridge')}>
+          <MaterialCommunityIcons name="bluetooth" size={22} color={ORANGE} />
+          <Text style={styles.companionLabel}>Companion HUD (BLE bridge)</Text>
+          <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
+        </TouchableOpacity>
+
         <Text style={styles.sectionLabel}>PRIVACY</Text>
         <TouchableOpacity style={styles.companionRow} onPress={() => router.push('/modals/cycle-tracking')}>
           <MaterialCommunityIcons name="calendar-heart" size={22} color={ORANGE} />

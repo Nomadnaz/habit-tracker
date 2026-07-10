@@ -50,14 +50,19 @@ export default function TabsLayout() {
         },
       }}
     >
-      {/* Each Tabs.Screen registers one tab. The "name" must match the filename in (tabs)/. */}
-      <Tabs.Screen name="index"    options={{ title: 'TODAY'    }} />
-      <Tabs.Screen name="habits"   options={{ title: 'HABITS'   }} />
-      <Tabs.Screen name="gym"      options={{ title: 'BODY'     }} />
-      <Tabs.Screen name="activity" options={{ title: 'ACTIVITY' }} />
-      <Tabs.Screen name="tree"     options={{ title: 'TREE'     }} />
-      <Tabs.Screen name="progress" options={{ title: 'PROGRESS' }} />
-      <Tabs.Screen name="profile"  options={{ title: 'PROFILE'  }} />
+      {/* Canonical 5 tabs (system-model.md / Code Audit v2 fix plan P1).
+          activity/progress/profile stay registered (their files still exist
+          and are reachable via router.push) but are hidden from the tab bar
+          via href: null — the cheapest way to keep a route navigable without
+          giving it a bottom-bar slot. */}
+      <Tabs.Screen name="index"    options={{ title: 'TODAY'   }} />
+      <Tabs.Screen name="habits"   options={{ title: 'HABITS'  }} />
+      <Tabs.Screen name="health"   options={{ title: 'HEALTH'  }} />
+      <Tabs.Screen name="gym"      options={{ title: 'FITNESS' }} />
+      <Tabs.Screen name="life"     options={{ title: 'LIFE'    }} />
+      <Tabs.Screen name="activity" options={{ href: null }} />
+      <Tabs.Screen name="progress" options={{ href: null }} />
+      <Tabs.Screen name="profile"  options={{ href: null }} />
     </Tabs>
   );
 }
