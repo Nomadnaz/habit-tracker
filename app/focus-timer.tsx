@@ -28,6 +28,7 @@ import {
   readFocusSettingsLocal,
 } from '@/lib/focus-settings';
 import { supabase } from '@/lib/supabase';
+import { logFocusSession } from '@/lib/focus-data';
 import { MinuteWheelPicker } from '@/components/WheelPicker';
 
 // Leaving twice (whether running OR paused) = failed session.
@@ -472,6 +473,9 @@ export default function FocusTimerScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setPhase(p => {
       if (p === 'focus') {
+        // A focus (work) interval just completed — log it (Code Audit v2
+        // fix plan B3). Break intervals don't count as focus time.
+        logFocusSession(workSecsRef.current / 60);
         secsLeftRef.current = breakSecsRef.current;
         setSecsLeft(breakSecsRef.current);
         phaseRef.current = 'break';

@@ -291,6 +291,51 @@ export async function buildContext(
     })());
   }
 
+  if (want('daily_steps')) {
+    jobs.push((async () => {
+      // Code Audit v2 fix plan B2: steps previously lived ONLY in the app's
+      // local AsyncStorage blob — no server-side context could ever contain
+      // a step count. lib/body-data.ts now upserts today's count here.
+      const { data } = await supabase
+        .from('daily_steps')
+        .select('date, steps')
+        .eq('user_id', userId)
+        .gte('date', localDateKeyPlusDays(-7, tzOffsetMinutes))
+        .order('date', { ascending: false })
+        .limit(7);
+      raw.daily_steps = data ?? [];
+      if (data?.length) {
+        lines.push(`STEPS (last 7 days): today ${data[0].date === today ? data[0].steps : 0}, avg ${Math.round(data.reduce((s: number, d: { steps?: number }) => s + (d.steps ?? 0), 0) / data.length)}/day.`);
+      } else {
+        lines.push('STEPS: none synced yet.');
+      }
+    })());
+  }
+
+  if (want('focus_sessions')) {
+    jobs.push((async () => {
+      // Code Audit v2 fix plan B3: the focus companion previously only ever
+      // read user_focus (the timer's SETTINGS), never its history — it could
+      // not answer "how much did I focus this week?". app/focus-timer.tsx
+      // now writes focus_sessions on completion (lib/focus-data.ts); the
+      // device already did (migration 026).
+      const { data } = await supabase
+        .from('focus_sessions')
+        .select('duration_mins, date')
+        .eq('user_id', userId)
+        .gte('date', localDateKeyPlusDays(-7, tzOffsetMinutes))
+        .order('date', { ascending: false })
+        .limit(60);
+      raw.focus_sessions = data ?? [];
+      if (data?.length) {
+        const totalMins = data.reduce((s: number, r: { duration_mins?: number }) => s + (r.duration_mins ?? 0), 0);
+        lines.push(`FOCUS SESSIONS (last 7 days): ${data.length} sessions, ${totalMins} total minutes.`);
+      } else {
+        lines.push('FOCUS SESSIONS: none logged in the last 7 days.');
+      }
+    })());
+  }
+
   if (want('mood_logs')) {
     jobs.push((async () => {
       // Only mood_score/stress_score/triggers — journal_entries/therapy_notes
@@ -364,6 +409,78 @@ export async function buildContext(
   }
 
   await Promise.all(jobs);
+
+  // ── SharedContext (Code Audit v2 fix plan, P2/B1) ──────────────────────────
+  // The structural gap the audit named as the root cause of "the AI can't see
+  // other sections": buildContext previously only had per-companion
+  // contextSources plus the precomputed boolean FLAGS below — flags cross
+  // domains, numbers didn't. Ask the gym or activity companion "how many
+  // calories today?" and its context had zero meal rows. This block runs for
+  // EVERY companion, unconditionally, reusing raw.* when a companion's own
+  // contextSources already fetched the same data (zero extra queries for
+  // calorie/sleep/focus themselves) and running one small extra query
+  // otherwise — same cost/value trade the flags below already made.
+  {
+    const sevenDaysAgoShared = localDateKeyPlusDays(-7, tzOffsetMinutes);
+    const [mealsShared, targetsShared, sleepShared, gymPlanShared, stepsShared, focusShared, waterShared] = await Promise.all([
+      Array.isArray(raw.meals)
+        ? Promise.resolve(raw.meals as Array<{ date: string; calories?: number; protein_g?: number }>)
+        : supabase.from('meals').select('date, calories, protein_g').eq('user_id', userId).eq('date', today)
+            .then((r: { data: unknown }) => (r.data as Array<{ date: string; calories?: number; protein_g?: number }>) ?? []),
+      raw.nutrition_targets !== undefined
+        ? Promise.resolve(raw.nutrition_targets as { calories?: number; protein_g?: number } | null)
+        : supabase.from('nutrition_targets').select('calories, protein_g').eq('user_id', userId)
+            .maybeSingle().then((r: { data: unknown }) => (r.data as { calories?: number; protein_g?: number } | null) ?? null),
+      Array.isArray(raw.sleep_logs)
+        ? Promise.resolve(raw.sleep_logs as Array<{ total_hours?: number }>)
+        : supabase.from('sleep_logs').select('total_hours').eq('user_id', userId)
+            .order('date', { ascending: false }).limit(1).then((r: { data: unknown }) => (r.data as Array<{ total_hours?: number }>) ?? []),
+      raw.gym_plan !== undefined
+        ? Promise.resolve(raw.gym_plan as Record<string, string | null> | null)
+        : supabase.from('gym_plan').select('*').eq('user_id', userId)
+            .maybeSingle().then((r: { data: unknown }) => (r.data as Record<string, string | null> | null) ?? null),
+      Array.isArray(raw.daily_steps)
+        ? Promise.resolve((raw.daily_steps as Array<{ date: string; steps?: number }>).find(d => d.date === today) ?? null)
+        : supabase.from('daily_steps').select('steps').eq('user_id', userId).eq('date', today)
+            .maybeSingle().then((r: { data: unknown }) => (r.data as { steps?: number } | null) ?? null),
+      Array.isArray(raw.focus_sessions)
+        ? Promise.resolve(raw.focus_sessions as Array<{ duration_mins?: number }>)
+        : supabase.from('focus_sessions').select('duration_mins').eq('user_id', userId)
+            .gte('date', sevenDaysAgoShared).limit(60).then((r: { data: unknown }) => (r.data as Array<{ duration_mins?: number }>) ?? []),
+      Array.isArray(raw.water_logs)
+        ? Promise.resolve(raw.water_logs as Array<{ amount_ml?: number }>)
+        : supabase.from('water_logs').select('amount_ml').eq('user_id', userId)
+            .gte('logged_at', `${today}T00:00:00`).limit(50).then((r: { data: unknown }) => (r.data as Array<{ amount_ml?: number }>) ?? []),
+    ]);
+
+    const sharedParts: string[] = [];
+
+    const caloriesToday = mealsShared.filter(m => m.date === today).reduce((s, m) => s + (m.calories ?? 0), 0);
+    const proteinToday = mealsShared.filter(m => m.date === today).reduce((s, m) => s + (m.protein_g ?? 0), 0);
+    if (targetsShared?.calories) sharedParts.push(`calories ${caloriesToday}/${targetsShared.calories}`);
+    if (targetsShared?.protein_g) sharedParts.push(`protein ${proteinToday}/${targetsShared.protein_g}g`);
+
+    if (sleepShared.length) sharedParts.push(`sleep ${(sleepShared[0].total_hours ?? 0).toFixed(1)}h`);
+
+    if (gymPlanShared) {
+      const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const tomorrow = days[(localWeekday(tzOffsetMinutes) + 1) % 7];
+      const tomorrowPlan = gymPlanShared[tomorrow];
+      sharedParts.push(`tomorrow: ${tomorrowPlan || 'rest day'}`);
+    }
+
+    if (stepsShared) sharedParts.push(`steps ${stepsShared.steps ?? 0}`);
+
+    if (focusShared.length) {
+      const totalFocusMins = focusShared.reduce((s, f) => s + (f.duration_mins ?? 0), 0);
+      sharedParts.push(`focus ${totalFocusMins}m this week`);
+    }
+
+    const waterTodayMl = waterShared.reduce((s, w) => s + (w.amount_ml ?? 0), 0);
+    if (waterTodayMl > 0) sharedParts.push(`water ${(waterTodayMl / 1000).toFixed(1)}L`);
+
+    if (sharedParts.length) lines.push(`SHARED (today): ${sharedParts.join(' · ')}`);
+  }
 
   // ── Precomputed flags (task 040/041) ───────────────────────────────────────
   // Each flag has its own fixed, tiny query — independent of contextSources —

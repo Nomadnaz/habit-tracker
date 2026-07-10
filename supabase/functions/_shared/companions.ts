@@ -64,7 +64,7 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['tasks', 'user_focus', 'habit_logs', 'user_context_summary', 'vault'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'habit & task'),
-    actions: ['create_task', 'reschedule_task', 'complete_task'],
+    actions: ['create_task', 'reschedule_task', 'complete_task', 'remember_about_user'],
   },
   life: {
     defaultName: 'Assistant',
@@ -72,7 +72,7 @@ export const companions: Record<string, CompanionConfig> = {
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'schedule & tasks'),
     // Calendar/email actions are future + always-preview; none auto-run in v1.
-    actions: ['create_task', 'reschedule_task'],
+    actions: ['create_task', 'reschedule_task', 'remember_about_user'],
   },
   gym: {
     defaultName: 'Coach',
@@ -83,7 +83,7 @@ export const companions: Record<string, CompanionConfig> = {
   },
   focus: {
     defaultName: 'Focus',
-    contextSources: ['user_focus', 'tasks', 'user_context_summary'],
+    contextSources: ['user_focus', 'tasks', 'focus_sessions', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'deep-work & focus'),
     actions: [],
@@ -99,7 +99,7 @@ export const companions: Record<string, CompanionConfig> = {
   },
   activity: {
     defaultName: 'Trail',
-    contextSources: ['activities', 'user_context_summary'],
+    contextSources: ['activities', 'daily_steps', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'hike/run/walk'),
     actions: [],

@@ -173,6 +173,31 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     return { table: 'pb_log', exercise_id: exerciseId, weight_kg: weightKg };
   },
 
+  // Code Audit v2 fix plan B4: buildContext.ts renders "NOTES YOU'VE SAVED"
+  // from user_context_summary.assistant_notes_md, but nothing ever wrote that
+  // column — the AI could not remember anything a user told it to remember.
+  // Appends one bullet, deduping exact repeats and capping growth so the
+  // notes block can't unboundedly inflate every future prompt.
+  remember_about_user: async (supabase, userId, data, _tzOffsetMinutes) => {
+    const note = str(data.note) ?? str(data.fact) ?? str(data.text);
+    if (!note) throw new Error('remember_about_user needs a note');
+    const { data: existing } = await supabase
+      .from('user_context_summary')
+      .select('assistant_notes_md')
+      .eq('user_id', userId)
+      .maybeSingle();
+    const bullet = `- ${note}`;
+    const lines = (existing?.assistant_notes_md ?? '').split('\n').filter((l: string) => l.trim());
+    if (lines.includes(bullet)) return { table: 'user_context_summary', note, deduped: true };
+    const MAX_NOTES = 30; // bound prompt growth — oldest notes roll off
+    const nextMd = [...lines, bullet].slice(-MAX_NOTES).join('\n');
+    const { error } = await supabase
+      .from('user_context_summary')
+      .upsert({ user_id: userId, assistant_notes_md: nextMd, notes_updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    if (error) throw new Error(error.message);
+    return { table: 'user_context_summary', note };
+  },
+
   // Calorie companion's only declared action (used to return 'unsupported'
   // unconditionally — audit 2026-07-06 found it was never wired).
   log_meal: async (supabase, userId, data, tzOffsetMinutes) => {
@@ -213,6 +238,8 @@ export const ACTION_SPECS: Record<string, string> = {
     'log_pb — record a personal best. data: { "exerciseId": string, "weightKg": number, "reps"?: number, "date"?: "YYYY-MM-DD" }',
   log_meal:
     'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }',
+  remember_about_user:
+    'remember_about_user — save a fact the user wants remembered for future conversations. data: { "note": string }',
 };
 
 /** Pure gate: the action's decision BEFORE anyone writes anything. */

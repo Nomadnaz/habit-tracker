@@ -259,10 +259,11 @@ export async function connectAndSyncAppleHealth(historyDays = 56): Promise<{
     if (!metrics) {
       return { ok: false, error: 'Could not read Apple Health data.' };
     }
-    const { loadBodyData, saveBodyData } = await import('./body-data');
+    const { loadBodyData, saveBodyData, syncTodayStepsToSupabase, todaySteps } = await import('./body-data');
     const current = await loadBodyData();
     const merged = mergeAppleHealthIntoBodyData(current, metrics);
     await saveBodyData(merged);
+    syncTodayStepsToSupabase(todaySteps(merged));
     return { ok: true, data: merged };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Apple Health sync failed.';

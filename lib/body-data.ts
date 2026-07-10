@@ -310,6 +310,22 @@ export function todaySteps(d: BodyData): number {
   return d.stepsHistory[dateKey(startOfToday())] ?? 0;
 }
 
+// Fire-and-forget upsert so server-side buildContext (SharedContext block,
+// Code Audit v2 fix plan B2) can see today's step count — previously steps
+// lived ONLY in this file's local AsyncStorage blob, invisible to every AI
+// companion. AsyncStorage stays the source of truth for the UI; this is a
+// one-way mirror, same local-first pattern as every other domain.
+export function syncTodayStepsToSupabase(steps: number): void {
+  bg(async () => {
+    const userId = await getUid();
+    if (!userId) return;
+    await supabase.from('daily_steps').upsert(
+      { user_id: userId, date: dateKey(startOfToday()), steps, source: 'healthkit', updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,date' },
+    );
+  });
+}
+
 // Builds a weeks×7 grid of dates, Monday→Sunday columns, today in the last row.
 // Days after today (future) are returned as null so they render as blank.
 export function buildDayGrid(weeks: number): (Date | null)[][] {

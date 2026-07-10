@@ -13,7 +13,7 @@ import { refreshWorkoutsTotal } from './streaks';
 import { supabase } from './supabase';
 import { checkAndAwardBadges } from './badges';
 
-export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication' | 'activity' | 'goal' | 'expense' | 'mood';
+export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication' | 'activity' | 'goal' | 'expense' | 'mood' | 'focus';
 export type Action = 'create' | 'update' | 'delete';
 
 export async function postWrite(entity: Entity, record: any, action: Action): Promise<void> {
@@ -52,6 +52,7 @@ async function incrementCumulativeStats(entity: Entity, record: any, action: Act
     const delta: Record<string, number> = {};
     if (entity === 'habit' && record.completed) delta.total_habits_completed = 1;
     if (entity === 'workout') delta.total_gym_sessions = 1;
+    if (entity === 'focus') delta.total_focus_secs = typeof record.durationSecs === 'number' ? record.durationSecs : 0;
     if (entity === 'activity') {
       const meters = typeof record.distanceM === 'number' ? record.distanceM : 0;
       if (record.type === 'run') delta.total_distance_run_m = meters;
