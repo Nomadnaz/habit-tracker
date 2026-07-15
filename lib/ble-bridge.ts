@@ -10,7 +10,13 @@
  * Requires GROQ_API_KEY set as a Supabase secret.
  */
 
-import { BleManager, type Device, type Subscription } from 'react-native-ble-plx';
+// Type-only import (erased at runtime). The BleManager class itself is
+// lazy-required in getBleManager(): expo-router eagerly loads every route at
+// boot, and app/ble-bridge.tsx + app/pair-device.tsx import this module, so a
+// top-level value import of react-native-ble-plx crashes the whole app at
+// launch wherever the native module is absent (Expo Go). Same pattern as
+// lib/apple-health.ts and lib/locationTask.ts.
+import type { BleManager, Device, Subscription } from 'react-native-ble-plx';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { adpcmDecode, makeAdpcmState, type AdpcmState } from '@/lib/adpcm';
 
@@ -110,7 +116,9 @@ class BleBridgeManager {
   private getBleManager(): BleManager {
     if (!this.manager) {
       try {
-        this.manager = new BleManager();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { BleManager: BleManagerClass } = require('react-native-ble-plx');
+        this.manager = new BleManagerClass() as BleManager;
       } catch {
         throw new Error('BLE native module not available. A dev build (not Expo Go) is required.');
       }
@@ -172,7 +180,10 @@ class BleBridgeManager {
   private async _connect(device: Device) {
     try {
       this.emit({ status: 'connecting' });
-      const connected = await device.connect();
+      // requestMTU is Android-only (ignored on iOS, which auto-negotiates
+      // ~185). The 181-byte SYNC chunks need ATT_MTU >= 184; Android's
+      // default of 23 would fail every write without this.
+      const connected = await device.connect({ requestMTU: 247 });
       await connected.discoverAllServicesAndCharacteristics();
       this.device = connected;
 
