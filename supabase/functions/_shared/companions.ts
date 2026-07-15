@@ -133,6 +133,30 @@ export const companions: Record<string, CompanionConfig> = {
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'mood & wellbeing'),
     actions: [],
   },
+  // The following 3 (Code Audit v2 fix plan P3): screens/tables have existed
+  // since tasks 024/065/064, but had no companion config until now — config-
+  // only, same pattern as the 9 above.
+  medication: {
+    defaultName: 'Vital',
+    contextSources: ['medications', 'user_context_summary'],
+    model: 'haiku',
+    systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'medication & supplement'),
+    actions: [],
+  },
+  finance: {
+    defaultName: 'Ledger',
+    contextSources: ['expenses', 'bills', 'user_context_summary'],
+    model: 'haiku',
+    systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'finance'),
+    actions: [],
+  },
+  library: {
+    defaultName: 'Stacks',
+    contextSources: ['books', 'movies', 'saved_links', 'ideas', 'user_context_summary'],
+    model: 'haiku',
+    systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'reading, watching & saved ideas'),
+    actions: [],
+  },
 };
 
 export type CompanionType = keyof typeof companions;

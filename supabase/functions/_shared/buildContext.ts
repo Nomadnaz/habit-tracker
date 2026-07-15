@@ -384,6 +384,153 @@ export async function buildContext(
     })());
   }
 
+  // Code Audit v2 fix plan P3: medication/finance/library companions added to
+  // companions.ts with no matching buildContext block would just always see
+  // "No data yet." — these mirror the habit_logs/meals blocks above.
+
+  if (want('medications')) {
+    jobs.push((async () => {
+      const { data: meds } = await supabase
+        .from('medications')
+        .select('id, name, type')
+        .eq('user_id', userId)
+        .eq('active', true)
+        .limit(20);
+      if (!meds?.length) { raw.medications = []; lines.push('MEDICATIONS: none active.'); return; }
+
+      const { data: logs } = await supabase
+        .from('medication_logs')
+        .select('medication_id, date, taken')
+        .in('medication_id', meds.map((m: { id: string }) => m.id))
+        .gte('date', lookbackKey);
+      raw.medications = meds;
+      raw.medication_logs = logs ?? [];
+
+      lines.push('MEDICATIONS (adherence, last 2 weeks):');
+      for (const m of meds) {
+        const own = (logs ?? []).filter((l: { medication_id: string }) => l.medication_id === m.id);
+        const taken = own.filter((l: { taken: boolean }) => l.taken).length;
+        lines.push(`- ${m.name} (${m.type}): ${taken}/14 days taken`);
+      }
+    })());
+  }
+
+  if (want('expenses')) {
+    jobs.push((async () => {
+      const monthStart = `${today.slice(0, 7)}-01`;
+      const [{ data: expenses }, { data: budgets }] = await Promise.all([
+        supabase.from('expenses').select('amount, category, date').eq('user_id', userId).gte('date', monthStart).limit(200),
+        supabase.from('budgets').select('category, monthly_target_amount').eq('user_id', userId),
+      ]);
+      raw.expenses = expenses ?? [];
+      raw.budgets = budgets ?? [];
+      if (expenses?.length) {
+        const total = expenses.reduce((s: number, e: { amount: number }) => s + e.amount, 0);
+        lines.push(`SPENDING (this month): ${total.toFixed(2)} total.`);
+        const byCategory = new Map<string, number>();
+        for (const e of expenses) byCategory.set(e.category, (byCategory.get(e.category) ?? 0) + e.amount);
+        for (const b of budgets ?? []) {
+          const spent = byCategory.get(b.category) ?? 0;
+          if (spent > b.monthly_target_amount) {
+            lines.push(`- OVER BUDGET: ${b.category} ${spent.toFixed(2)}/${b.monthly_target_amount}`);
+          }
+        }
+      } else {
+        lines.push('SPENDING: none logged this month.');
+      }
+    })());
+  }
+
+  if (want('bills')) {
+    jobs.push((async () => {
+      const { data } = await supabase
+        .from('bills')
+        .select('name, amount, due_date')
+        .eq('user_id', userId)
+        .eq('active', true)
+        .order('due_date', { ascending: true })
+        .limit(10);
+      raw.bills = data ?? [];
+      if (data?.length) {
+        lines.push('UPCOMING BILLS:');
+        for (const b of data) lines.push(`- ${b.name}: ${b.amount} due ${b.due_date}`);
+      } else {
+        lines.push('BILLS: none active.');
+      }
+    })());
+  }
+
+  if (want('books')) {
+    jobs.push((async () => {
+      const { data } = await supabase
+        .from('books')
+        .select('title, author, status, current_page, total_pages')
+        .eq('user_id', userId)
+        .neq('status', 'finished')
+        .limit(10);
+      raw.books = data ?? [];
+      if (data?.length) {
+        lines.push('BOOKS (reading / to-read):');
+        for (const b of data) {
+          const progress = b.status === 'reading' && b.total_pages ? `, p.${b.current_page}/${b.total_pages}` : '';
+          lines.push(`- ${b.title}${b.author ? ` by ${b.author}` : ''} (${b.status}${progress})`);
+        }
+      } else {
+        lines.push('BOOKS: none tracked.');
+      }
+    })());
+  }
+
+  if (want('movies')) {
+    jobs.push((async () => {
+      const { data } = await supabase
+        .from('movies')
+        .select('title, year')
+        .eq('user_id', userId)
+        .eq('status', 'to_watch')
+        .limit(10);
+      raw.movies = data ?? [];
+      if (data?.length) {
+        lines.push('MOVIES (watchlist):');
+        for (const m of data) lines.push(`- ${m.title}${m.year ? ` (${m.year})` : ''}`);
+      } else {
+        lines.push('MOVIES: watchlist empty.');
+      }
+    })());
+  }
+
+  if (want('saved_links')) {
+    jobs.push((async () => {
+      const { data } = await supabase
+        .from('saved_links')
+        .select('title, url')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      raw.saved_links = data ?? [];
+      if (data?.length) {
+        lines.push('RECENTLY SAVED LINKS:');
+        for (const l of data) lines.push(`- ${l.title || l.url}`);
+      }
+    })());
+  }
+
+  if (want('ideas')) {
+    jobs.push((async () => {
+      const { data } = await supabase
+        .from('ideas')
+        .select('content')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      raw.ideas = data ?? [];
+      if (data?.length) {
+        lines.push('RECENT IDEAS:');
+        for (const i of data) lines.push(`- ${i.content}`);
+      }
+    })());
+  }
+
   if (want('vault') && userMessage) {
     jobs.push((async () => {
       // FTS over the Obsidian-synced notes (tools/vault-agent populates
