@@ -13,7 +13,7 @@ import { refreshWorkoutsTotal } from './streaks';
 import { supabase } from './supabase';
 import { checkAndAwardBadges } from './badges';
 
-export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication' | 'activity' | 'goal' | 'expense' | 'mood' | 'focus';
+export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication' | 'activity' | 'goal' | 'expense' | 'mood' | 'focus' | 'book' | 'movie';
 export type Action = 'create' | 'update' | 'delete';
 
 export async function postWrite(entity: Entity, record: any, action: Action): Promise<void> {
@@ -43,7 +43,11 @@ export async function postWrite(entity: Entity, record: any, action: Action): Pr
 }
 
 async function incrementCumulativeStats(entity: Entity, record: any, action: Action): Promise<void> {
-  if (action !== 'create') return; // only count new occurrences, not edits/deletes
+  // Book/movie completions arrive as 'update' (status → finished/watched, not
+  // a new row) — everything else only counts on 'create'.
+  const isLibraryCompletion = (entity === 'book' && record.status === 'finished')
+    || (entity === 'movie' && record.status === 'watched');
+  if (action !== 'create' && !isLibraryCompletion) return;
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
@@ -58,6 +62,8 @@ async function incrementCumulativeStats(entity: Entity, record: any, action: Act
       if (record.type === 'run') delta.total_distance_run_m = meters;
       else delta.total_distance_walked_m = meters; // hike + walk both count as walked distance
     }
+    if (entity === 'book' && record.status === 'finished') delta.total_books_finished = 1;
+    if (entity === 'movie' && record.status === 'watched') delta.total_movies_watched = 1;
     if (Object.keys(delta).length === 0) return; // nothing this entity contributes to yet
 
     const { data: existing } = await supabase

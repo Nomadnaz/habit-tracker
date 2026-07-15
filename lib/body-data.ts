@@ -16,6 +16,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { postWrite } from './postWrite';
 import { toDateKey as dateKey, addDaysToKey } from './dateKey';
 export { dateKey };
 import {
@@ -288,6 +289,10 @@ export async function addWater(amountMl: number): Promise<BodyData> {
     if (!userId) return;
     await supabase.from('water_logs').insert({ id: genId(), user_id: userId, amount_ml: amountMl, logged_at: entry.at });
   });
+  // Fan-out — 'water' has been in postWrite's Entity union since it was
+  // written but this file never called it (Code Audit v2 fix plan P4): the
+  // union advertised support that didn't exist.
+  postWrite('water', entry, 'create');
   return data;
 }
 
@@ -301,6 +306,7 @@ export async function logWeight(weightKg: number): Promise<BodyData> {
     if (!userId) return;
     await supabase.from('body_weight_logs').insert({ id: genId(), user_id: userId, weight_kg: weightKg, logged_at: entry.at });
   });
+  postWrite('weight', entry, 'create');
   return data;
 }
 

@@ -13,6 +13,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { withStorageLock } from './storageLock';
+import { postWrite } from './postWrite';
 
 function genId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 async function getUid(): Promise<string | null> {
@@ -71,6 +72,10 @@ export async function setBookStatus(id: string, status: BookStatus): Promise<voi
       status, finished_at: status === 'finished' ? new Date().toISOString() : null,
     }).eq('id', id);
   });
+  // Fan-out (cumulative_stats.total_books_finished) — previously this file
+  // never called postWrite at all, so finishing a book fired zero fan-out
+  // and that column could never increment (Code Audit v2 fix plan P4).
+  postWrite('book', { id, status }, 'update');
 }
 
 // ── Movies ───────────────────────────────────────────────────────────────────
@@ -98,6 +103,8 @@ export async function markWatched(id: string, rating?: number): Promise<void> {
       status: 'watched', rating: rating ?? null, date_watched: new Date().toISOString().slice(0, 10),
     }).eq('id', id);
   });
+  // Fan-out (cumulative_stats.total_movies_watched) — see setBookStatus above.
+  postWrite('movie', { id, status: 'watched', rating }, 'update');
 }
 
 // ── Links ────────────────────────────────────────────────────────────────────

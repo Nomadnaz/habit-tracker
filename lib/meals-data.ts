@@ -156,6 +156,9 @@ export async function deleteMeal(dateKey: string, mealId: string): Promise<void>
   });
 
   bg(async () => { await supabase.from('meals').delete().eq('id', mealId); });
+  // Fan-out — known gap since handover-3 (Code Audit v2 fix plan P4):
+  // deleted meals previously left stats uncorrected.
+  postWrite('meal', { id: mealId, date: dateKey }, 'delete');
 }
 
 /** Most-recent distinct meals (by name) for the quick-add row. */
