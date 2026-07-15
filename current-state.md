@@ -58,15 +58,15 @@ workouts, personal_bests, body_logs
 - This session adds: `system-model.md`, `database.md`, `current-state.md` (this file), rewritten `CLAUDE.md`, `tasks/001`–`tasks/077`
 
 ## NEXT TASK
-**P0–P3 are done** (P2 code deployed 2026-07-15 as `ai-chat` v23; P3's companion-roster code is committed but rides on its own redeploy of `ai-chat`, not yet requested). Next up is **P4 — postWrite integrity**: wire `lib/library-data.ts`, `deleteMeal()`, `lib/body-data.ts` into the fan-out (they currently bypass `postWrite`).
+**P0–P4 are done** (P2 code deployed 2026-07-15 as `ai-chat` v23; P3's companion-roster code is committed but rides on its own redeploy of `ai-chat`, not yet requested; P4 committed `0d25fa4`, not yet on-device verified). Next up is **P5 — the vault loop**: start the Mac vault agent (`tools/vault-agent`, built but never launched) and point the Obsidian postWrite stub at `vault_files`.
 
 **Working plan: `SecondBrain/Projects/Habit Tracker/Build/2026-07-09 Code Audit v2 — Fix Plan.md`** (analysis: same folder, `— Analysis.md`). Phases:
 - ~~**P0 — hygiene**~~ ✅ done 2026-07-10.
 - ~~**P1 — nav restructure**~~ ✅ done 2026-07-10 (task 078 resolved: enforce the 5-tab plan).
 - ~~**P2 — SharedContext**~~ ✅ done 2026-07-15 — code done 2026-07-10, migration 029 applied live, `ai-chat` redeployed to v23 2026-07-15.
 - ~~**P3 — companion roster**~~ ✅ code done 2026-07-15 (`medication`/`finance`/`library` configs + buildContext blocks added, committed `d549057`) — **needs its own `ai-chat` redeploy** (currently live v23 predates this commit; not yet requested).
-- **P4 — postWrite integrity** (next): wire `lib/library-data.ts`, `deleteMeal()`, `lib/body-data.ts` into the fan-out.
-- **P5 — vault loop**: start the Mac vault agent (built, never launched), point the Obsidian postWrite stub at `vault_files`.
+- ~~**P4 — postWrite integrity**~~ ✅ done 2026-07-16 (commit `0d25fa4`): `lib/library-data.ts`'s `setBookStatus`/`markWatched` now call `postWrite('book'|'movie', …, 'update')` on finish/watch (Entity union extended, `incrementCumulativeStats` relaxed to count these two update events so `total_books_finished`/`total_movies_watched` can finally increment); `deleteMeal()` now calls `postWrite('meal', …, 'delete')`; `lib/body-data.ts`'s `addWater`/`logWeight` now call `postWrite('water'|'weight', …, 'create')` (the Entity union already had these, just unused). `tsc`/`vitest` held at the pre-existing baseline (32/32 pass). Not verified on-device.
+- **P5 — vault loop** (next): start the Mac vault agent (built, never launched), point the Obsidian postWrite stub at `vault_files`.
 - **P6 — EAS dev build + device pass**: the actual verification gate for everything above, plus filing slow-clock applications (FamilyControls, CASA, IAP).
 
 Domains beyond the spine (travel/social/wearables) remain correctly FUTURE per the spec.
