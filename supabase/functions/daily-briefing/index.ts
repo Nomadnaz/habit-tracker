@@ -98,6 +98,44 @@ async function updateUserContextSummary(
   }
 }
 
+// Task 060: remember_about_user (actionExecutor.ts) only hard-caps
+// assistant_notes_md at 30 bullets — old facts silently roll off rather than
+// being condensed, so a long-lived note (e.g. "allergic to X") can get pushed
+// out by newer trivia. Once the notes block is long enough to be worth the
+// Haiku call, condense it into fewer, denser bullets instead of just
+// truncating. ~4 chars/token is the same rough estimate used elsewhere in
+// this codebase; 7000 chars ≈ 1.75k tokens, inside the task's ~1.5-2k range.
+const NOTES_RESUMMARIZE_CHAR_THRESHOLD = 7000;
+
+async function resummarizeAssistantNotes(
+  admin: SupabaseClient,
+  anthropic: Anthropic,
+  userId: string,
+  notesMd: string,
+): Promise<void> {
+  try {
+    const completion = await anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 600,
+      system:
+        'Condense these saved notes about a user into a shorter bullet list ("- fact"), one fact per line. Merge duplicates and superseded entries, drop anything now redundant, but preserve every distinct fact — never invent or omit information. Output ONLY the bullet list, nothing else.',
+      messages: [{ role: 'user', content: notesMd }],
+    });
+    const condensed = completion.content
+      .filter((b: { type: string }) => b.type === 'text')
+      .map((b: { text: string }) => b.text)
+      .join('')
+      .trim();
+    if (!condensed) return;
+    await admin.from('user_context_summary').upsert(
+      { user_id: userId, assistant_notes_md: condensed, notes_updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    );
+  } catch (err) {
+    console.error('resummarizeAssistantNotes error:', err);
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
@@ -173,6 +211,15 @@ ${ctx.text}`;
 
     // Fire-and-forget — never delays or fails the briefing response.
     updateUserContextSummary(admin, userId, ctx.raw, tzOffsetMinutes).catch(() => {});
+    (async () => {
+      const existingNotes = ctx.raw.user_context_summary
+        ? (ctx.raw.user_context_summary as { assistant_notes_md?: string } | null)?.assistant_notes_md
+        : (await admin.from('user_context_summary').select('assistant_notes_md').eq('user_id', userId).maybeSingle())
+            .data?.assistant_notes_md;
+      if (existingNotes && existingNotes.length >= NOTES_RESUMMARIZE_CHAR_THRESHOLD) {
+        await resummarizeAssistantNotes(admin, anthropic, userId, existingNotes);
+      }
+    })().catch(() => {});
 
     return new Response(JSON.stringify({ briefing: briefing || 'Nothing to report yet today.', generatedAt }), {
       status: 200,
