@@ -12,6 +12,7 @@
 import { refreshWorkoutsTotal } from './streaks';
 import { supabase } from './supabase';
 import { checkAndAwardBadges } from './badges';
+import { writeObsidian as writeObsidianImpl } from './obsidian';
 
 export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication' | 'activity' | 'goal' | 'expense' | 'mood' | 'focus' | 'book' | 'movie';
 export type Action = 'create' | 'update' | 'delete';
@@ -29,7 +30,7 @@ export async function postWrite(entity: Entity, record: any, action: Action): Pr
     incrementCumulativeStats(entity, record, action),
     checkBadges(entity, record),
     addFriendFeedEvent(entity, record), // stub — task 070/socials FUTURE
-    writeObsidian(entity, record), // stub — task 058/059, needs iCloud (device-gated)
+    writeObsidian(entity, record, action), // lib/obsidian.ts — writes to vault_files (Supabase), see that file's header
   ];
 
   const results = await Promise.allSettled(effects);
@@ -102,9 +103,8 @@ async function addFriendFeedEvent(entity: Entity, record: any): Promise<void> {
   console.log('addFriendFeedEvent stub:', entity);
 }
 
-async function writeObsidian(entity: Entity, record: any): Promise<void> {
-  // Stub: would write to user's Obsidian vault
-  console.log('writeObsidian stub:', entity);
+async function writeObsidian(entity: Entity, record: any, action: Action): Promise<void> {
+  await writeObsidianImpl(entity, record, action);
 }
 
 export type CumulativeStats = {

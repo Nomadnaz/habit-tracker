@@ -389,7 +389,10 @@ export async function markDoneToday(templateId: string): Promise<void> {
   });
   // task 025: this was writing straight to workout_done_log with no fan-out
   // at all — postWrite('workout', ...) had never been wired here. Fixed.
-  postWrite('workout', { template_id: templateId, date: today }, wasAlreadyDone ? 'update' : 'create');
+  // Template name (for lib/obsidian.ts's vault note) — cheap local lookup.
+  const templates = await getTemplates();
+  const templateName = templates.find(t => t.id === templateId)?.name;
+  postWrite('workout', { template_id: templateId, template_name: templateName, date: today }, wasAlreadyDone ? 'update' : 'create');
 }
 
 export async function unmarkDoneToday(templateId: string): Promise<void> {

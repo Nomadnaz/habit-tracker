@@ -63,8 +63,10 @@ export async function addBook(title: string, author?: string): Promise<Book> {
 }
 
 export async function setBookStatus(id: string, status: BookStatus): Promise<void> {
+  let title: string | undefined;
   await withStorageLock(BOOKS_KEY, async () => {
     const list = await getBooks();
+    title = list.find(b => b.id === id)?.title;
     await saveList(BOOKS_KEY, list.map(b => (b.id === id ? { ...b, status } : b)));
   });
   bg(async () => {
@@ -75,7 +77,7 @@ export async function setBookStatus(id: string, status: BookStatus): Promise<voi
   // Fan-out (cumulative_stats.total_books_finished) — previously this file
   // never called postWrite at all, so finishing a book fired zero fan-out
   // and that column could never increment (Code Audit v2 fix plan P4).
-  postWrite('book', { id, status }, 'update');
+  postWrite('book', { id, title, status }, 'update');
 }
 
 // ── Movies ───────────────────────────────────────────────────────────────────
@@ -94,8 +96,10 @@ export async function addMovie(title: string, year?: number): Promise<Movie> {
 }
 
 export async function markWatched(id: string, rating?: number): Promise<void> {
+  let title: string | undefined;
   await withStorageLock(MOVIES_KEY, async () => {
     const list = await getMovies();
+    title = list.find(m => m.id === id)?.title;
     await saveList(MOVIES_KEY, list.map(m => (m.id === id ? { ...m, status: 'watched' as MovieStatus, rating } : m)));
   });
   bg(async () => {
@@ -104,7 +108,7 @@ export async function markWatched(id: string, rating?: number): Promise<void> {
     }).eq('id', id);
   });
   // Fan-out (cumulative_stats.total_movies_watched) — see setBookStatus above.
-  postWrite('movie', { id, status: 'watched', rating }, 'update');
+  postWrite('movie', { id, title, status: 'watched', rating }, 'update');
 }
 
 // ── Links ────────────────────────────────────────────────────────────────────

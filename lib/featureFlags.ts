@@ -17,6 +17,11 @@ export const featureFlags = {
   appBlocking: false,
   cycleTracking: false,
   accountabilityPayments: false,
+  // Gates the real filesystem/Obsidian round-trip (task 058/059 phase 2 —
+  // "Export to Obsidian") ONLY. Does NOT gate lib/obsidian.ts's phase-1
+  // vault-note writer (see that file) — that runs ungated for every user,
+  // since it's populating the AI's existing memory store (vault_files), not
+  // "Obsidian sync" in the sense this flag means.
   obsidianSync: false,
   socialFeed: false,
 } as const;

@@ -188,7 +188,7 @@ export async function toggleToday(habit: Habit): Promise<boolean> {
   // task 063) doesn't need to recompute it or import this module back.
   const streak = computeStreak(map[habit.id]);
   bg(() => saveStreak(habit.id, streak, nextCompleted ? today : null));
-  postWrite('habit', { habit_id: habit.id, date: today, completed: nextCompleted, streak: streak.current }, wasExisting ? 'update' : 'create');
+  postWrite('habit', { habit_id: habit.id, name: habit.name, date: today, completed: nextCompleted, streak: streak.current }, wasExisting ? 'update' : 'create');
 
   return nextCompleted;
 }

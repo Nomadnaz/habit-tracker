@@ -117,7 +117,11 @@ export async function toggleMilestone(goalId: string, milestoneId: string): Prom
       completed: nowCompleted, completed_at: nowCompleted ? new Date().toISOString() : null,
     }).eq('id', milestoneId);
   });
-  postWrite('goal', { goal_id: goalId, milestone_id: milestoneId, completed: nowCompleted }, 'update');
+  // Goal title (for lib/obsidian.ts's vault note) — cheap local lookup, no
+  // network call; toggleMilestone only receives ids otherwise.
+  const goals = await loadList<Goal>(GOALS_KEY);
+  const goalTitle = goals.find(g => g.id === goalId)?.title;
+  postWrite('goal', { goal_id: goalId, title: goalTitle, milestone_id: milestoneId, completed: nowCompleted }, 'update');
 }
 
 export async function getGoalLogs(goalId: string): Promise<GoalLog[]> {

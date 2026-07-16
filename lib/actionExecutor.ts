@@ -142,7 +142,10 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
         await writeMap(mergeAppleIdsIntoTaskMap(await readMap(), dateKey, task.id, ids));
       }
 
-      await postWrite('task', task, 'create');
+      // date included (Task itself has no date field — dateKey is the day-map
+      // key) so lib/obsidian.ts's vault writer can file this under the right
+      // Daily Note.
+      await postWrite('task', { ...task, date: dateKey }, 'create');
       const when = hour != null ? ` at ${String(hour).padStart(2, '0')}:${String(minute ?? 0).padStart(2, '0')}` : '';
       return { summary: `Added "${label}" for ${dateKey}${when}` };
     }
@@ -166,7 +169,7 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
       if (userId) void supabase.from('tasks').update(taskToDbRow(updated, toKey, userId)).eq('id', taskId);
       void syncTaskScheduleToApple(updated, { dateKey: toKey });
 
-      await postWrite('task', updated, 'update');
+      await postWrite('task', { ...updated, date: toKey }, 'update');
       return { summary: `Moved "${existing.label}" to ${toKey}` };
     }
 
@@ -185,7 +188,7 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
       if (userId) void supabase.from('tasks').update({ done: true }).eq('id', taskId).eq('user_id', userId);
       void syncTaskDoneToApple(target, true, { dateKey });
 
-      await postWrite('task', { ...target, done: true }, 'update');
+      await postWrite('task', { ...target, done: true, date: dateKey }, 'update');
       return { summary: `Marked "${target.label}" done` };
     }
 
