@@ -18,6 +18,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { supabase } from '@/lib/supabase';
 import { companions } from '@/lib/companions';
+import { exportToObsidian } from '@/lib/obsidianExport';
 
 const ORANGE = '#FF4D00';
 const INK    = '#1A1714';
@@ -35,6 +36,18 @@ export default function Settings() {
   const [hasKey, setHasKey] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportToObsidian();
+    } catch (err) {
+      Alert.alert('Export failed', err instanceof Error ? err.message : 'Try again in a moment.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const refresh = useCallback(async () => {
     try {
@@ -130,6 +143,17 @@ export default function Settings() {
             <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
           </TouchableOpacity>
         ))}
+
+        <Text style={styles.sectionLabel}>SECOND BRAIN</Text>
+        <TouchableOpacity style={styles.companionRow} onPress={handleExport} disabled={exporting}>
+          <MaterialCommunityIcons name="brain" size={22} color={ORANGE} />
+          <Text style={styles.companionLabel}>
+            {exporting ? 'Preparing export…' : 'Export to Obsidian (.zip)'}
+          </Text>
+          {exporting
+            ? <ActivityIndicator size="small" color={ORANGE} />
+            : <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />}
+        </TouchableOpacity>
 
         <Text style={styles.sectionLabel}>CONNECTED DEVICES</Text>
         <TouchableOpacity style={styles.companionRow} onPress={() => router.push('/ble-bridge')}>
