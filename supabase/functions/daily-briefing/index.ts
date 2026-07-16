@@ -16,7 +16,8 @@
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import { buildContext } from '../_shared/buildContext.ts';
-import { localDateKey } from '../_shared/localDate.ts';
+import { localDateKey, localDateKeyPlusDays } from '../_shared/localDate.ts';
+import { computeSleepTrend } from '../_shared/trends.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -80,12 +81,26 @@ async function updateUserContextSummary(
 
     const tasksTodayCount = tasks.filter(t => t.date === today).length;
 
+    // Task 061: a snapshot alone ("X tasks tracked") isn't a trend. Dedicated
+    // query rather than reusing ctx.raw.sleep_logs — that source is windowed
+    // to the last 7 days (buildContext.ts's own SLEEP block), too narrow for
+    // the 2-week recent-vs-prior comparison computeSleepTrend needs.
+    const { data: sleepRows } = await admin
+      .from('sleep_logs')
+      .select('date, total_hours')
+      .eq('user_id', userId)
+      .gte('date', localDateKeyPlusDays(-14, tzOffsetMinutes))
+      .order('date', { ascending: false })
+      .limit(14);
+    const sleepTrend = computeSleepTrend(sleepRows ?? []);
+
     const profileMd = [
       `Tasks tracked: ${tasks.length} (recent).`,
       `Tasks today (${today}): ${tasksTodayCount}.`,
       `Workouts logged: ${workouts.length} (recent).`,
       tasks[0]?.date ? `Last task date: ${tasks[0].date}.` : null,
       workouts[0]?.date ? `Last workout date: ${workouts[0].date}.` : null,
+      sleepTrend,
     ].filter(Boolean).join('\n');
 
     const now = new Date().toISOString();
