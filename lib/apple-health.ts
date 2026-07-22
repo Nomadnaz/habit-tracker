@@ -27,7 +27,10 @@ function getHealthKit(): HealthKitModule | null {
   if (Platform.OS !== 'ios') return null;
   try {
     // Native module only exists in custom dev / production builds.
-    return require('react-native-health').default as HealthKitModule;
+    // react-native-health exports via `module.exports =`, not a `.default` —
+    // reading `.default` here always returned undefined, silently disabling
+    // HealthKit in every build, dev or production.
+    return require('react-native-health') as HealthKitModule;
   } catch {
     return null;
   }
