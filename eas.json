@@ -21,7 +21,10 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6793554196"
+        "ascAppId": "6793554196",
+        "ascApiKeyPath": "/Users/nova/.eas-credentials/AuthKey_M595G8337Z.p8",
+        "ascApiKeyId": "M595G8337Z",
+        "ascApiKeyIssuerId": "53c842c2-58eb-48f7-999a-ee92bf0d9abf"
       }
     }
   }
