@@ -18,7 +18,9 @@
         "NSSpeechRecognitionUsageDescription": "Transcribe voice questions from your Companion HUD device (unused — cloud transcription is used instead).",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Keep tracking your hike, run, or walk in the background if you lock your phone or switch apps mid-activity.",
         "NSLocationWhenInUseUsageDescription": "Track your route, distance, and pace while recording a hike, run, or walk.",
-        "UIBackgroundModes": ["location"],
+        "UIBackgroundModes": [
+          "location"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.nova.habittracker"
@@ -33,7 +35,14 @@
       "permissions": [
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",
-        "android.permission.ACCESS_BACKGROUND_LOCATION"
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -71,6 +80,13 @@
           "isAndroidBackgroundLocationEnabled": true
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2e1a9c53-a91b-4cb2-9339-5f34f8563979"
+      }
+    },
+    "owner": "nomadnaz"
   }
 }
