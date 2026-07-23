@@ -86,7 +86,10 @@ export async function initAppleHealth(): Promise<boolean> {
   const kit = getHealthKit();
   if (!kit) return false;
 
-  const available = await promisifyNoOpts<boolean>((cb) => kit.isAvailable(cb)).catch(() => false);
+  if (typeof kit.isAvailable !== 'function') {
+    throw new Error('HealthKit native module loaded but isAvailable() is missing — check native linking.');
+  }
+  const available = await promisifyNoOpts<boolean>((cb) => kit.isAvailable(cb));
   if (!available) return false;
 
   await new Promise<void>((resolve, reject) => {
