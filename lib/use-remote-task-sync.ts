@@ -10,8 +10,9 @@
 //   • On INSERT/UPDATE: merges the row into on-device @tasks; for genuinely new
 //     tasks (not already local) it also creates the Apple Reminder/Event.
 //   • On DELETE: removes it locally + from Apple.
-//   • On launch / app-foreground: a short "catch-up" pull for very recent rows
-//     created while the app was backgrounded.
+//   • On launch / app-foreground: a "catch-up" pull that also creates the Apple
+//     Reminder/Event for anything created while the app was shut, same dedup
+//     guard as the live path so it can't re-duplicate.
 //   • Emits a 'tasks:changed' event so any open task screen reloads instantly.
 //
 // Mounted once, globally, in app/_layout.tsx. Writes flow through @tasks (the
@@ -140,11 +141,9 @@ async function applyRow(row: Record<string, unknown>, notify = false): Promise<v
     // Add to the app's on-device store first (so it shows in the app).
     await writeMap(putInDay(map, dateKey, incoming));
 
-    // Only the LIVE realtime path (notify=true) creates the Apple entry, and
-    // only ONCE per id. The bulk catch-up (reconcile, notify=false) never writes
-    // to Apple — that bulk path is what previously mass-duplicated. App-created
-    // tasks hit the update branch above, so this fires only for genuinely-new
-    // EXTERNAL tasks (e.g. the voice device while the app is open).
+    // Below this point is the "announce it" step (banner/buzz) — only the LIVE
+    // realtime path does that; reconcile()'s bulk catch-up (notify=false)
+    // already did its own Apple write above, dedup-guarded the same way.
     if (!notify) return;
 
     DeviceEventEmitter.emit(TASKS_REMOTE_ADDED_EVENT, {
@@ -230,6 +229,40 @@ async function reconcile(userId: string): Promise<void> {
         void supabase.from('tasks').delete().eq('id', id).eq('user_id', userId);
         continue;
       }
+
+      // Genuinely new task, created outside the app (e.g. the voice device)
+      // while this device was shut. The live path (applyRow, notify=true)
+      // creates the Apple entry on the spot; this catch-up path used to skip
+      // it entirely, so device-created tasks never made it into Apple Calendar/
+      // Reminders unless the app happened to be open at creation time. Same
+      // dedup guard as the live path (findExistingAppleReminder first) so this
+      // can't reintroduce the mass-duplication bug that disabled it originally.
+      if (
+        Platform.OS === 'ios' &&
+        !incoming.appleReminderId &&
+        !incoming.appleEventId &&
+        !appleCreatedIds.has(id)
+      ) {
+        appleCreatedIds.add(id);
+        const existingReminder = await findExistingAppleReminder(incoming.label, dateKey);
+        if (existingReminder) {
+          incoming.appleReminderId = existingReminder;
+        } else {
+          const ids = await syncNewTaskToApple({
+            label: incoming.label,
+            dateKey,
+            mode: 'reminders-and-calendar',
+            hour: incoming.hour,
+            minute: incoming.minute,
+            durationMins: incoming.durationMins,
+            location: incoming.location,
+            priority: incoming.priority,
+          });
+          incoming.appleReminderId = ids.appleReminderId;
+          incoming.appleEventId = ids.appleEventId;
+        }
+      }
+
       map = putInDay(map, dateKey, incoming);
       added++;
     }
