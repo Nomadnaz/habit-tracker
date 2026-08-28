@@ -74,6 +74,77 @@ export async function getMealsForDate(dateKey: string): Promise<Meal[]> {
   return map[dateKey] ?? [];
 }
 
+// ── Down-sync ────────────────────────────────────────────────────────────────
+// This layer is local-first and, until now, ONE-WAY: every mutation pushed up
+// to Supabase and nothing ever came back. That is fine while the phone is the
+// only writer -- but the voice device writes server-side (device-log, and
+// ai-chat with execute:true), so a meal logged by voice landed in the `meals`
+// table and was invisible in the app forever. Reported on hardware 2026-08-28:
+// "it says it logged it but it's not appearing in the app anywhere".
+//
+// Tasks never had this problem because `tasks` is in the supabase_realtime
+// publication (migration 008) and the app applies those events locally.
+// Nothing else is, so every other domain the device can log needs a pull.
+//
+// Merge rules, in order of what they protect:
+//  - Local wins on id collision. A row edited offline must not be clobbered by
+//    the older server copy it hasn't been pushed to yet.
+//  - Server rows absent locally are added. This is the device's writes landing.
+//  - A local row missing from the server is KEPT, never deleted. It is far more
+//    likely to be an unsynced offline write than a real remote deletion, and
+//    silently eating someone's logged food is the worst failure here.
+const fromDbRow = (r: Record<string, unknown>): Meal => ({
+  id: String(r.id),
+  date: String(r.date),
+  mealType: (r.meal_type as Meal['mealType']) ?? 'snack',
+  name: String(r.name ?? 'Meal'),
+  calories: Number(r.calories ?? 0),
+  proteinG: Number(r.protein_g ?? 0),
+  carbsG: Number(r.carbs_g ?? 0),
+  fatG: Number(r.fat_g ?? 0),
+  photoUrl: (r.photo_url as string) ?? undefined,
+  loggedVia: (r.logged_via as Meal['loggedVia']) ?? 'manual',
+  createdAt: String(r.created_at ?? new Date().toISOString()),
+});
+
+/**
+ * Pulls the server's meals for one day into local storage. Safe to call on
+ * every screen focus: it is a single indexed query and a no-op when nothing
+ * new arrived. Never throws -- offline is the normal case for this app, and a
+ * failed sync must leave the local data exactly as it was.
+ *
+ * Returns true when local storage actually changed, so callers can skip a
+ * re-render they don't need.
+ */
+export async function pullRemoteMeals(dateKey: string): Promise<boolean> {
+  try {
+    const userId = await getUid();
+    if (!userId) return false;
+
+    const { data, error } = await supabase
+      .from('meals')
+      .select('id, date, meal_type, name, calories, protein_g, carbs_g, fat_g, photo_url, logged_via, created_at')
+      .eq('user_id', userId)
+      .eq('date', dateKey);
+    if (error || !data) return false;
+
+    return await withStorageLock(MEALS_KEY, async () => {
+      const map = await loadMealMap();
+      const local = map[dateKey] ?? [];
+      const localIds = new Set(local.map((m) => m.id));
+
+      const incoming = data.filter((r) => !localIds.has(String(r.id))).map(fromDbRow);
+      if (incoming.length === 0) return false;
+
+      map[dateKey] = [...local, ...incoming].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      await saveMealMap(map);
+      return true;
+    });
+  } catch {
+    return false;
+  }
+}
+
 function toDbRow(m: Meal, userId: string) {
   return {
     id: m.id, user_id: userId, date: m.date, meal_type: m.mealType, name: m.name,

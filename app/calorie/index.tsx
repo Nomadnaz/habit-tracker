@@ -16,7 +16,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import {
-  getMealsForDate, addMeal, deleteMeal, getRecentMeals,
+  getMealsForDate, addMeal, deleteMeal, getRecentMeals, pullRemoteMeals,
   getTargets, dailyTotals, todayKey, MEAL_TYPES,
   type Meal, type NutritionTargets,
 } from '@/lib/meals-data';
@@ -57,10 +57,20 @@ export default function CalorieScreen() {
   const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
+    // Show local first so the screen is instant and works offline, exactly as
+    // before. Then pull anything the SERVER has for this day that we don't --
+    // meals logged by the voice device land straight in Supabase and would
+    // otherwise never appear here (this layer used to be push-only).
     const [m, t, r] = await Promise.all([getMealsForDate(dk), getTargets(), getRecentMeals()]);
     setMeals(m);
     setTargets(t);
     setRecent(r);
+
+    if (await pullRemoteMeals(dk)) {
+      const [m2, r2] = await Promise.all([getMealsForDate(dk), getRecentMeals()]);
+      setMeals(m2);
+      setRecent(r2);
+    }
   }, [dk]);
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
