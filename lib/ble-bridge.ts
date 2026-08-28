@@ -297,7 +297,12 @@ class BleBridgeManager {
       this.emit({ lastQuestion: question });
       if (this.device) await writeCmd(this.device, BLE_CMD_SET_QUESTION, question);
 
-      const answer = await this._callAiChat(question);
+      // Logging first, conversation second. Most of what gets said to this
+      // device is "log X", and ai-chat cannot do that -- it gates actions
+      // rather than executing them, so it answers "I can't add that to your
+      // app" (reported on hardware 2026-08-28). device-log writes, and tells
+      // us when the utterance wasn't a log at all so we can fall through.
+      const answer = (await this._tryDeviceLog(question)) ?? (await this._callAiChat(question));
       this.emit({ lastAnswer: answer });
       if (this.device) await writeCmd(this.device, BLE_CMD_SET_ANSWER, answer);
 
@@ -308,6 +313,33 @@ class BleBridgeManager {
       console.warn('[ble-bridge] session error:', e?.message);
     } finally {
       if (!this._stopping) this.emit({ status: 'connected' });
+    }
+  }
+
+  /**
+   * Returns the spoken confirmation when the utterance was a log, or null when
+   * it wasn't and the caller should ask ai-chat instead.
+   *
+   * Never throws: a logging outage must degrade to conversation, not break
+   * hold-to-talk entirely.
+   */
+  private async _tryDeviceLog(question: string): Promise<string | null> {
+    try {
+      const { data, error } = await supabase.functions.invoke('device-log', {
+        body: {
+          transcript: question,
+          // The phone knows the user's timezone; the ESP32 does not. Same
+          // reasoning as _callAiChat below -- the server writes real dated
+          // rows, so a wrong offset files today's lunch under yesterday.
+          tzOffsetMinutes: new Date().getTimezoneOffset(),
+        },
+      });
+      if (error) throw error;
+      if (!data?.handled) return null;
+      return (data.speech ?? '').trim() || null;
+    } catch (e: any) {
+      console.warn('[ble-bridge] device-log failed, falling back to ai-chat:', e?.message);
+      return null;
     }
   }
 

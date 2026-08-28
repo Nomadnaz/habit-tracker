@@ -3,8 +3,12 @@
 //
 //   POST  Authorization: Bearer <user JWT>
 //   body: { transcript: string, tzOffsetMinutes?: number }
-//   → { logged: [{ kind, summary }], failed: [{ summary, reason }],
-//       unclear: string[], speech: string }
+//   → { handled: boolean, logged: [{ kind, summary }],
+//       failed: [{ summary, reason }], unclear: string[], speech: string }
+//
+//   handled=false means the utterance wasn't a log ("what did I eat today?").
+//   The caller should route it to ai-chat instead. Nothing is billed in that
+//   case, so a question costs one model call, not two.
 //
 // WHY THIS IS NOT ai-chat:
 //   ai-chat is built to converse. It returns prose, emits at most one action
@@ -245,17 +249,27 @@ Deno.serve(async (req: Request) => {
       else failed.push({ summary, reason: r.message ?? r.status });
     });
 
-    await admin.from('api_usage').upsert({
-      user_id: userId, date: today,
-      message_count: 1, last_message_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,date', ignoreDuplicates: false });
+    // "handled" is the routing signal: nothing parsed means this wasn't a log
+    // at all ("what did I eat today?"), and the caller should fall through to
+    // ai-chat rather than answering with silence.
+    const handled = logged.length > 0 || failed.length > 0 || unclear.length > 0;
+
+    // Only bill an utterance that actually did logging work. An unhandled one
+    // goes on to ai-chat, which bills its own call — without this guard a
+    // single question would cost the user two against FREE_DAILY_CAP.
+    if (handled) {
+      await admin.from('api_usage').upsert({
+        user_id: userId, date: today,
+        message_count: 1, last_message_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,date', ignoreDuplicates: false });
+    }
 
     const speech = logged.length === 0
       ? (failed.length ? `Couldn't log that: ${failed[0].reason}` : "Didn't catch anything to log.")
       : `Logged ${logged.map((l) => l.summary).join(', ')}` +
         (failed.length ? `. ${failed.length} didn't save.` : '');
 
-    return new Response(JSON.stringify({ logged, failed, unclear, speech }), { headers: cors });
+    return new Response(JSON.stringify({ handled, logged, failed, unclear, speech }), { headers: cors });
   } catch (err) {
     console.error('device-log error', err);
     return new Response(
