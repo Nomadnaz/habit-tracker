@@ -84,7 +84,12 @@ Domains beyond the spine (travel/social/wearables) remain correctly FUTURE per t
 ### Migrations — all 29 live
 Confirmed via `list_migrations` + `supabase/migrations/APPLIED.md` (2026-07-10, includes new `029_daily_steps.sql`, applied via Supabase MCP this session). Nothing pending.
 
-### Edge Functions — 1 redeploy pending (P3), rest current
+### Edge Functions — all current as of 2026-08-28
+**`ai-chat` is v24** (deployed 2026-08-28): ships P3's companion roster (medication/finance/library — committed `d549057` back on 2026-07-15, undeployed until now) **and** a fix for `habitCoach`, which is `DEFAULT_COMPANION` and therefore what the voice device gets: its action list had no logging verbs at all, so on hardware "add a task" worked while "log a coffee" replied "I can't add that to your app". `log_meal` existed but only on the `calorie` companion, which the device never selects. habitCoach now also has `log_meal`/`log_water`/`log_weight`/`toggle_habit`.
+
+**`device-log` is v2, NEW** (deployed 2026-08-28): the device's real logging path — one utterance → N structured writes, executed server-side. See the function header for why this can't be `ai-chat`. Both bridges (`lib/ble-bridge.ts`, `companion-hud/tools/phone_sim.py`) now try it first and fall through to `ai-chat` on `handled: false`. **The TestFlight app predates that routing** — it needs a new EAS build before the device uses `device-log` rather than `ai-chat`.
+
+### Historical: Edge Functions — 1 redeploy pending (P3), rest current
 **`ai-chat` and `save-api-key` were both deployed 2026-07-15** (`ai-chat` → v23 with P2's SharedContext work live; `save-api-key` → v1, its first-ever deploy). `transcribe`, `daily-briefing`, `device-state`, `tts`, `food-vision` remain `ACTIVE`, no changes pending. **New gap: P3's companion-roster commit (`d549057`, 2026-07-15) postdates the `ai-chat` v23 deploy**, so `medication`/`finance`/`library` companions exist in code but aren't live yet — needs its own `supabase functions deploy ai-chat` once requested explicitly (each deploy needs its own human go-ahead per this project's rule; a generic "continue" does not count, confirmed twice this session).
 
 ### On-device verification — **underway as of 2026-07-24**, TestFlight pipeline now live
