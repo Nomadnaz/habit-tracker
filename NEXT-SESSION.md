@@ -1,86 +1,49 @@
-# NEXT-SESSION.md — start here to continue the habit-tracker build
+# NEXT SESSION — start here
 
-> ⚠️ **STALE — superseded by `handover.md` (2026-07-06).** This file describes the two-parallel-chat
-> split from 2026-06-29 (Chat A/B); that split no longer reflects how the project is worked. Read
-> `handover.md` instead. Kept here for history only.
+Read in this order: `system-model.md` → `database.md` → `current-state.md` →
+`handover-8-rep-sensor-and-voice-logging.md`.
 
-> Hand-off file. The previous chat ran out of token budget. Read this, then the three canonical
-> docs, then act. Last updated: 2026-06-29.
+The device concept changed on 2026-08-26. It is no longer a wrist-worn mirror
+of this app — it is a magnetically mounted gym instrument + voice logger. The
+firmware spec is `~/esp/projects/companion-hud/docs/rep-sensor-concept.md`.
 
-## ⏱️ 30-second orientation
-- This is a **React Native + Expo SDK 54** app at `~/esp/habit-tracker`.
-- It looks like 38 features; structurally it's ~90 Supabase tables, one AI pipeline, thin CRUD
-  screens. The full picture is in `system-model.md`.
-- Work is split across **two parallel chats**:
-  - **Chat A (AI / device):** the `ai-chat` Edge Function ("AI ask") + the ESP32 [[Companion HUD]]
-    firmware in `~/esp/projects/companion-hud`. Owns `lib/companions.ts`, `lib/streaks.ts`,
-    `components/ChatScreen.tsx`, `supabase/functions/ai-chat/`, `_shared/buildContext.ts`,
-    `006_ai_companions.sql` (all currently **untracked**).
-  - **Chat B (this one — app features):** Phase 0 foundation + the **calorie tracker** (committed).
-- **Don't edit the other chat's files** unless coordinating. The calorie work deliberately avoided
-  `ai-chat` by using a separate `food-vision` function.
+## Where things stand
 
-## 📖 Read these first, in order
-1. `system-model.md` — canonical architecture + conflict rules (wins over everything).
-2. `database.md` — schema, incl. existing-vs-proposed reconciliation.
-3. `current-state.md` — what's actually built + the progress log + ⚠️ ACTION NEEDED section.
-4. Then the **one** `tasks/NNN-*.md` you're about to work on. Never load the full master spec.
+| Piece | State |
+|---|---|
+| Rep counting on hardware | ✅ 18/18 verified across varied speed + range |
+| ROM / centimetre accuracy | ❌ **never validated against a tape measure** |
+| `device-log` (voice → many writes) | Deployed **v2**, parsing never exercised end-to-end |
+| `ai-chat` | **v24** — habitCoach logging fix + P3 companions |
+| App down-syncs (5 domains) | Written, typechecked, **never run on a device** |
+| EAS build carrying the app changes | Kicked off 2026-08-28 |
+| `exercise_sets` (somewhere to put a set) | ❌ not started — **this is next** |
 
-## ✅ What's DONE (committed)
-- **Phase 0 foundation** (tasks/001–005): canonical docs, 77-task plan, `migrations/001_baseline.sql`,
-  the [[Date Key Format]] migration (`lib/dateKey.ts` + `002_date_key_format.sql` + boot migration),
-  gym/body schema reconciliation (`003_gym_body_reconcile.sql`).
-- **Calorie tracker + snap-a-picture** (tasks/028–030, commit `12cb50c`): `app/calorie.tsx`,
-  `lib/meals-data.ts`, `lib/foodVision.ts`, `supabase/functions/food-vision/`, `007_nutrition.sql`.
-  Reachable from the Today header 🍎 icon. Manual logging works offline now; the snap flow shows a
-  labeled *mock* estimate until `food-vision` is deployed.
+## Do this first
 
-## 🚧 In progress (Chat A — do not duplicate)
-Phase-1 companion infra is partly built but **uncommitted and has known issues** (flagged, not fixed):
-`ai-chat` is a **mock** (no real Claude call / rate-limit / caching), `lib/streaks.ts` uses **UTC not
-local timezone** (breaks the canonical streak rule — should use `lib/dateKey.ts`), and
-`postWrite.ts`/`buildContext.ts` reference a `context_json` column that doesn't exist (the migration
-has `profile_md`/`assistant_notes_md`). If you touch the AI pipeline, fix these and coordinate.
+**1. Confirm the three unverified things**, in this order — each is cheap and
+each gates work behind it:
 
-## ⚠️ ACTION NEEDED (a human / privileged session — cannot be done from a background chat)
-1. **`git push`** — local is **9 commits ahead of `origin/main`**; these chats have no GitHub creds.
-2. **Run migrations** in the Supabase SQL editor (project `dnbdjjrjudrzugxkpeeh`):
-   `002_date_key_format.sql` (⚠️ run ONCE — not re-runnable), `003_gym_body_reconcile.sql`,
-   `006_ai_companions.sql`, `007_nutrition.sql`.
-3. **Deploy the vision function:** `supabase functions deploy food-vision` and
-   `supabase secrets set ANTHROPIC_API_KEY=sk-ant-…` (key stays server-side — never in the bundle).
-4. **Restart Metro with a clean cache** so the new camera deps resolve: `npx expo start -c --tunnel`.
-   (Camera works in Expo Go; a custom dev build needs a native rebuild for the new native modules.)
-5. **On device:** verify Today → 🍎 Calories → log a meal manually, then SNAP A MEAL.
-6. **Phone install (optional):** EAS path — needs a free Expo account + a paid Apple Developer
-   account ($99/yr). `eas.json` is committed.
+- Voice-log a coffee, then open the calorie tab. Does it appear? (Proves the
+  down-sync and the whole voice path.)
+- Say a full meal deal — "egg and cress sandwich, coffee, protein bar". Does it
+  log **three** items with sane macros? (Proves `device-log`, which only the
+  new build can reach; `ai-chat` will only ever log one.)
+- Stick the device on a cable stack, do 10 reps against a tape measure. Is the
+  centimetre figure within ~5cm? (Go/no-go for ever showing absolute ROM.)
 
-## ▶️ Suggested next build tasks (Chat B / app features)
-Pick the next pending one from `current-state.md`. Logical candidates per the [[Build Order]]:
-- **tasks/023 — Habits screen** (+ `HeatmapCalendar`) — high value, MVP spine, pairs with streaks.
-- **tasks/024 — Medication & Supplements** sub-section of habits.
-- **tasks/034 — Body page hub** — unifies the existing steps/water/weight screens.
-- Or harden the calorie tracker: Supabase Storage photo upload, edit-from-quick-add, water tracking.
+**2. Then build `exercise_sets`** — reps are currently counted and thrown away.
+See handover 8's last section for exactly what's missing and why `log_pb` is
+wrong today. **Needs a migration**; run it in the SQL editor, never
+`supabase db push` (it re-runs the one-time-unsafe `002`), and update
+`APPLIED.md` the moment it lands.
 
-## 🧭 Working rules (from CLAUDE.md)
-- One task per session; enrich → implement → verify (tsc) → update `current-state.md` → commit.
-- Migration numbers in task files are **hints** — run `ls supabase/migrations/` and use the next free
-  number (next is `008`).
-- Match existing screens: light theme (`#FF4D00` accent), **PixeloidSans** fonts (NOT PressStart2P —
-  CLAUDE.md is stale on this). Dark theme is task 077, deliberately last.
-- Every domain write goes through `lib/postWrite.ts` — never touch cumulative_stats/badges/Obsidian
-  directly.
+## Standing rules that bit this session
 
-## 📒 Second brain
-Full navigable docs: `~/esp/SecondBrain/Projects/Habit Tracker/` (open `Habit Tracker.md`). This
-session's log: `~/esp/SecondBrain/Conversations/2026-06-29-habit-tracker-foundation-and-calorie-tracker.md`.
-
----
-
-### Copy-paste prompt to start the next chat
-```
-Read NEXT-SESSION.md, then system-model.md, database.md, and current-state.md in the
-habit-tracker repo (~/esp/habit-tracker). I'm continuing the app-features track (Chat B).
-Don't touch the other session's AI/ai-chat files. Confirm the current state back to me,
-then let's start tasks/023 (Habits screen) — or tell me if something needs me first.
-```
+- **Never `supabase db push`.**
+- **Every function deploy needs its own explicit go-ahead** — a generic
+  "continue" doesn't count.
+- **Nothing is deployed unless the exact files are committed first.**
+- The app is **local-first**: a server-side write is invisible until that
+  domain has a pull. `tasks` is the only table with realtime.
+- Deploying an endpoint is not shipping a feature — **check what routes to it.**
