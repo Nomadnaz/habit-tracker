@@ -78,8 +78,11 @@ per-domain dedup keys — they differ, and getting one wrong double-logs.
   companion misbehaves after 2026-08-28, P3 is the first suspect.
 - `device-log` **v2** — new.
 - **No migrations were needed** for any of this; all target tables were live.
-- An EAS production build was kicked off 2026-08-28 to carry the app-side
-  changes (device-log routing + all five down-syncs) to TestFlight.
+- EAS **build 10 (v1.0.0)** built and auto-submitted to App Store Connect on
+  2026-08-28, carrying the app-side changes (device-log routing + all five
+  down-syncs). Build ID `5fbe9ff9-a71e-48da-807c-705f3a526876`. Anything before
+  build 10 does NOT have them — a tester on build 9 or earlier will still see
+  `ai-chat` answering and server-written rows staying invisible.
 
 ## What is genuinely unverified
 

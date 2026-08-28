@@ -16,7 +16,7 @@ firmware spec is `~/esp/projects/companion-hud/docs/rep-sensor-concept.md`.
 | `device-log` (voice → many writes) | Deployed **v2**, parsing never exercised end-to-end |
 | `ai-chat` | **v24** — habitCoach logging fix + P3 companions |
 | App down-syncs (5 domains) | Written, typechecked, **never run on a device** |
-| EAS build carrying the app changes | Kicked off 2026-08-28 |
+| EAS build carrying the app changes | ✅ **build 10 (v1.0.0) submitted to TestFlight 2026-08-28** |
 | `exercise_sets` (somewhere to put a set) | ❌ not started — **this is next** |
 
 ## Do this first
