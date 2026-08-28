@@ -13,7 +13,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import {
-  getSleepLog, logSleep, getRecentSleepLogs,
+  getSleepLog, logSleep, getRecentSleepLogs, pullRemoteSleep,
   getPhoneDownTarget, setPhoneDownTarget, logPhoneDown, getRecentPhoneLogs, computeChallengeStreak,
   type SleepLog, type PhoneLog,
 } from '@/lib/sleep-data';
@@ -67,6 +67,7 @@ export default function SleepDetailModal() {
   const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
+    await pullRemoteSleep(); // voice-logged sleep is written server-side
     const [log, week, t, phoneLogs] = await Promise.all([
       getSleepLog(today), getRecentSleepLogs(7), getPhoneDownTarget(), getRecentPhoneLogs(30),
     ]);

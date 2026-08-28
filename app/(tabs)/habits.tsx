@@ -18,7 +18,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import {
-  getActiveHabits, addHabit, deleteHabit, getLogsForHabit,
+  getActiveHabits, addHabit, deleteHabit, getLogsForHabit, pullRemoteHabitLogs,
   toggleToday, computeStreakWithFreezes, buildHeatmap, isDoneOnDate, setAutoFreeze,
   type Habit, type HabitLog, type Frequency,
 } from '@/lib/habits-data';
@@ -60,6 +60,9 @@ export default function HabitsScreen() {
   const [medCourseLength, setMedCourseLength] = useState('');
 
   const refresh = useCallback(async () => {
+    // Habits ticked by the voice device are written server-side; this layer is
+    // local-first and was push-only, so pull before reading or they never show.
+    await pullRemoteHabitLogs();
     const habits = await getActiveHabits();
     const logs = await Promise.all(habits.map(h => getLogsForHabit(h.id)));
     setRows(habits.map((habit, i) => ({ habit, logs: logs[i] })));

@@ -49,6 +49,52 @@ export async function getRecentMoodLogs(days = 14): Promise<MoodLog[]> {
   return out.reverse();
 }
 
+/**
+ * Pulls server-side mood entries into local storage -- this layer was
+ * push-only, so a mood logged by the voice device never reached the app. See
+ * lib/meals-data.ts for the full reasoning; the merge rule is the same:
+ * LOCAL WINS on a date collision (never clobber an unsynced edit), and a
+ * purely-local day is kept, never deleted.
+ *
+ * Never throws. Returns true only if something changed.
+ */
+export async function pullRemoteMood(days = 14): Promise<boolean> {
+  try {
+    const { data: u } = await supabase.auth.getUser();
+    const userId = u.user?.id;
+    if (!userId) return false;
+    const since = toDateKey(new Date(Date.now() - days * 86400000));
+
+    const { data, error } = await supabase
+      .from('mood_logs')
+      .select('id, date, mood_score, stress_score, triggers, note, created_at')
+      .eq('user_id', userId).gte('date', since);
+    if (error || !data) return false;
+
+    return await withStorageLock(MOOD_KEY, async () => {
+      const map = await loadMap();
+      let changed = false;
+      for (const r of data) {
+        const key = String(r.date);
+        if (map[key]) continue; // local wins
+        map[key] = {
+          id: String(r.id), date: key,
+          moodScore: Number(r.mood_score ?? 0),
+          stressScore: r.stress_score == null ? undefined : Number(r.stress_score),
+          triggers: Array.isArray(r.triggers) ? (r.triggers as string[]) : [],
+          note: (r.note as string) ?? undefined,
+          createdAt: String(r.created_at ?? new Date().toISOString()),
+        };
+        changed = true;
+      }
+      if (changed) await AsyncStorage.setItem(MOOD_KEY, JSON.stringify(map));
+      return changed;
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function getTodayMood(): Promise<MoodLog | null> {
   const map = await loadMap();
   return map[toDateKey(new Date())] ?? null;

@@ -18,7 +18,7 @@ import { GymHeatmap, GymHeatmapLegend } from '@/components/GymHeatmap';
 import { Spark } from '@/components/Spark';
 
 import {
-  loadBodyData, addWater, logWeight,
+  loadBodyData, addWater, logWeight, pullRemoteBody,
   todaySteps, todayWaterMl, latestWeight, weightHistory,
   stepsSquareState, trainingDayType,
   goalStatus, formatSleep, refreshAppleHealthIfConnected,
@@ -77,6 +77,10 @@ export default function BodyScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => {
+    // Water/weight logged by the voice device land server-side, and this layer
+    // is local-first + push-only -- pull first or they never appear here.
+    // Fire-and-forget: the local render below must not wait on the network.
+    void pullRemoteBody().then(found => { if (found) loadBodyData().then(setData); });
     loadBodyData().then(d => {
       const movement = d.activeMovement as BodyMovement;
       setData(d);

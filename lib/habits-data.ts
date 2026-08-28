@@ -140,6 +140,55 @@ async function saveLogMap(map: LogMap): Promise<void> {
   await AsyncStorage.setItem(LOGS_KEY, JSON.stringify(map));
 }
 
+/**
+ * Pulls server-side habit completions into local storage -- this layer was
+ * push-only, so a habit ticked by voice never reached the app. See
+ * lib/meals-data.ts for the full reasoning.
+ *
+ * Deduped on (habitId, date), matching the uq_habit_logs_habit_date unique
+ * index the server upserts against, so re-running this can't double-log a day.
+ * Local wins on collision; local-only entries are kept.
+ *
+ * Never throws. Returns true only if something changed.
+ */
+export async function pullRemoteHabitLogs(days = 30): Promise<boolean> {
+  try {
+    const { data: u } = await supabase.auth.getUser();
+    const userId = u.user?.id;
+    if (!userId) return false;
+    const since = toDateKey(new Date(Date.now() - days * 86400000));
+
+    const { data, error } = await supabase
+      .from('habit_logs')
+      .select('id, habit_id, date, completed, notes, created_at')
+      .eq('user_id', userId).gte('date', since);
+    if (error || !data) return false;
+
+    return await withStorageLock(LOGS_KEY, async () => {
+      const map = await loadLogMap();
+      let changed = false;
+      for (const r of data) {
+        const habitId = String(r.habit_id);
+        const date = String(r.date);
+        const list = map[habitId] ?? [];
+        if (list.some((l) => l.date === date)) continue; // local wins
+        list.push({
+          id: String(r.id), habitId, date,
+          completed: r.completed !== false,
+          notes: (r.notes as string) ?? undefined,
+          createdAt: String(r.created_at ?? new Date().toISOString()),
+        });
+        map[habitId] = list;
+        changed = true;
+      }
+      if (changed) await saveLogMap(map);
+      return changed;
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function getLogsForHabit(habitId: string): Promise<HabitLog[]> {
   const map = await loadLogMap();
   return map[habitId] ?? [];

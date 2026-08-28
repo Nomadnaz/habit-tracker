@@ -17,6 +17,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { postWrite } from './postWrite';
+import { withStorageLock } from './storageLock';
 import { toDateKey as dateKey, addDaysToKey } from './dateKey';
 export { dateKey };
 import {
@@ -275,6 +276,76 @@ export async function refreshAppleHealthIfConnected(): Promise<BodyData | null> 
   const merged = mergeAppleHealthIntoBodyData(data, metrics);
   await save(merged);
   return merged;
+}
+
+// ── Down-sync ────────────────────────────────────────────────────────────────
+// This layer is local-first and was push-only, so water/weight logged by the
+// voice device (which writes server-side) never reached the app. Same gap and
+// same fix as lib/meals-data.ts -- see the long note there for the merge
+// reasoning. `tasks` is the only table with realtime, so every domain needs
+// its own pull.
+//
+// Water and weight are the awkward case: locally they are bare
+// {amountMl|weightKg, at} entries with NO id -- the row id is generated at
+// insert time and thrown away. So these dedupe on the TIMESTAMP instead, via
+// epoch-ms so that '...T12:00:00.000Z' and '...T12:00:00+00:00' compare equal
+// rather than double-logging every remote drink.
+const epoch = (iso: string): number => {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? -1 : t;
+};
+
+/**
+ * Pulls server-side water and weight entries into local storage. Never throws
+ * (offline is normal); returns true only if something actually changed.
+ * `days` bounds the query -- the device can only have written recently, and an
+ * unbounded pull would grow forever.
+ */
+export async function pullRemoteBody(days = 14): Promise<boolean> {
+  try {
+    const userId = await getUid();
+    if (!userId) return false;
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+
+    const [waterQ, weightQ] = await Promise.all([
+      supabase.from('water_logs').select('amount_ml, logged_at')
+        .eq('user_id', userId).gte('logged_at', since),
+      supabase.from('body_weight_logs').select('weight_kg, logged_at')
+        .eq('user_id', userId).gte('logged_at', since),
+    ]);
+    if (waterQ.error || weightQ.error) return false;
+
+    return await withStorageLock(BODY_KEY, async () => {
+      const data = await loadBodyData();
+      let changed = false;
+
+      const haveWater = new Set((data.waterLogs ?? []).map((w) => epoch(w.at)));
+      for (const r of waterQ.data ?? []) {
+        const at = String(r.logged_at);
+        if (haveWater.has(epoch(at))) continue;
+        data.waterLogs.push({ amountMl: Number(r.amount_ml ?? 0), at });
+        haveWater.add(epoch(at));
+        changed = true;
+      }
+
+      const haveWeight = new Set((data.weightLogs ?? []).map((w) => epoch(w.at)));
+      for (const r of weightQ.data ?? []) {
+        const at = String(r.logged_at);
+        if (haveWeight.has(epoch(at))) continue;
+        data.weightLogs.push({ weightKg: Number(r.weight_kg ?? 0), at });
+        haveWeight.add(epoch(at));
+        changed = true;
+      }
+
+      if (!changed) return false;
+      data.waterLogs.sort((a, b) => epoch(a.at) - epoch(b.at));
+      data.weightLogs.sort((a, b) => epoch(a.at) - epoch(b.at));
+      await save(data);
+      return true;
+    });
+  } catch {
+    return false;
+  }
 }
 
 // ── Mutations (the interactive trackers) ────────────────────────────────────

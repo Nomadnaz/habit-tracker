@@ -13,7 +13,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-import { getRecentMoodLogs, getTodayMood, logMood, TRIGGERS, type MoodLog } from '@/lib/mood-data';
+import { getRecentMoodLogs, getTodayMood, logMood, pullRemoteMood, TRIGGERS, type MoodLog } from '@/lib/mood-data';
 import ChatScreen from '@/components/ChatScreen';
 
 const ORANGE = '#FF4D00';
@@ -35,6 +35,7 @@ export default function MoodModal() {
   const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
+    await pullRemoteMood(); // voice-logged moods are written server-side
     const [today, week] = await Promise.all([getTodayMood(), getRecentMoodLogs(14)]);
     if (today) { setMood(today.moodScore); setStress(today.stressScore ?? 5); setTriggers(today.triggers); setNote(today.note ?? ''); }
     setRecent(week);

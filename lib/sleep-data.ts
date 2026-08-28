@@ -90,6 +90,52 @@ export async function getRecentSleepLogs(days = 7): Promise<SleepLog[]> {
   return logs.reverse(); // oldest first, for a chart
 }
 
+/**
+ * Pulls server-side sleep entries into local storage -- this layer was
+ * push-only, so sleep logged by the voice device never reached the app. Same
+ * merge rule as everywhere else: local wins on a date collision, local-only
+ * days are kept. See lib/meals-data.ts for why.
+ *
+ * Never throws. Returns true only if something changed.
+ */
+export async function pullRemoteSleep(days = 14): Promise<boolean> {
+  try {
+    const { data: u } = await supabase.auth.getUser();
+    const userId = u.user?.id;
+    if (!userId) return false;
+    const since = toDateKey(new Date(Date.now() - days * 86400000));
+
+    const { data, error } = await supabase
+      .from('sleep_logs')
+      .select('id, date, bedtime, wake_time, total_hours, quality_score, notes, created_at')
+      .eq('user_id', userId).gte('date', since);
+    if (error || !data) return false;
+
+    return await withStorageLock(SLEEP_KEY, async () => {
+      const map = await loadSleepMap();
+      let changed = false;
+      for (const r of data) {
+        const key = String(r.date);
+        if (map[key]) continue; // local wins
+        map[key] = {
+          id: String(r.id), date: key,
+          bedtime: (r.bedtime as string) ?? undefined,
+          wakeTime: (r.wake_time as string) ?? undefined,
+          totalHours: r.total_hours == null ? undefined : Number(r.total_hours),
+          qualityScore: r.quality_score == null ? undefined : Number(r.quality_score),
+          notes: (r.notes as string) ?? undefined,
+          createdAt: String(r.created_at ?? new Date().toISOString()),
+        };
+        changed = true;
+      }
+      if (changed) await saveSleepMap(map);
+      return changed;
+    });
+  } catch {
+    return false;
+  }
+}
+
 export async function getSleepLog(dateKey: string): Promise<SleepLog | null> {
   const map = await loadSleepMap();
   return map[dateKey] ?? null;
