@@ -219,6 +219,92 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     if (error) throw new Error(error.message);
     return { id: row.id, table: 'meals', date: row.date, name: row.name, calories: row.calories };
   },
+
+  // ── Device voice-logging actions (task: device-log) ──────────────────────
+  // These exist because the device has no local store to confirm into: it
+  // speaks, the server writes, the screen shows what landed. Every one is a
+  // plain append — nothing here can overwrite a value the user didn't just say.
+
+  log_water: async (supabase, userId, data, _tz) => {
+    const ml = num(data.amountMl) ?? num(data.amount_ml) ?? num(data.ml);
+    if (ml === undefined || ml <= 0) throw new Error('log_water needs a positive amountMl');
+    // Sanity bound: a single spoken drink above 3L is a mis-transcription
+    // ("two litres" heard as "twenty"), and water_logs has no upper guard.
+    if (ml > 3000) throw new Error(`log_water: ${ml}ml in one go is implausible — say it again?`);
+    const row = { id: crypto.randomUUID(), user_id: userId, amount_ml: Math.round(ml) };
+    const { error } = await supabase.from('water_logs').insert(row);
+    if (error) throw new Error(error.message);
+    return { id: row.id, table: 'water_logs', amount_ml: row.amount_ml };
+  },
+
+  log_weight: async (supabase, userId, data, _tz) => {
+    const kg = num(data.weightKg) ?? num(data.weight_kg) ?? num(data.kg);
+    if (kg === undefined) throw new Error('log_weight needs a weightKg');
+    // Guards a spoken-unit mix-up (pounds read as kg) as much as a typo.
+    if (kg < 20 || kg > 400) throw new Error(`log_weight: ${kg}kg is out of range — pounds by mistake?`);
+    const row = { id: crypto.randomUUID(), user_id: userId, weight_kg: kg };
+    const { error } = await supabase.from('body_weight_logs').insert(row);
+    if (error) throw new Error(error.message);
+    return { id: row.id, table: 'body_weight_logs', weight_kg: kg };
+  },
+
+  // Resolves a spoken habit NAME to its id -- the device never knows ids, and
+  // the model must not invent one. Unmatched names fail loudly rather than
+  // silently creating a habit the user didn't ask for.
+  toggle_habit: async (supabase, userId, data, tzOffsetMinutes) => {
+    const name = str(data.name) ?? str(data.habit) ?? str(data.label);
+    if (!name) throw new Error('toggle_habit needs a habit name');
+    const { data: habits, error: hErr } = await supabase
+      .from('habits').select('id, name').eq('user_id', userId).eq('active', true);
+    if (hErr) throw new Error(hErr.message);
+
+    const want = name.toLowerCase().trim();
+    const match = (habits ?? []).find((h: { name: string }) => h.name.toLowerCase().trim() === want)
+      ?? (habits ?? []).find((h: { name: string }) => h.name.toLowerCase().includes(want));
+    if (!match) {
+      const known = (habits ?? []).map((h: { name: string }) => h.name).join(', ') || 'none';
+      throw new Error(`no habit matching "${name}" (you have: ${known})`);
+    }
+
+    const date = resolveDateKey(data.date, tzOffsetMinutes);
+    const completed = data.completed === undefined ? true : data.completed === true;
+    // uq_habit_logs_habit_date makes saying it twice idempotent rather than a
+    // duplicate-key error the user would hear as a failure.
+    const { error } = await supabase
+      .from('habit_logs')
+      .upsert({ id: crypto.randomUUID(), user_id: userId, habit_id: match.id, date, completed },
+              { onConflict: 'habit_id,date' });
+    if (error) throw new Error(error.message);
+    return { table: 'habit_logs', habit_id: match.id, name: match.name, date, completed };
+  },
+
+  log_sleep: async (supabase, userId, data, tzOffsetMinutes) => {
+    const hours = num(data.totalHours) ?? num(data.total_hours) ?? num(data.hours);
+    if (hours === undefined || hours <= 0 || hours > 24) throw new Error('log_sleep needs totalHours between 0 and 24');
+    const date = resolveDateKey(data.date, tzOffsetMinutes);
+    const quality = num(data.qualityScore) ?? num(data.quality_score);
+    const { error } = await supabase.from('sleep_logs').upsert({
+      id: crypto.randomUUID(), user_id: userId, date,
+      total_hours: hours,
+      quality_score: quality !== undefined ? Math.max(1, Math.min(5, Math.round(quality))) : null,
+      source_device: 'manual',
+    }, { onConflict: 'user_id,date' });
+    if (error) throw new Error(error.message);
+    return { table: 'sleep_logs', date, total_hours: hours };
+  },
+
+  log_mood: async (supabase, userId, data, tzOffsetMinutes) => {
+    const score = num(data.moodScore) ?? num(data.mood_score) ?? num(data.score);
+    if (score === undefined) throw new Error('log_mood needs a moodScore 1-10');
+    const date = resolveDateKey(data.date, tzOffsetMinutes);
+    const { error } = await supabase.from('mood_logs').upsert({
+      id: crypto.randomUUID(), user_id: userId, date,
+      mood_score: Math.max(1, Math.min(10, Math.round(score))),
+      note: str(data.note) ?? null,
+    }, { onConflict: 'user_id,date' });
+    if (error) throw new Error(error.message);
+    return { table: 'mood_logs', date, mood_score: Math.round(score) };
+  },
 };
 
 /** True for action types the app/device can run as internal Supabase writes. */
@@ -240,6 +326,16 @@ export const ACTION_SPECS: Record<string, string> = {
     'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }',
   remember_about_user:
     'remember_about_user — save a fact the user wants remembered for future conversations. data: { "note": string }',
+  log_water:
+    'log_water — log drinking water. data: { "amountMl": number }',
+  log_weight:
+    'log_weight — log a body-weight reading. data: { "weightKg": number }',
+  toggle_habit:
+    'toggle_habit — mark a habit done for a day. data: { "name": string (the habit\'s name as the user says it), "date"?: "YYYY-MM-DD"|"today", "completed"?: boolean }',
+  log_sleep:
+    'log_sleep — log a night\'s sleep. data: { "totalHours": number, "qualityScore"?: 1-5, "date"?: "YYYY-MM-DD"|"today" }',
+  log_mood:
+    'log_mood — log how the user feels. data: { "moodScore": 1-10, "note"?: string, "date"?: "YYYY-MM-DD"|"today" }',
 };
 
 /** Pure gate: the action's decision BEFORE anyone writes anything. */
