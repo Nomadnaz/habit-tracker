@@ -34,6 +34,7 @@ import {
   syncTaskDoneToApple,
 } from './apple-sync';
 import { findTaskDateKey, moveTaskInMap } from './task-schedule';
+import { genId } from './workout-data';
 
 export type ActionStatus = 'auto' | 'preview' | 'clarify' | 'unsupported' | 'executed' | 'failed';
 
@@ -52,6 +53,24 @@ const str = (v: unknown): string | undefined =>
   typeof v === 'string' && v.trim() ? v.trim() : undefined;
 const numOrUndef = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+
+// Epley formula — see supabase/functions/_shared/actionExecutor.ts for why
+// raw weight_kg is the wrong PB test once reps vary. Kept in sync with that
+// server-side copy (mirrors the same log_pb/log_set contract for the
+// gated-'auto' path, which the app executes locally rather than server-side).
+const estimated1RM = (weightKg: number, reps: number): number =>
+  weightKg * (1 + Math.max(0, reps) / 30);
+
+async function bestEstimated1RM(userId: string, exerciseId: string): Promise<number> {
+  const [pbRes, setsRes] = await Promise.all([
+    supabase.from('pb_log').select('weight_kg, reps').eq('user_id', userId).eq('exercise_id', exerciseId),
+    supabase.from('exercise_sets').select('estimated_1rm_kg').eq('user_id', userId).eq('exercise_id', exerciseId),
+  ]);
+  const fromPbs = (pbRes.data ?? []).map((r: { weight_kg: number; reps: number | null }) =>
+    estimated1RM(r.weight_kg, r.reps ?? 1));
+  const fromSets = (setsRes.data ?? []).map((r: { estimated_1rm_kg: number }) => r.estimated_1rm_kg);
+  return Math.max(0, ...fromPbs, ...fromSets);
+}
 
 function priorityOf(v: unknown): Priority {
   const p = str(v)?.toUpperCase();
@@ -197,17 +216,63 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
       const weightKg = numOrUndef(data.weightKg) ?? numOrUndef(data.weight_kg);
       if (!exerciseId || weightKg === undefined) throw new Error('I need an exercise and a weight to log a PB.');
       if (!userId) throw new Error('Not signed in.');
+      const reps = numOrUndef(data.reps) ?? 1;
+      const e1rm = estimated1RM(weightKg, reps);
+      const prevBest = await bestEstimated1RM(userId, exerciseId);
+      if (e1rm <= prevBest) {
+        throw new Error(`That's not a PB — your best estimated 1RM for this exercise is already ${prevBest.toFixed(1)}kg.`);
+      }
       const row = {
+        id: genId(),
         user_id: userId,
         exercise_id: exerciseId,
         weight_kg: weightKg,
         reps: numOrUndef(data.reps) ?? null,
         date: resolveDateKey(data.date),
       };
-      const { error } = await supabase.from('pb_log').insert(row);
+      const { error } = await supabase.from('pb_log').upsert(row, { onConflict: 'user_id,exercise_id,date' });
       if (error) throw new Error(error.message);
       await postWrite('workout', row, 'create');
       return { summary: `Logged PB: ${exerciseId} ${weightKg}kg` };
+    }
+
+    case 'log_set': {
+      const exerciseId = str(data.exerciseId) ?? str(data.exercise_id);
+      const weightKg = numOrUndef(data.weightKg) ?? numOrUndef(data.weight_kg);
+      const reps = numOrUndef(data.reps);
+      if (!exerciseId || weightKg === undefined || reps === undefined) {
+        throw new Error('I need an exercise, a weight, and reps to log a set.');
+      }
+      if (!userId) throw new Error('Not signed in.');
+      const date = resolveDateKey(data.date);
+      const e1rm = estimated1RM(weightKg, reps);
+      const setRow = {
+        id: genId(),
+        user_id: userId,
+        exercise_id: exerciseId,
+        date,
+        weight_kg: weightKg,
+        reps,
+        estimated_1rm_kg: e1rm,
+        rom_cm: numOrUndef(data.romCm) ?? numOrUndef(data.rom_cm) ?? null,
+        peak_velocity_mps: numOrUndef(data.peakVelocityMps) ?? numOrUndef(data.peak_velocity_mps) ?? null,
+        tempo_seconds: numOrUndef(data.tempoSeconds) ?? numOrUndef(data.tempo_seconds) ?? null,
+        source: str(data.source) === 'device' ? 'device' : 'manual',
+      };
+      const { error } = await supabase.from('exercise_sets').insert(setRow);
+      if (error) throw new Error(error.message);
+
+      const prevBest = await bestEstimated1RM(userId, exerciseId);
+      let newPb = false;
+      if (e1rm > prevBest) {
+        const { error: pbError } = await supabase.from('pb_log').upsert(
+          { id: genId(), user_id: userId, exercise_id: exerciseId, weight_kg: weightKg, reps, date },
+          { onConflict: 'user_id,exercise_id,date' },
+        );
+        if (!pbError) newPb = true;
+      }
+      await postWrite('workout', setRow, 'create');
+      return { summary: `Logged set: ${exerciseId} ${weightKg}kg x${reps}${newPb ? ' — new PB!' : ''}` };
     }
 
     default:

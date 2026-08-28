@@ -92,6 +92,32 @@ const resolveDateKey = (v: unknown, tzOffsetMinutes = 0): string => {
   return localDateKey(tzOffsetMinutes);
 };
 
+// Epley formula — the standard estimate for what a lifter could do for one
+// rep, given any weight x reps pair. Needed because raw weight is the wrong
+// PB test once reps vary: 20kg x 10 (~26.7kg e1RM) beats 25kg x 3 (~27.5kg is
+// actually still higher — the point is it's not simply "biggest weight_kg
+// ever entered", which is what pb_log used to test).
+const estimated1RM = (weightKg: number, reps: number): number =>
+  weightKg * (1 + Math.max(0, reps) / 30);
+
+// The best estimated-1RM this user has ever posted for an exercise, across
+// both pb_log (manually-declared PBs) and exercise_sets (every logged set) —
+// a set that was never explicitly called a "PB" can still be the true best.
+async function bestEstimated1RM(
+  supabase: SupabaseClient,
+  userId: string,
+  exerciseId: string,
+): Promise<number> {
+  const [pbRes, setsRes] = await Promise.all([
+    supabase.from('pb_log').select('weight_kg, reps').eq('user_id', userId).eq('exercise_id', exerciseId),
+    supabase.from('exercise_sets').select('estimated_1rm_kg').eq('user_id', userId).eq('exercise_id', exerciseId),
+  ]);
+  const fromPbs = (pbRes.data ?? []).map((r: { weight_kg: number; reps: number | null }) =>
+    estimated1RM(r.weight_kg, r.reps ?? 1));
+  const fromSets = (setsRes.data ?? []).map((r: { estimated_1rm_kg: number }) => r.estimated_1rm_kg);
+  return Math.max(0, ...fromPbs, ...fromSets);
+}
+
 const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
   // "add gym tomorrow at 6" → a real row in `tasks`.
   create_task: async (supabase, userId, data, tzOffsetMinutes) => {
@@ -161,6 +187,12 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     const exerciseId = str(data.exerciseId) ?? str(data.exercise_id);
     const weightKg = num(data.weightKg) ?? num(data.weight_kg);
     if (!exerciseId || weightKg === undefined) throw new Error('log_pb needs exerciseId + weightKg');
+    const reps = num(data.reps) ?? 1;
+    const e1rm = estimated1RM(weightKg, reps);
+    const prevBest = await bestEstimated1RM(supabase, userId, exerciseId);
+    if (e1rm <= prevBest) {
+      throw new Error(`Not a PB — best estimated 1RM for this exercise is already ${prevBest.toFixed(1)}kg.`);
+    }
     const row = {
       user_id: userId,
       exercise_id: exerciseId,
@@ -168,9 +200,53 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
       reps: num(data.reps) ?? null,
       date: resolveDateKey(data.date, tzOffsetMinutes),
     };
-    const { error } = await supabase.from('pb_log').insert(row);
+    const { error } = await supabase.from('pb_log').upsert(row, { onConflict: 'user_id,exercise_id,date' });
     if (error) throw new Error(error.message);
-    return { table: 'pb_log', exercise_id: exerciseId, weight_kg: weightKg };
+    return { table: 'pb_log', exercise_id: exerciseId, weight_kg: weightKg, estimated_1rm_kg: e1rm };
+  },
+
+  // A single set — weight/reps always spoken, rom/velocity/tempo measured by
+  // the rep-sensor firmware when source is 'device' (that wiring doesn't
+  // exist yet on the firmware/bridge side — see handover-8 — so today every
+  // caller passes source: 'manual' or omits it). Also the real PB check: any
+  // set can be the user's best estimated-1RM even if they never said "PB",
+  // so this upserts pb_log too when it is one.
+  log_set: async (supabase, userId, data, tzOffsetMinutes) => {
+    const exerciseId = str(data.exerciseId) ?? str(data.exercise_id);
+    const weightKg = num(data.weightKg) ?? num(data.weight_kg);
+    const reps = num(data.reps);
+    if (!exerciseId || weightKg === undefined || reps === undefined) {
+      throw new Error('log_set needs exerciseId + weightKg + reps');
+    }
+    const date = resolveDateKey(data.date, tzOffsetMinutes);
+    const e1rm = estimated1RM(weightKg, reps);
+    const source = str(data.source) === 'device' ? 'device' : 'manual';
+    const setRow = {
+      id: crypto.randomUUID(),
+      user_id: userId,
+      exercise_id: exerciseId,
+      date,
+      weight_kg: weightKg,
+      reps,
+      estimated_1rm_kg: e1rm,
+      rom_cm: num(data.romCm) ?? num(data.rom_cm) ?? null,
+      peak_velocity_mps: num(data.peakVelocityMps) ?? num(data.peak_velocity_mps) ?? null,
+      tempo_seconds: num(data.tempoSeconds) ?? num(data.tempo_seconds) ?? null,
+      source,
+    };
+    const { error } = await supabase.from('exercise_sets').insert(setRow);
+    if (error) throw new Error(error.message);
+
+    const prevBest = await bestEstimated1RM(supabase, userId, exerciseId);
+    let newPb = false;
+    if (e1rm > prevBest) {
+      const { error: pbError } = await supabase.from('pb_log').upsert(
+        { user_id: userId, exercise_id: exerciseId, weight_kg: weightKg, reps, date },
+        { onConflict: 'user_id,exercise_id,date' },
+      );
+      if (!pbError) newPb = true;
+    }
+    return { table: 'exercise_sets', exercise_id: exerciseId, weight_kg: weightKg, reps, estimated_1rm_kg: e1rm, new_pb: newPb };
   },
 
   // Code Audit v2 fix plan B4: buildContext.ts renders "NOTES YOU'VE SAVED"
@@ -321,7 +397,9 @@ export const ACTION_SPECS: Record<string, string> = {
   complete_task:
     'complete_task — mark a task done. data: { "taskId": string (the id shown in TASKS) }',
   log_pb:
-    'log_pb — record a personal best. data: { "exerciseId": string, "weightKg": number, "reps"?: number, "date"?: "YYYY-MM-DD" }',
+    'log_pb — record a personal best. Rejected (throws) if it is not actually a new best estimated-1RM for that exercise. data: { "exerciseId": string, "weightKg": number, "reps"?: number, "date"?: "YYYY-MM-DD" }',
+  log_set:
+    'log_set — log one set (weight x reps). Always logs to exercise_sets; also updates pb_log if this set beats the exercise\'s best estimated-1RM. data: { "exerciseId": string, "weightKg": number, "reps": number, "date"?: "YYYY-MM-DD" }',
   log_meal:
     'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }',
   remember_about_user:

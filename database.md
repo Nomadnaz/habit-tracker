@@ -37,6 +37,7 @@ Concrete mapping (see `supabase/migrations/003_gym_body_reconcile.sql`, drafted 
 | `gym_plan` (PPL day planner) | new table, no existing equivalent — added as-is |
 | `body_logs` (weight/water/steps/vitamins/notes, one row/day) | **not introduced** — stays split across `body_weight_logs`/`water_logs`; steps/vitamins/notes deferred to tasks/034 (Body page hub) as new columns on those tables if/when a screen needs them |
 | `exercises` | already matches, used as-is |
+| `exercise_sets` (new, migration `030`) | one row per logged set — `weight_kg`/`reps` always spoken, `estimated_1rm_kg` computed via Epley at write time, `rom_cm`/`peak_velocity_mps`/`tempo_seconds` populated only when `source = 'device'` (rep-sensor firmware; that wiring doesn't exist yet — see handover-8). `exercise_id` is TEXT, not FK'd, matching `pb_log`'s existing convention. `log_pb`/`log_set` in `_shared/actionExecutor.ts` (and `lib/actionExecutor.ts`'s client-side mirror) now compare against the best estimated-1RM across `pb_log` ∪ `exercise_sets` before accepting a PB, instead of `log_pb`'s old blind insert. |
 
 ---
 

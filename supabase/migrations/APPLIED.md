@@ -41,7 +41,10 @@
 | 027_vault_inbox.sql | ✅ yes | 2026-07-08 | Applied via Supabase MCP. `vault_inbox` table confirmed live. |
 | 028_firmware_storage.sql | ✅ yes | 2026-07-08 | Applied via Supabase MCP (public `firmware` bucket for OTA — user explicitly confirmed the public-bucket tradeoff). Bucket confirmed live via `storage.buckets`. |
 
-All 28 numbered migrations are now live. `supabase/migrations/` and the live project are in sync.
+| 029_daily_steps.sql | ✅ yes | 2026-08-04 (approx) | Confirmed live per current-state.md ("Migrations — all 29 live"); this ledger just hadn't been updated for it. |
+| 030_exercise_sets.sql | ⬜ NOT YET RUN | — | New table for the rep-sensor pivot (handover-8, element 2) — `exercise_sets` + estimated-1RM PB detection. Paste into the SQL editor, then flip this row and re-run `_shared/actionExecutor.ts`'s callers (redeploy `ai-chat` + `device-log`, both import it) — until then `log_pb`/`log_set` will 500 on the missing table. |
+
+All 29 numbered migrations through `029` are live. `030` is drafted, not yet applied — see row above.
 
 ## Legacy table cleanup (2026-07-06)
 Before running `009_habits.sql`, discovered the live DB already had `habits`, `habit_logs`, `profiles`,

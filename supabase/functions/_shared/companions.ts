@@ -92,7 +92,7 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['workout_done_log', 'pb_log', 'body_weight_logs', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'gym'),
-    actions: ['log_pb'],
+    actions: ['log_pb', 'log_set'],
   },
   focus: {
     defaultName: 'Focus',
