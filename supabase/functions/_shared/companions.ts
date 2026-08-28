@@ -64,7 +64,20 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['tasks', 'user_focus', 'habit_logs', 'user_context_summary', 'vault'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'habit & task'),
-    actions: ['create_task', 'reschedule_task', 'complete_task', 'remember_about_user'],
+    // habitCoach is DEFAULT_COMPANION -- what the voice device gets when no
+    // companionType is sent. It could create tasks but not log anything, so
+    // "log a coffee" came back as "I can't add that to your app" while "add a
+    // task" worked (reported on hardware 2026-08-28). Logging verbs belong on
+    // the device's default companion.
+    //
+    // device-log is still the better path for this (it writes several items
+    // from one sentence; ai-chat emits at most one action per turn). These
+    // exist so a client that hasn't shipped the device-log routing yet can
+    // still log a single item instead of being told to do it by hand.
+    actions: [
+      'create_task', 'reschedule_task', 'complete_task', 'remember_about_user',
+      'log_meal', 'log_water', 'log_weight', 'toggle_habit',
+    ],
   },
   life: {
     defaultName: 'Assistant',
