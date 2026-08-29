@@ -70,13 +70,17 @@ const LOG_SCHEMA = {
         required: [
           'kind', 'name', 'confidence', 'calories', 'protein_g', 'carbs_g',
           'fat_g', 'meal_type', 'amount_ml', 'weight_kg', 'total_hours',
-          'mood_score', 'date', 'task_hour',
+          'mood_score', 'date', 'task_hour', 'reps',
         ],
         properties: {
           kind: {
             type: 'string',
-            enum: ['meal', 'water', 'weight', 'habit', 'sleep', 'mood', 'task', 'note'],
+            enum: ['meal', 'water', 'weight', 'habit', 'sleep', 'mood', 'task', 'note', 'exercise'],
           },
+          // For kind 'exercise' this is the exercise name as spoken ("squats",
+          // "bench press") -- resolved against the user's own `exercises`
+          // rows after parsing (see resolveExerciseId), not by the model,
+          // which never sees the user's exercise IDs.
           name: { type: 'string' },
           confidence: { type: 'number' },
           // Nullable fields use anyOf rather than a `type: ['number','null']`
@@ -94,6 +98,7 @@ const LOG_SCHEMA = {
           mood_score: nullable({ type: 'number' }),
           date: nullable({ type: 'string' }),
           task_hour: nullable({ type: 'number' }),
+          reps: nullable({ type: 'number' }),
         },
       },
     },
@@ -115,15 +120,46 @@ RULES
 - meal_type: infer from the food and the hour if the speaker doesn't say. A sandwich at midday is lunch; a protein bar on its own is a snack.
 - confidence 0-1: how sure you are this is what they meant. Below 0.5, put the phrase in "unclear" instead of guessing.
 - Anything you cannot confidently turn into an entry goes in "unclear" verbatim. Never invent a number the speaker did not say and you cannot reasonably estimate.
-- Never log something the speaker only mentioned in passing ("I should drink more water" is not a water log).`;
+- Never log something the speaker only mentioned in passing ("I should drink more water" is not a water log).
+- "exercise" is a gym set: a named exercise + weight + reps, e.g. "squats, sixty kilos for eight reps" -> name "Squats", weight_kg 60, reps 8. Only emit this when BOTH a weight and a rep count were said -- "I did squats" alone with no numbers goes to "unclear", never guessed.`;
+
+// Case-insensitive, punctuation-stripped match against the user's own
+// exercises -- the model never sees exercise IDs (unlike ai-chat, this
+// endpoint has no buildContext step), so a spoken name has to be resolved
+// here. Exact match wins; otherwise substring containment either direction,
+// rejecting if more than one exercise matches (ambiguous beats wrong).
+function resolveExerciseId(
+  spokenName: string,
+  exercises: { id: string; name: string }[],
+): string | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+  const target = norm(spokenName);
+  if (!target) return null;
+  const exact = exercises.filter((e) => norm(e.name) === target);
+  if (exact.length === 1) return exact[0].id;
+  if (exact.length > 1) return null; // ambiguous -- don't guess
+  const contains = exercises.filter((e) => {
+    const n = norm(e.name);
+    return n.includes(target) || target.includes(n);
+  });
+  return contains.length === 1 ? contains[0].id : null;
+}
 
 // Maps one parsed item onto the executor contract in _shared/actionExecutor.ts.
-function toAction(item: Record<string, unknown>): CompanionAction | null {
+// exerciseId is pre-resolved (async, needs a DB lookup) and passed in only
+// for kind 'exercise' -- every other kind ignores the third argument.
+function toAction(item: Record<string, unknown>, exerciseId?: string | null): CompanionAction | null {
   const conf = typeof item.confidence === 'number' ? item.confidence : 0.5;
   const n = (v: unknown) => (typeof v === 'number' ? v : undefined);
   const date = typeof item.date === 'string' ? item.date : 'today';
 
   switch (item.kind) {
+    case 'exercise': {
+      const weightKg = n(item.weight_kg);
+      const reps = n(item.reps);
+      if (!exerciseId || weightKg === undefined || reps === undefined) return null;
+      return { type: 'log_set', confidence: conf, data: { exerciseId, weightKg, reps, date } };
+    }
     case 'meal':
       return {
         type: 'log_meal', confidence: conf,
@@ -167,6 +203,7 @@ function summarise(item: Record<string, unknown>): string {
     case 'sleep': return `${item.total_hours} h sleep`;
     case 'mood': return `mood ${r(item.mood_score)}/10`;
     case 'task': return `task: ${item.name}`;
+    case 'exercise': return `${item.name} · ${item.weight_kg}kg x${r(item.reps)}`;
     default: return String(item.name ?? item.kind);
   }
 }
@@ -234,16 +271,43 @@ Deno.serve(async (req: Request) => {
     const items = out?.items ?? [];
     const unclear = out?.unclear ?? [];
 
-    const actions = items.map(toAction).filter((a): a is CompanionAction => a !== null);
+    // Exercise names need resolving against this user's own `exercises`
+    // rows before an action can be built -- fetch once, reuse for every
+    // 'exercise' item in the utterance rather than a query each.
+    const hasExercise = items.some((it) => it.kind === 'exercise');
+    const userExercises = hasExercise
+      ? ((await admin.from('exercises').select('id, name').eq('user_id', userId)).data ?? [])
+      : [];
+
+    // Build item/action pairs together so a null action (unresolved exercise
+    // name, missing weight/reps) can be dropped WITHOUT desyncing `items[i]`
+    // from `results[i]` below -- a plain map+filter would silently misalign
+    // every item after the first drop.
+    const pairs = items.map((item) => {
+      const exerciseId = item.kind === 'exercise'
+        ? resolveExerciseId(String(item.name ?? ''), userExercises)
+        : undefined;
+      return { item, action: toAction(item, exerciseId) };
+    });
+    const actionable = pairs.filter((p): p is { item: Record<string, unknown>; action: CompanionAction } => p.action !== null);
+    // Items that parsed but couldn't become an action (e.g. "leg press" with
+    // no matching exercise, or an ambiguous name) go into unclear too --
+    // never silently dropped, same rule as the model's own "unclear" list.
+    for (const p of pairs) {
+      if (p.action === null && p.item.kind === 'exercise') {
+        unclear.push(`${String(p.item.name ?? 'exercise')} — no matching exercise found, or missing weight/reps`);
+      }
+    }
+
     // execute:true is the whole point -- the device has no local store to
     // confirm a gated action into, so the write happens here or nowhere.
-    const results = await processActions(admin, userId, actions, { execute: true, tzOffsetMinutes: tz });
+    const results = await processActions(admin, userId, actionable.map((p) => p.action), { execute: true, tzOffsetMinutes: tz });
 
     const logged: { kind: string; summary: string }[] = [];
     const failed: { summary: string; reason: string }[] = [];
     results.forEach((r, i) => {
-      const summary = summarise(items[i] ?? {});
-      if (r.status === 'executed') logged.push({ kind: String(items[i]?.kind ?? ''), summary });
+      const summary = summarise(actionable[i]?.item ?? {});
+      if (r.status === 'executed') logged.push({ kind: String(actionable[i]?.item.kind ?? ''), summary });
       // Anything not executed is reported, never silently dropped: a log the
       // user believes happened and didn't is worse than an audible failure.
       else failed.push({ summary, reason: r.message ?? r.status });
