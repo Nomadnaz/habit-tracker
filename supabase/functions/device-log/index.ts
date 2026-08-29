@@ -35,6 +35,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { processActions, type CompanionAction } from '../_shared/actionExecutor.ts';
 import { getUserApiKey } from '../_shared/byok.ts';
 import { localDateKey } from '../_shared/localDate.ts';
+import { matchExerciseName } from '../_shared/exercises.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -79,7 +80,7 @@ const LOG_SCHEMA = {
           },
           // For kind 'exercise' this is the exercise name as spoken ("squats",
           // "bench press") -- resolved against the user's own `exercises`
-          // rows after parsing (see resolveExerciseId), not by the model,
+          // rows after parsing (see matchExerciseName), not by the model,
           // which never sees the user's exercise IDs.
           name: { type: 'string' },
           confidence: { type: 'number' },
@@ -122,28 +123,6 @@ RULES
 - Anything you cannot confidently turn into an entry goes in "unclear" verbatim. Never invent a number the speaker did not say and you cannot reasonably estimate.
 - Never log something the speaker only mentioned in passing ("I should drink more water" is not a water log).
 - "exercise" is a gym set: a named exercise + weight + reps, e.g. "squats, sixty kilos for eight reps" -> name "Squats", weight_kg 60, reps 8. Only emit this when BOTH a weight and a rep count were said -- "I did squats" alone with no numbers goes to "unclear", never guessed.`;
-
-// Case-insensitive, punctuation-stripped match against the user's own
-// exercises -- the model never sees exercise IDs (unlike ai-chat, this
-// endpoint has no buildContext step), so a spoken name has to be resolved
-// here. Exact match wins; otherwise substring containment either direction,
-// rejecting if more than one exercise matches (ambiguous beats wrong).
-function resolveExerciseId(
-  spokenName: string,
-  exercises: { id: string; name: string }[],
-): string | null {
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
-  const target = norm(spokenName);
-  if (!target) return null;
-  const exact = exercises.filter((e) => norm(e.name) === target);
-  if (exact.length === 1) return exact[0].id;
-  if (exact.length > 1) return null; // ambiguous -- don't guess
-  const contains = exercises.filter((e) => {
-    const n = norm(e.name);
-    return n.includes(target) || target.includes(n);
-  });
-  return contains.length === 1 ? contains[0].id : null;
-}
 
 // Maps one parsed item onto the executor contract in _shared/actionExecutor.ts.
 // exerciseId is pre-resolved (async, needs a DB lookup) and passed in only
@@ -285,7 +264,7 @@ Deno.serve(async (req: Request) => {
     // every item after the first drop.
     const pairs = items.map((item) => {
       const exerciseId = item.kind === 'exercise'
-        ? resolveExerciseId(String(item.name ?? ''), userExercises)
+        ? matchExerciseName(String(item.name ?? ''), userExercises)
         : undefined;
       return { item, action: toAction(item, exerciseId) };
     });

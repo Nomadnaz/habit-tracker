@@ -15,13 +15,18 @@
 // of prose (the device is a renderer, not a model).
 //
 // Actions: complete_task, toggle_habit, gym_checkin, log_focus_session,
-// capture_note. capture_note lands in vault_inbox (migration 027) for the
-// Mac vault agent to materialise as an Obsidian Inbox/ note — the AI reads
-// vault_files only, never a filesystem (vault canon).
+// capture_note, log_set. capture_note lands in vault_inbox (migration 027)
+// for the Mac vault agent to materialise as an Obsidian Inbox/ note — the AI
+// reads vault_files only, never a filesystem (vault canon). log_set is
+// emitted by the rep-sensor firmware on LIFT_DONE (screen_lift.c) — see
+// _shared/exercises.ts + _shared/actionExecutor.ts's log_set for the name
+// resolution + estimated-1RM PB check it shares with the voice path.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { createClient } from '@supabase/supabase-js';
 import { localDateKey, localWeekday } from '../_shared/localDate.ts';
+import { resolveExerciseId } from '../_shared/exercises.ts';
+import { processActions } from '../_shared/actionExecutor.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -193,6 +198,35 @@ async function applyAction(admin: Admin, userId: string, tz: number, a: Action):
           duration_mins: Math.round(mins), source: 'device',
         });
         return { op, ok: !error, error: error?.message };
+      }
+      // Emitted by screen_lift.c on LIFT_DONE -- weight_kg is always
+      // spoken/typed (lift_begin's argument), reps/rom_cm/peak_velocity_mps/
+      // tempo_seconds are always measured by the rep-sensor firmware. The
+      // firmware only knows the exercise NAME (no ID concept), same as
+      // device-log's voice path -- reuse the same resolver so "squats" means
+      // the same thing whichever transport said it. The actual write (+
+      // estimated-1RM PB check) reuses _shared/actionExecutor.ts's log_set
+      // rather than a third copy of that logic.
+      case 'log_set': {
+        const exerciseName = String(a.exercise ?? '').trim();
+        if (!exerciseName) return { op, ok: false, error: 'exercise required' };
+        const weightKg = Number(a.weight_kg);
+        const reps = Number(a.reps);
+        if (!Number.isFinite(weightKg) || !Number.isFinite(reps) || reps <= 0) {
+          return { op, ok: false, error: 'weight_kg + reps required' };
+        }
+        const exerciseId = await resolveExerciseId(admin, userId, exerciseName);
+        if (!exerciseId) return { op, ok: false, error: `no matching exercise for "${exerciseName}"` };
+
+        const data: Record<string, unknown> = { exerciseId, weightKg, reps, date: today, source: 'device' };
+        if (Number.isFinite(Number(a.rom_cm))) data.romCm = Number(a.rom_cm);
+        if (Number.isFinite(Number(a.peak_velocity_mps))) data.peakVelocityMps = Number(a.peak_velocity_mps);
+        if (Number.isFinite(Number(a.tempo_seconds))) data.tempoSeconds = Number(a.tempo_seconds);
+
+        const [result] = await processActions(
+          admin, userId, [{ type: 'log_set', confidence: 1, data }], { execute: true, tzOffsetMinutes: tz },
+        );
+        return { op, ok: result.status === 'executed', error: result.status === 'executed' ? undefined : result.message };
       }
       case 'capture_note': {
         const text = String(a.text ?? '').trim();
