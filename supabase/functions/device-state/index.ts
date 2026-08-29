@@ -207,6 +207,16 @@ async function applyAction(admin: Admin, userId: string, tz: number, a: Action):
       // the same thing whichever transport said it. The actual write (+
       // estimated-1RM PB check) reuses _shared/actionExecutor.ts's log_set
       // rather than a third copy of that logic.
+      //
+      // Unlike device-log's voice path, an unresolved name here is
+      // auto-created rather than rejected: this name came verbatim from
+      // firmware (today, literally "TEST SET" from the calibration button;
+      // later, whatever the user typed/said), not from a model that could
+      // have misheard or hallucinated a different real exercise. There is no
+      // "wrong exercise" risk to guard against, only "new exercise" -- and
+      // silently dropping every device-measured set until voice-driven
+      // lift_begin() exists would make this whole path untestable on
+      // hardware in the meantime.
       case 'log_set': {
         const exerciseName = String(a.exercise ?? '').trim();
         if (!exerciseName) return { op, ok: false, error: 'exercise required' };
@@ -215,8 +225,14 @@ async function applyAction(admin: Admin, userId: string, tz: number, a: Action):
         if (!Number.isFinite(weightKg) || !Number.isFinite(reps) || reps <= 0) {
           return { op, ok: false, error: 'weight_kg + reps required' };
         }
-        const exerciseId = await resolveExerciseId(admin, userId, exerciseName);
-        if (!exerciseId) return { op, ok: false, error: `no matching exercise for "${exerciseName}"` };
+        let exerciseId = await resolveExerciseId(admin, userId, exerciseName);
+        if (!exerciseId) {
+          const newId = crypto.randomUUID();
+          const { error: createErr } = await admin.from('exercises')
+            .insert({ id: newId, user_id: userId, name: exerciseName });
+          if (createErr) return { op, ok: false, error: createErr.message };
+          exerciseId = newId;
+        }
 
         const data: Record<string, unknown> = { exerciseId, weightKg, reps, date: today, source: 'device' };
         if (Number.isFinite(Number(a.rom_cm))) data.romCm = Number(a.rom_cm);

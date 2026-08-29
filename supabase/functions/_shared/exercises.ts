@@ -7,6 +7,14 @@
 // then unambiguous substring containment either direction. Ambiguous or
 // unmatched returns null -- never guessed, same rule as everything else
 // these two endpoints do with uncertain input.
+//
+// A null return means different things to each caller: device-log's voice
+// path treats it as a hard failure (an LLM could have misheard a DIFFERENT
+// real exercise, so guessing is unsafe). device-state's log_set case instead
+// auto-creates the exercise on null -- a firmware-sourced name carries no
+// "wrong exercise" risk, only "new exercise". That branch lives in
+// device-state/index.ts, not here; this module only ever returns a match or
+// null, never creates anything itself.
 // ─────────────────────────────────────────────────────────────────────────
 
 // deno-lint-ignore no-explicit-any
