@@ -122,7 +122,7 @@ RULES
 - confidence 0-1: how sure you are this is what they meant. Below 0.5, put the phrase in "unclear" instead of guessing.
 - Anything you cannot confidently turn into an entry goes in "unclear" verbatim. Never invent a number the speaker did not say and you cannot reasonably estimate.
 - Never log something the speaker only mentioned in passing ("I should drink more water" is not a water log).
-- "exercise" is a gym set: a named exercise + weight + reps, e.g. "squats, sixty kilos for eight reps" -> name "Squats", weight_kg 60, reps 8. Only emit this when BOTH a weight and a rep count were said -- "I did squats" alone with no numbers goes to "unclear", never guessed.`;
+- "exercise" is the ONE kind that needs two specific numbers to be usable: a named exercise + weight + reps, e.g. "squats, sixty kilos for eight reps" -> name "Squats", weight_kg 60, reps 8. Only emit "exercise" when BOTH a weight and a rep count were said -- "I did squats" alone with no numbers goes to "unclear". This rule is specific to "exercise" and does not apply to any other kind -- "task" and "note" in particular need no numbers or measurements at all. "Add a task to call the dentist" or "remind me to call the dentist" is straightforwardly a task, exactly as confidently as "logged a coffee" is a meal. Do not become more hesitant about task/note/habit/mood just because exercise has a stricter bar.`;
 
 // Maps one parsed item onto the executor contract in _shared/actionExecutor.ts.
 // exerciseId is pre-resolved (async, needs a DB lookup) and passed in only
@@ -292,10 +292,17 @@ Deno.serve(async (req: Request) => {
       else failed.push({ summary, reason: r.message ?? r.status });
     });
 
-    // "handled" is the routing signal: nothing parsed means this wasn't a log
-    // at all ("what did I eat today?"), and the caller should fall through to
-    // ai-chat rather than answering with silence.
-    const handled = logged.length > 0 || failed.length > 0 || unclear.length > 0;
+    // "handled" is the routing signal: only a REAL attempt (something written,
+    // or something recognized and attempted but genuinely failed) counts.
+    // unclear-only means the model couldn't confidently classify anything --
+    // indistinguishable from "this wasn't a log at all" ("what did I eat
+    // today?", or a misclassified "add a task"), so the caller must fall
+    // through to ai-chat rather than claiming the turn with a non-answer.
+    // (Bug fixed 2026-08-31: this used to also count bare `unclear` as
+    // handled, which silently swallowed every utterance the classifier
+    // wasn't confident about -- including plain task/note requests that
+    // ai-chat would have handled correctly -- with no fallback.)
+    const handled = logged.length > 0 || failed.length > 0;
 
     // Only bill an utterance that actually did logging work. An unhandled one
     // goes on to ai-chat, which bills its own call — without this guard a
