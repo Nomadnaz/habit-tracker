@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { BleManager, Device, Subscription } from 'react-native-ble-plx';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { adpcmDecode, makeAdpcmState, type AdpcmState } from '@/lib/adpcm';
+import { reconcile as reconcileRemoteTasks } from '@/lib/use-remote-task-sync';
 
 // Set once a BLE connection has ever succeeded. Gates auto-connect-on-launch
 // (below) so a user who has never owned/paired the physical device doesn't
@@ -349,6 +350,13 @@ class BleBridgeManager {
       const answer = (await this._tryDeviceLog(question)) ?? (await this._callAiChat(question));
       this.emit({ lastAnswer: answer });
       if (this.device) await writeCmd(this.device, BLE_CMD_SET_ANSWER, answer);
+      // Both paths above write server-side (execute:true) — including
+      // create_task. Apple Calendar/Reminders sync for a server-written task
+      // only ever runs from use-remote-task-sync's reconcile(), which used to
+      // fire incidentally because using the device required opening the app
+      // (see the auto-reconnect work above — that's no longer true, so the
+      // implicit trigger is gone and has to be explicit here instead).
+      void this._reconcileTasksAfterAction();
 
       this.history.push({ role: 'user', content: question });
       this.history.push({ role: 'assistant', content: answer });
@@ -568,7 +576,25 @@ class BleBridgeManager {
       console.warn('[ble-bridge] device-state POST failed:', error.message);
       return;
     }
+    // complete_task/etc. write server-side too — same reconcile gap as the
+    // voice path below.
+    void this._reconcileTasksAfterAction();
     await this._pushSnapshot();
+  }
+
+  /** Apple Calendar/Reminders only gets a server-written task via
+   *  use-remote-task-sync's reconcile() — call it directly after any
+   *  device-triggered write instead of relying on the app happening to be
+   *  foregrounded around the same time. Best-effort: never blocks or throws
+   *  into the caller, same reasoning as _pushSnapshot(). */
+  private async _reconcileTasksAfterAction() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (userId) await reconcileRemoteTasks(userId);
+    } catch (e: any) {
+      console.warn('[ble-bridge] post-action reconcile failed:', e?.message);
+    }
   }
 
   /** Re-push the snapshot when the user's tasks change in the app (same

@@ -206,7 +206,7 @@ async function removeRow(id: string): Promise<void> {
  * app — e.g. by the voice device. The app's "delete" is actually archive=true,
  * so filtering archived=false means we NEVER resurrect a task the user deleted.
  */
-async function reconcile(userId: string): Promise<void> {
+export async function reconcile(userId: string): Promise<void> {
   const { data } = await supabase
     .from('tasks')
     .select(TASK_SELECT_COLUMNS)
