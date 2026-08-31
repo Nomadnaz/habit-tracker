@@ -38,6 +38,9 @@ import '@/lib/locationTask';
 // ai-chat) into the on-device store + Apple Calendar — see lib/use-remote-task-sync.ts.
 import { useRemoteTaskSync } from '@/lib/use-remote-task-sync';
 
+// Auto-reconnect the Companion HUD BLE bridge on launch/foreground.
+import { useBleAutoConnect } from '@/lib/ble-bridge';
+
 // Slide-down banner + buzz when a task arrives live from the device.
 import { RemoteTaskBanner } from '@/components/RemoteTaskBanner';
 
@@ -94,6 +97,13 @@ export default function RootLayout() {
   // Keep on-device tasks in sync with task changes that originate outside the
   // app (the voice device, other devices) in real time. No-op until logged in.
   useRemoteTaskSync(session?.user?.id ?? null);
+
+  // Auto-(re)connect the Companion HUD BLE bridge on launch and whenever the
+  // app returns to the foreground — previously this only ever started from
+  // the Companion HUD screen's Connect button, so a set done at the gym with
+  // the app not open on that exact screen had no live connection to relay
+  // over. No-op for anyone who has never paired a device.
+  useBleAutoConnect();
 
   // Load our custom fonts. fontsLoaded becomes true once they're downloaded and ready.
   // Until then, we don't render anything (to avoid text flashing with the wrong font).

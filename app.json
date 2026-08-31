@@ -69,8 +69,8 @@
       [
         "react-native-ble-plx",
         {
-          "isBackgroundEnabled": false,
-          "modes": [],
+          "isBackgroundEnabled": true,
+          "modes": ["central"],
           "bluetoothAlwaysPermission": "Connect to your Companion HUD device to relay voice commands to the AI."
         }
       ],

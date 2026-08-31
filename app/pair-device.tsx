@@ -10,30 +10,50 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { bleBridge, type BridgeState } from '@/lib/ble-bridge';
+import { bleBridge, isDeviceProvisioned, type BridgeState } from '@/lib/ble-bridge';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 
 /**
- * Pair the Companion HUD for standalone Wi-Fi mode.
+ * Pair the Companion HUD for standalone Wi-Fi mode, and manage up to two
+ * saved networks (device firmware caps it at 3 total — see wifi.c) so it
+ * can get online without the phone wherever you actually use it, not just
+ * at home.
  *
- * Flow: connect over BLE (reuses the bridge singleton) → user enters home
- * Wi-Fi credentials + their account password → mint a NEW, device-owned
- * Supabase session via the password grant (independent refresh-token chain,
- * so revoking the device never logs the phone out) → write everything to the
- * encrypted provisioning characteristic (OS shows its bonding prompt on
- * first write) → device connects to Wi-Fi and syncs on its own.
+ * Flow: connect over BLE (reuses the bridge singleton) → save a network
+ * (SSID/PSK, labelled "home" or "hotspot") → the FIRST save on a device also
+ * mints it a device-owned Supabase login (independent refresh-token chain,
+ * so revoking the device never logs the phone out) — every save after that
+ * only needs the account password again if you want to re-mint that login,
+ * which this screen never asks for once `isDeviceProvisioned()` says it's
+ * already done. Both writes go to the same encrypted provisioning
+ * characteristic (OS shows its bonding prompt on first use). The device
+ * matches by SSID/label and updates in place, so re-adding "home" here after
+ * a router password change just works.
+ *
+ * "Outdoor" here means your phone's Personal Hotspot — a gym itself almost
+ * never has usable open Wi-Fi, but your hotspot has a fixed SSID/password
+ * you control, so provisioning it once means the device gets online through
+ * your phone passively (no app interaction) anywhere you carry it. iOS
+ * doesn't expose the hotspot's credentials to third-party apps, so this
+ * screen can't prefill them — see the inline hint.
  */
 export default function PairDeviceScreen() {
   const router = useRouter();
   const [bridge, setBridge] = useState<BridgeState | null>(null);
-  const [ssid, setSsid] = useState('');
-  const [psk, setPsk] = useState('');
+  const [provisioned, setProvisioned] = useState(false);
+
+  const [homeSsid, setHomeSsid] = useState('');
+  const [homePsk, setHomePsk] = useState('');
+  const [hotspotSsid, setHotspotSsid] = useState('');
+  const [hotspotPsk, setHotspotPsk] = useState('');
   const [accountPassword, setAccountPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+
+  const [busySlot, setBusySlot] = useState<'home' | 'hotspot' | null>(null);
+  const [savedSlot, setSavedSlot] = useState<'home' | 'hotspot' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => bleBridge.subscribe(setBridge), []);
+  useEffect(() => { isDeviceProvisioned().then(setProvisioned); }, []);
 
   const connected =
     bridge?.status === 'connected' || bridge?.status === 'listening' || bridge?.status === 'processing';
@@ -59,22 +79,29 @@ export default function PairDeviceScreen() {
     return json.refresh_token as string;
   }
 
-  async function handlePair() {
+  async function handleSave(slot: 'home' | 'hotspot') {
+    const ssid = (slot === 'home' ? homeSsid : hotspotSsid).trim();
+    const psk = slot === 'home' ? homePsk : hotspotPsk;
     setError(null);
-    setBusy(true);
+    setBusySlot(slot);
     try {
-      const refreshToken = await mintDeviceRefreshToken();
-      await bleBridge.provisionDevice({ ssid: ssid.trim(), psk, refreshToken });
+      const refreshToken = provisioned ? undefined : await mintDeviceRefreshToken();
+      await bleBridge.provisionDevice({ ssid, psk, label: slot, refreshToken });
       setAccountPassword('');
-      setDone(true);
+      setProvisioned(true);
+      setSavedSlot(slot);
     } catch (e: any) {
       setError(e?.message ?? 'Pairing failed.');
     } finally {
-      setBusy(false);
+      setBusySlot(null);
     }
   }
 
-  const canPair = connected && ssid.trim().length > 0 && accountPassword.length > 0 && !busy;
+  const needsPassword = !provisioned;
+  const canSave = (slot: 'home' | 'hotspot') => {
+    const ssid = (slot === 'home' ? homeSsid : hotspotSsid).trim();
+    return connected && ssid.length > 0 && (!needsPassword || accountPassword.length > 0) && !busySlot;
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -86,56 +113,94 @@ export default function PairDeviceScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        {done ? (
-          <>
-            <Text style={styles.doneText}>
-              Device provisioned. It will join your Wi-Fi and sync on its own —
-            the phone is now optional.
+        <Text style={styles.step}>
+          1 · CONNECT{connected ? '  ✓' : ''}
+        </Text>
+        {!connected ? (
+          <TouchableOpacity style={styles.btn} onPress={() => bleBridge.start()}>
+            <Text style={styles.btnText}>
+              {bridge?.status === 'scanning' || bridge?.status === 'connecting'
+                ? 'CONNECTING…'
+                : 'CONNECT TO DEVICE'}
             </Text>
-            <TouchableOpacity style={styles.btn} onPress={() => router.back()}>
-              <Text style={styles.btnText}>DONE</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
+          </TouchableOpacity>
+        ) : null}
+        {bridge?.error ? <Text style={styles.errorText}>{bridge.error}</Text> : null}
+
+        {/* Home Wi-Fi */}
+        <Text style={styles.step}>
+          2 · HOME WI-FI{savedSlot === 'home' ? '  ✓ SAVED' : ''}
+        </Text>
+        <Text style={styles.hint}>Wherever the device normally sits and charges.</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Wi-Fi network name (SSID)"
+          placeholderTextColor="#555"
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={homeSsid}
+          onChangeText={setHomeSsid}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Wi-Fi password"
+          placeholderTextColor="#555"
+          autoCapitalize="none"
+          secureTextEntry
+          value={homePsk}
+          onChangeText={setHomePsk}
+        />
+        <TouchableOpacity
+          style={[styles.btn, !canSave('home') && styles.btnDisabled]}
+          disabled={!canSave('home')}
+          onPress={() => handleSave('home')}
+        >
+          {busySlot === 'home' ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>SAVE HOME WI-FI</Text>}
+        </TouchableOpacity>
+
+        {/* Outdoor / hotspot */}
+        <Text style={styles.step}>
+          3 · OUTDOOR (OPTIONAL){savedSlot === 'hotspot' ? '  ✓ SAVED' : ''}
+        </Text>
+        <Text style={styles.hint}>
+          Most gyms don't have usable Wi-Fi — your phone's Personal Hotspot does.
+          Enable it in Settings → Personal Hotspot, then enter that name and
+          password here. The device will connect through your phone whenever
+          it's nearby and the hotspot is on, no app needed.
+        </Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Hotspot name (SSID)"
+          placeholderTextColor="#555"
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={hotspotSsid}
+          onChangeText={setHotspotSsid}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Hotspot password"
+          placeholderTextColor="#555"
+          autoCapitalize="none"
+          secureTextEntry
+          value={hotspotPsk}
+          onChangeText={setHotspotPsk}
+        />
+        <TouchableOpacity
+          style={[styles.btn, !canSave('hotspot') && styles.btnDisabled]}
+          disabled={!canSave('hotspot')}
+          onPress={() => handleSave('hotspot')}
+        >
+          {busySlot === 'hotspot' ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>SAVE HOTSPOT</Text>}
+        </TouchableOpacity>
+
+        {needsPassword ? (
           <>
-            <Text style={styles.step}>
-              1 · CONNECT{connected ? '  ✓' : ''}
-            </Text>
-            {!connected ? (
-              <TouchableOpacity style={styles.btn} onPress={() => bleBridge.start()}>
-                <Text style={styles.btnText}>
-                  {bridge?.status === 'scanning' || bridge?.status === 'connecting'
-                    ? 'CONNECTING…'
-                    : 'CONNECT TO DEVICE'}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-            {bridge?.error ? <Text style={styles.errorText}>{bridge.error}</Text> : null}
-
-            <Text style={styles.step}>2 · HOME WI-FI</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Wi-Fi network name (SSID)"
-              placeholderTextColor="#555"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={ssid}
-              onChangeText={setSsid}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Wi-Fi password"
-              placeholderTextColor="#555"
-              autoCapitalize="none"
-              secureTextEntry
-              value={psk}
-              onChangeText={setPsk}
-            />
-
-            <Text style={styles.step}>3 · CONFIRM ACCOUNT</Text>
+            <Text style={styles.step}>4 · CONFIRM ACCOUNT</Text>
             <Text style={styles.hint}>
-              Your account password mints a separate login just for the device,
-              so you can revoke it later without signing out of this phone.
+              Needed once, for whichever network you save first — it mints a
+              separate login just for the device, so you can revoke it later
+              without signing out of this phone. Not asked again after that.
             </Text>
             <TextInput
               style={styles.input}
@@ -146,23 +211,22 @@ export default function PairDeviceScreen() {
               value={accountPassword}
               onChangeText={setAccountPassword}
             />
-
-            <TouchableOpacity
-              style={[styles.btn, !canPair && styles.btnDisabled]}
-              disabled={!canPair}
-              onPress={handlePair}
-            >
-              {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>PAIR</Text>}
-            </TouchableOpacity>
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <Text style={styles.hint}>
-              Your phone may show a Bluetooth pairing prompt — accept it. That
-              bonding step is what encrypts the credentials in transit.
-            </Text>
           </>
+        ) : (
+          <Text style={styles.doneText}>
+            Device already has an account login — just add or update networks
+            above.
+          </Text>
         )}
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <Text style={styles.hint}>
+          Your phone may show a Bluetooth pairing prompt — accept it. That
+          bonding step is what encrypts the credentials in transit. The
+          device tries every saved network it can see and picks whichever is
+          in range, home first.
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );
