@@ -286,10 +286,25 @@ Deno.serve(async (req: Request) => {
     const failed: { summary: string; reason: string }[] = [];
     results.forEach((r, i) => {
       const summary = summarise(actionable[i]?.item ?? {});
-      if (r.status === 'executed') logged.push({ kind: String(actionable[i]?.item.kind ?? ''), summary });
-      // Anything not executed is reported, never silently dropped: a log the
-      // user believes happened and didn't is worse than an audible failure.
-      else failed.push({ summary, reason: r.message ?? r.status });
+      if (r.status === 'executed') {
+        logged.push({ kind: String(actionable[i]?.item.kind ?? ''), summary });
+      } else if (r.status === 'failed') {
+        // A write was genuinely attempted and errored (bad data, a real
+        // DB error) -- report it, never silently drop it.
+        failed.push({ summary, reason: r.message ?? r.status });
+      }
+      // Any other status (preview/clarify/unsupported) means processActions
+      // never actually attempted anything -- it's the app's confirm-before-
+      // acting gate for confidence below the auto threshold, meant for a
+      // screen that can show a confirmation card. The device has no such
+      // screen, so a gated (not executed, not failed) action isn't a
+      // failure -- it's simply not handled, same as if nothing had parsed
+      // at all. (Bug fixed 2026-08-31: this used to lump every non-executed
+      // status into `failed`, which meant a moderate-confidence guess like
+      // "set tomorrow to a push day" surfaced as "Couldn't log that: Confirm
+      // to remember_about_user" -- an internal gate name read out as if it
+      // were an error, with `handled: true` blocking the ai-chat fallback
+      // that could have answered conversationally instead.)
     });
 
     // "handled" is the routing signal: only a REAL attempt (something written,
