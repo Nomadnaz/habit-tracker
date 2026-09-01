@@ -25,7 +25,7 @@
 //   exists), but is OFF by default.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { localDateKey, localDateKeyPlusDays } from './localDate.ts';
+import { localDateKey, localDateKeyPlusDays, localWeekday } from './localDate.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
@@ -314,6 +314,31 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     return { table: 'ideas', content };
   },
 
+  // gym_plan is one row per user (columns monday..sunday, each a free-text
+  // session_type or null) -- a weekly SCHEDULE, not an event log, so unlike
+  // every other action here this sets a slot forward in time rather than
+  // recording something that already happened. Upserting only the touched
+  // day column (PostgREST upsert only SETs the columns present in the
+  // payload on conflict) leaves every other day untouched.
+  set_gym_plan: async (supabase, userId, data, tzOffsetMinutes) => {
+    const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const sessionType = str(data.sessionType) ?? str(data.session) ?? str(data.type);
+    if (!sessionType) throw new Error('set_gym_plan needs a sessionType');
+    const raw = str(data.day)?.toLowerCase();
+    let day: string;
+    if (!raw || raw === 'today') day = WEEKDAYS[localWeekday(tzOffsetMinutes)];
+    else if (raw === 'tomorrow') day = WEEKDAYS[(localWeekday(tzOffsetMinutes) + 1) % 7];
+    else if (WEEKDAYS.includes(raw)) day = raw;
+    else throw new Error(`set_gym_plan: unrecognized day "${raw}" (want a weekday, "today", or "tomorrow")`);
+
+    const { error } = await supabase.from('gym_plan').upsert(
+      { user_id: userId, [day]: sessionType, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    );
+    if (error) throw new Error(error.message);
+    return { table: 'gym_plan', day, sessionType };
+  },
+
   log_pb: async (supabase, userId, data, tzOffsetMinutes) => {
     const exerciseId = str(data.exerciseId) ?? str(data.exercise_id);
     const weightKg = num(data.weightKg) ?? num(data.weight_kg);
@@ -573,6 +598,8 @@ export const ACTION_SPECS: Record<string, string> = {
     'create_goal — add a new goal. data: { "title": string, "category"?: string, "targetDate"?: "YYYY-MM-DD" }',
   save_idea:
     'save_idea — capture a quick idea (not a book/movie/link — those need a real lookup this action doesn\'t do). data: { "content": string }',
+  set_gym_plan:
+    'set_gym_plan — set the weekly gym plan for one day. data: { "day": "monday".."sunday"|"today"|"tomorrow", "sessionType": string (e.g. "push", "pull", "legs", "rest") }',
 };
 
 /** Pure gate: the action's decision BEFORE anyone writes anything. */

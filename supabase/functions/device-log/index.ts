@@ -72,14 +72,14 @@ const LOG_SCHEMA = {
           'kind', 'name', 'confidence', 'calories', 'protein_g', 'carbs_g',
           'fat_g', 'meal_type', 'amount_ml', 'weight_kg', 'total_hours',
           'mood_score', 'date', 'task_hour', 'reps', 'completed',
-          'duration_mins', 'distance_m', 'activity_type', 'amount', 'category',
+          'duration_mins', 'distance_m', 'activity_type', 'amount', 'category', 'plan_day',
         ],
         properties: {
           kind: {
             type: 'string',
             enum: [
               'meal', 'water', 'weight', 'habit', 'sleep', 'mood', 'task', 'note', 'exercise',
-              'gym_checkin', 'focus', 'activity', 'expense', 'medication', 'goal', 'idea',
+              'gym_checkin', 'focus', 'activity', 'expense', 'medication', 'goal', 'idea', 'gym_plan',
             ],
           },
           // For kind 'exercise' this is the exercise name as spoken ("squats",
@@ -117,6 +117,11 @@ const LOG_SCHEMA = {
           // 'expense' only.
           amount: nullable({ type: 'number' }),
           category: nullable({ type: 'string' }),
+          // 'gym_plan' only -- which day of the SCHEDULE this sets, not when
+          // the utterance was spoken. Deliberately separate from `date`
+          // (every other kind's "when this happened") to avoid conflating
+          // the two.
+          plan_day: nullable({ type: 'string', enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'today', 'tomorrow'] }),
         },
       },
     },
@@ -147,7 +152,8 @@ RULES
 - "expense" needs an amount: "spent twelve pounds on lunch" -> amount 12, category "food", name "lunch". No amount said -> "unclear".
 - "medication" is "I took my <name>" / "missed my <name>" -- name is the medication as spoken, nothing else needed.
 - "goal" is creating a NEW goal, not progress on an existing one: "add a goal to run a marathon" -> name "Run a marathon". A vague aspiration mentioned in passing ("I really should get fitter") is not a goal creation.
-- "idea" is an explicit capture: "save this idea: ...", "note an idea about ...". A stray thought not framed as worth saving goes to "unclear", not "idea".`;
+- "idea" is an explicit capture: "save this idea: ...", "note an idea about ...". A stray thought not framed as worth saving goes to "unclear", not "idea".
+- "gym_plan" sets the WEEKLY SCHEDULE, not a log of something that happened: "set tomorrow as a push day", "make Friday leg day", "Monday is rest day" -> plan_day + name (the session type, e.g. "push"/"pull"/"legs"/"rest"/"upper"/"lower"). Needs BOTH a day and a session type -- "tomorrow's a gym day" with no session type given is too vague, goes to "unclear".`;
 
 // Maps one parsed item onto the executor contract in _shared/actionExecutor.ts.
 // exerciseId is pre-resolved (async, needs a DB lookup) and passed in only
@@ -223,6 +229,11 @@ function toAction(item: Record<string, unknown>, exerciseId?: string | null): Co
       return { type: 'create_goal', confidence: conf, data: { title: item.name } };
     case 'idea':
       return { type: 'save_idea', confidence: conf, data: { content: item.name } };
+    case 'gym_plan': {
+      const planDay = typeof item.plan_day === 'string' ? item.plan_day : undefined;
+      if (!planDay || !item.name) return null;
+      return { type: 'set_gym_plan', confidence: conf, data: { day: planDay, sessionType: item.name } };
+    }
     default:
       return null;
   }
@@ -248,6 +259,7 @@ function summarise(item: Record<string, unknown>): string {
     case 'medication': return `${item.name} ✓`;
     case 'goal': return `goal: ${item.name}`;
     case 'idea': return `idea: ${item.name}`;
+    case 'gym_plan': return `${item.plan_day}: ${item.name}`;
     default: return String(item.name ?? item.kind);
   }
 }

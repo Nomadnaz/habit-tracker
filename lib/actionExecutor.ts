@@ -34,7 +34,7 @@ import {
   syncTaskDoneToApple,
 } from './apple-sync';
 import { findTaskDateKey, moveTaskInMap } from './task-schedule';
-import { genId, markDoneToday } from './workout-data';
+import { genId, markDoneToday, setGymPlanDay, WEEKDAYS as GYM_WEEKDAYS, type PlanDayValue } from './workout-data';
 import { getActiveHabits, getLogsForHabit, isDoneOnDate, toggleToday } from './habits-data';
 import { logMood } from './mood-data';
 import { addMeal } from './meals-data';
@@ -457,6 +457,25 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
       if (!content) throw new Error("I couldn't tell the idea.");
       await addIdea(content);
       return { summary: `Idea saved: ${content}` };
+    }
+
+    case 'set_gym_plan': {
+      const sessionTypeRaw = (str(data.sessionType) ?? str(data.session) ?? str(data.type))?.toLowerCase();
+      const VALID_SESSIONS: PlanDayValue[] = ['push', 'pull', 'legs', 'upper', 'lower', 'rest', 'cheat'];
+      const sessionType = VALID_SESSIONS.find(v => v === sessionTypeRaw);
+      if (!sessionType) throw new Error(`"${sessionTypeRaw ?? ''}" isn't a session type I recognize (push/pull/legs/upper/lower/rest/cheat).`);
+      const rawDay = str(data.day)?.toLowerCase();
+      const todayIdx = new Date().getDay(); // 0=Sunday, matches GYM_WEEKDAYS' Mon..Sun order via +6%7 below
+      let day: (typeof GYM_WEEKDAYS)[number];
+      if (!rawDay || rawDay === 'today') day = GYM_WEEKDAYS[(todayIdx + 6) % 7];
+      else if (rawDay === 'tomorrow') day = GYM_WEEKDAYS[todayIdx % 7];
+      else {
+        const found = GYM_WEEKDAYS.find(d => d === rawDay);
+        if (!found) throw new Error(`"${rawDay}" isn't a day I recognize.`);
+        day = found;
+      }
+      await setGymPlanDay(day, sessionType);
+      return { summary: `${day}: ${sessionType}` };
     }
 
     default:
