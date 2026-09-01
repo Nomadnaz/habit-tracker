@@ -17,10 +17,13 @@
 // Actions: complete_task, toggle_habit, gym_checkin, log_focus_session,
 // capture_note, log_set. capture_note lands in vault_inbox (migration 027)
 // for the Mac vault agent to materialise as an Obsidian Inbox/ note — the AI
-// reads vault_files only, never a filesystem (vault canon). log_set is
-// emitted by the rep-sensor firmware on LIFT_DONE (screen_lift.c) — see
-// _shared/exercises.ts + _shared/actionExecutor.ts's log_set for the name
-// resolution + estimated-1RM PB check it shares with the voice path.
+// reads vault_files only, never a filesystem (vault canon); it has no
+// equivalent in _shared/actionExecutor.ts and is the one op that stays
+// fully local to this file. Every other op (as of 2026-09-01) delegates to
+// _shared/actionExecutor.ts's INTERNAL_EXECUTORS via processActions — this
+// file only resolves what device-state-specific inputs need before calling
+// it (an id instead of a name, a lookup-then-flip for a bare button tap
+// with no explicit target state) rather than reimplementing the write.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { createClient } from '@supabase/supabase-js';
@@ -148,56 +151,60 @@ async function applyAction(admin: Admin, userId: string, tz: number, a: Action):
   const today = localDateKey(tz);
   try {
     switch (op) {
+      // These four delegate to _shared/actionExecutor.ts's INTERNAL_EXECUTORS
+      // via processActions rather than reimplementing the write here — until
+      // 2026-09-01 each was its own hand-rolled copy (different field names,
+      // different match strategy for toggle_habit, complete_task unable to
+      // un-complete) that could silently drift from the voice/chat path's
+      // version of "the same" action. See log_set below for the pattern this
+      // follows (it was the first to do this, for the rep-sensor work).
       case 'complete_task': {
         if (!a.id) return { op, ok: false, error: 'id required' };
-        const { error } = await admin.from('tasks')
-          .update({ done: a.done !== false })
-          .eq('user_id', userId).eq('id', String(a.id));
-        return { op, ok: !error, error: error?.message };
+        const [result] = await processActions(
+          admin, userId,
+          [{ type: 'complete_task', confidence: 1, data: { taskId: String(a.id), done: a.done !== false } }],
+          { execute: true, tzOffsetMinutes: tz },
+        );
+        return { op, ok: result.status === 'executed', error: result.status === 'executed' ? undefined : result.message };
       }
       case 'toggle_habit': {
         if (!a.id) return { op, ok: false, error: 'id required' };
         const habitId = String(a.id);
+        // A bare button tap has no explicit target state -- it flips
+        // whatever's there today, same as before. Voice/chat (device-log,
+        // ai-chat) always pass an explicit completed instead, so this
+        // lookup-then-flip is device-state-specific, not shared executor
+        // behavior (which defaults an omitted completed to true, correct
+        // for "log yoga" but wrong for "tap the same habit again").
         const { data: existing } = await admin.from('habit_logs')
-          .select('id, completed')
-          .eq('user_id', userId).eq('habit_id', habitId).eq('date', today)
-          .maybeSingle();
-        if (existing) {
-          const { error } = await admin.from('habit_logs')
-            .update({ completed: !existing.completed }).eq('id', existing.id);
-          return { op, ok: !error, error: error?.message };
-        }
-        const { error } = await admin.from('habit_logs').insert({
-          id: crypto.randomUUID(), user_id: userId, habit_id: habitId,
-          date: today, completed: true,
-        });
-        return { op, ok: !error, error: error?.message };
+          .select('completed').eq('user_id', userId).eq('habit_id', habitId).eq('date', today).maybeSingle();
+        const nextCompleted = existing ? !existing.completed : true;
+        const [result] = await processActions(
+          admin, userId,
+          [{ type: 'toggle_habit', confidence: 1, data: { habitId, completed: nextCompleted, date: today } }],
+          { execute: true, tzOffsetMinutes: tz },
+        );
+        return { op, ok: result.status === 'executed', error: result.status === 'executed' ? undefined : result.message };
       }
       case 'gym_checkin': {
-        // workout_template_id is NOT NULL with a per-day uniqueness constraint;
-        // the device has no template concept, so a fixed sentinel id both
-        // satisfies the schema and makes repeat check-ins the same day no-ops.
-        const { data: existing } = await admin.from('workout_done_log')
-          .select('id').eq('user_id', userId).eq('date', today)
-          .eq('workout_template_id', 'device-checkin').maybeSingle();
-        if (existing) return { op, ok: true };
-        const { error } = await admin.from('workout_done_log').insert({
-          id: crypto.randomUUID(), user_id: userId,
-          workout_template_id: 'device-checkin', date: today,
-          duration_mins: typeof a.duration_mins === 'number' ? a.duration_mins : null,
-        });
-        return { op, ok: !error, error: error?.message };
+        const [result] = await processActions(
+          admin, userId,
+          [{ type: 'gym_checkin', confidence: 1, data: { durationMins: a.duration_mins, date: today } }],
+          { execute: true, tzOffsetMinutes: tz },
+        );
+        return { op, ok: result.status === 'executed', error: result.status === 'executed' ? undefined : result.message };
       }
       case 'log_focus_session': {
         const mins = Number(a.mins);
         if (!Number.isFinite(mins) || mins <= 0 || mins > 24 * 60) {
           return { op, ok: false, error: 'mins required (1-1440)' };
         }
-        const { error } = await admin.from('focus_sessions').insert({
-          id: crypto.randomUUID(), user_id: userId, date: today,
-          duration_mins: Math.round(mins), source: 'device',
-        });
-        return { op, ok: !error, error: error?.message };
+        const [result] = await processActions(
+          admin, userId,
+          [{ type: 'log_focus_session', confidence: 1, data: { durationMins: mins, date: today } }],
+          { execute: true, tzOffsetMinutes: tz },
+        );
+        return { op, ok: result.status === 'executed', error: result.status === 'executed' ? undefined : result.message };
       }
       // Emitted by screen_lift.c on LIFT_DONE -- weight_kg is always
       // spoken/typed (lift_begin's argument), reps/rom_cm/peak_velocity_mps/

@@ -171,16 +171,147 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
   complete_task: async (supabase, userId, data, _tzOffsetMinutes) => {
     const taskId = str(data.taskId) ?? str(data.id);
     if (!taskId) throw new Error('complete_task needs a taskId');
+    const done = data.done === undefined ? true : data.done === true;
     const { data: updated, error } = await supabase
       .from('tasks')
-      .update({ done: true })
+      .update({ done })
       .eq('id', taskId)
       .eq('user_id', userId)
       .select('id')
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!updated) throw new Error(`complete_task: no task found with id ${taskId}`);
-    return { id: taskId, table: 'tasks', done: true };
+    return { id: taskId, table: 'tasks', done };
+  },
+
+  // "went to the gym today" -- a plain check-in, no template concept (that's
+  // what workout_done_log's own template_id is for; this device/voice path
+  // has no template, so it reuses the same 'device-checkin' sentinel id
+  // device-state's button op already established, keeping repeat check-ins
+  // the same day idempotent either way).
+  gym_checkin: async (supabase, userId, data, tzOffsetMinutes) => {
+    const date = resolveDateKey(data.date, tzOffsetMinutes);
+    const { data: existing } = await supabase
+      .from('workout_done_log').select('id').eq('user_id', userId).eq('date', date)
+      .eq('workout_template_id', 'device-checkin').maybeSingle();
+    if (existing) return { table: 'workout_done_log', date, already_logged: true };
+    const { error } = await supabase.from('workout_done_log').insert({
+      id: crypto.randomUUID(), user_id: userId, workout_template_id: 'device-checkin', date,
+      duration_mins: num(data.durationMins) ?? num(data.duration_mins) ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return { table: 'workout_done_log', date };
+  },
+
+  log_focus_session: async (supabase, userId, data, tzOffsetMinutes) => {
+    const mins = num(data.durationMins) ?? num(data.duration_mins);
+    if (!mins || mins <= 0 || mins > 24 * 60) throw new Error('log_focus_session needs durationMins (1-1440)');
+    const date = resolveDateKey(data.date, tzOffsetMinutes);
+    const { error } = await supabase.from('focus_sessions').insert({
+      id: crypto.randomUUID(), user_id: userId, date,
+      duration_mins: Math.round(mins), source: 'device',
+    });
+    if (error) throw new Error(error.message);
+    return { table: 'focus_sessions', date, duration_mins: Math.round(mins) };
+  },
+
+  // Retrospective ("I just ran 5k in 25 minutes") rather than live-tracked --
+  // there's no route/GPS from a voice log, so start_time/end_time are backed
+  // out from durationMins ending now. Matches activities' NOT NULL columns
+  // without inventing a live-tracking concept that doesn't apply here.
+  log_activity: async (supabase, userId, data, _tzOffsetMinutes) => {
+    const type = str(data.type);
+    if (!type || !['hike', 'run', 'walk'].includes(type)) {
+      throw new Error('log_activity needs type: "hike" | "run" | "walk"');
+    }
+    const durationMins = num(data.durationMins) ?? num(data.duration_mins);
+    if (!durationMins || durationMins <= 0) throw new Error('log_activity needs durationMins');
+    const durationSecs = Math.round(durationMins * 60);
+    const end = new Date();
+    const start = new Date(end.getTime() - durationSecs * 1000);
+    const distanceM = num(data.distanceM) ?? num(data.distance_m) ?? 0;
+    const { error } = await supabase.from('activities').insert({
+      id: crypto.randomUUID(), user_id: userId, type,
+      start_time: start.toISOString(), end_time: end.toISOString(),
+      duration_secs: durationSecs, distance_m: distanceM,
+      notes: str(data.notes) ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return { table: 'activities', type, duration_secs: durationSecs, distance_m: distanceM };
+  },
+
+  log_expense: async (supabase, userId, data, tzOffsetMinutes) => {
+    const amount = num(data.amount);
+    if (amount === undefined) throw new Error('log_expense needs an amount');
+    const date = resolveDateKey(data.date, tzOffsetMinutes);
+    const { error } = await supabase.from('expenses').insert({
+      id: crypto.randomUUID(), user_id: userId, amount,
+      currency: str(data.currency) ?? 'USD',
+      category: str(data.category) ?? 'other',
+      note: str(data.note) ?? null, date,
+    });
+    if (error) throw new Error(error.message);
+    return { table: 'expenses', amount, date };
+  },
+
+  // "I took my vitamin D" -- resolves by name against the user's own
+  // `medications`, same inline exact-then-substring pattern toggle_habit
+  // uses below (not worth extracting a shared matcher for a single caller).
+  log_medication: async (supabase, userId, data, tzOffsetMinutes) => {
+    const name = str(data.name) ?? str(data.medication);
+    if (!name) throw new Error('log_medication needs a medication name');
+    const { data: meds, error: mErr } = await supabase
+      .from('medications').select('id, name').eq('user_id', userId);
+    if (mErr) throw new Error(mErr.message);
+    const want = name.toLowerCase().trim();
+    const match = (meds ?? []).find((m: { name: string }) => m.name.toLowerCase().trim() === want)
+      ?? (meds ?? []).find((m: { name: string }) => m.name.toLowerCase().includes(want));
+    if (!match) {
+      const known = (meds ?? []).map((m: { name: string }) => m.name).join(', ') || 'none';
+      throw new Error(`no medication matching "${name}" (you have: ${known})`);
+    }
+    const date = resolveDateKey(data.date, tzOffsetMinutes);
+    const taken = data.taken === undefined ? true : data.taken === true;
+    const { error } = await supabase.from('medication_logs').upsert(
+      {
+        id: crypto.randomUUID(), user_id: userId, medication_id: match.id, date, taken,
+        dose_taken: num(data.doseTaken) ?? num(data.dose_taken) ?? null,
+      },
+      { onConflict: 'medication_id,date' },
+    );
+    if (error) throw new Error(error.message);
+    return { table: 'medication_logs', medication_id: match.id, name: match.name, date, taken };
+  },
+
+  // A new goal, not progress on an existing one -- matches create_task's
+  // "voice creates a new thing" shape. Editing/completing a goal by voice is
+  // deliberately not wired: "which goal, and to what?" is exactly the kind
+  // of ambiguity this whole action system is built to avoid guessing at.
+  create_goal: async (supabase, userId, data, tzOffsetMinutes) => {
+    const title = str(data.title) ?? str(data.name);
+    if (!title) throw new Error('create_goal needs a title');
+    const { error } = await supabase.from('goals').insert({
+      id: crypto.randomUUID(), user_id: userId, title,
+      category: str(data.category) ?? null,
+      target_date: data.targetDate ? resolveDateKey(data.targetDate, tzOffsetMinutes) : null,
+      status: 'active',
+    });
+    if (error) throw new Error(error.message);
+    return { table: 'goals', title };
+  },
+
+  // A quick capture, not a structured book/movie/link entry -- those need an
+  // external lookup (Google Books/TMDB) or a real URL, neither of which a
+  // spoken sentence reliably has. "Save this idea: ..." is the one library
+  // shape a bare voice log can honestly serve.
+  save_idea: async (supabase, userId, data, _tzOffsetMinutes) => {
+    const content = str(data.content) ?? str(data.note) ?? str(data.name);
+    if (!content) throw new Error('save_idea needs content');
+    const { error } = await supabase.from('ideas').insert({
+      id: crypto.randomUUID(), user_id: userId, content, tags: [],
+    });
+    if (error) throw new Error(error.message);
+    return { table: 'ideas', content };
   },
 
   log_pb: async (supabase, userId, data, tzOffsetMinutes) => {
@@ -324,22 +455,36 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     return { id: row.id, table: 'body_weight_logs', weight_kg: kg };
   },
 
-  // Resolves a spoken habit NAME to its id -- the device never knows ids, and
-  // the model must not invent one. Unmatched names fail loudly rather than
-  // silently creating a habit the user didn't ask for.
+  // Resolves either a direct habitId (device-state's button-tap path, which
+  // already has one from the snapshot it just rendered) or a spoken habit
+  // NAME (voice/chat, which never has an id and must not invent one).
+  // Previously these were two separately-implemented dispatchers (one here
+  // by name, one hand-rolled in device-state/index.ts by id) that could
+  // silently drift; unified 2026-09-01 so both transports share one write.
   toggle_habit: async (supabase, userId, data, tzOffsetMinutes) => {
-    const name = str(data.name) ?? str(data.habit) ?? str(data.label);
-    if (!name) throw new Error('toggle_habit needs a habit name');
-    const { data: habits, error: hErr } = await supabase
-      .from('habits').select('id, name').eq('user_id', userId).eq('active', true);
-    if (hErr) throw new Error(hErr.message);
+    const habitId = str(data.habitId) ?? str(data.id);
+    let match: { id: string; name: string };
+    if (habitId) {
+      const { data: row, error } = await supabase
+        .from('habits').select('id, name').eq('user_id', userId).eq('id', habitId).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!row) throw new Error(`no habit with id ${habitId}`);
+      match = row;
+    } else {
+      const name = str(data.name) ?? str(data.habit) ?? str(data.label);
+      if (!name) throw new Error('toggle_habit needs a habitId or a habit name');
+      const { data: habits, error: hErr } = await supabase
+        .from('habits').select('id, name').eq('user_id', userId).eq('active', true);
+      if (hErr) throw new Error(hErr.message);
 
-    const want = name.toLowerCase().trim();
-    const match = (habits ?? []).find((h: { name: string }) => h.name.toLowerCase().trim() === want)
-      ?? (habits ?? []).find((h: { name: string }) => h.name.toLowerCase().includes(want));
-    if (!match) {
-      const known = (habits ?? []).map((h: { name: string }) => h.name).join(', ') || 'none';
-      throw new Error(`no habit matching "${name}" (you have: ${known})`);
+      const want = name.toLowerCase().trim();
+      const found = (habits ?? []).find((h: { name: string }) => h.name.toLowerCase().trim() === want)
+        ?? (habits ?? []).find((h: { name: string }) => h.name.toLowerCase().includes(want));
+      if (!found) {
+        const known = (habits ?? []).map((h: { name: string }) => h.name).join(', ') || 'none';
+        throw new Error(`no habit matching "${name}" (you have: ${known})`);
+      }
+      match = found;
     }
 
     const date = resolveDateKey(data.date, tzOffsetMinutes);
@@ -395,7 +540,7 @@ export const ACTION_SPECS: Record<string, string> = {
   reschedule_task:
     'reschedule_task — change an existing task\'s date/time/priority. data: { "taskId": string (the id shown in TASKS), "date"?: "YYYY-MM-DD"|"today"|"tomorrow", "hour"?: 0-23, "minute"?: 0-59, "priority"?: "LOW"|"MEDIUM"|"HIGH" }',
   complete_task:
-    'complete_task — mark a task done. data: { "taskId": string (the id shown in TASKS) }',
+    'complete_task — mark a task done (or not done). data: { "taskId": string (the id shown in TASKS), "done"?: boolean (default true) }',
   log_pb:
     'log_pb — record a personal best. Rejected (throws) if it is not actually a new best estimated-1RM for that exercise. data: { "exerciseId": string, "weightKg": number, "reps"?: number, "date"?: "YYYY-MM-DD" }',
   log_set:
@@ -414,6 +559,20 @@ export const ACTION_SPECS: Record<string, string> = {
     'log_sleep — log a night\'s sleep. data: { "totalHours": number, "qualityScore"?: 1-5, "date"?: "YYYY-MM-DD"|"today" }',
   log_mood:
     'log_mood — log how the user feels. data: { "moodScore": 1-10, "note"?: string, "date"?: "YYYY-MM-DD"|"today" }',
+  gym_checkin:
+    'gym_checkin — mark a gym session as done today, no template. data: { "durationMins"?: number, "date"?: "YYYY-MM-DD"|"today" }',
+  log_focus_session:
+    'log_focus_session — log a completed focus/deep-work block. data: { "durationMins": number, "date"?: "YYYY-MM-DD"|"today" }',
+  log_activity:
+    'log_activity — log a run/hike/walk after the fact (no live GPS track). data: { "type": "run"|"hike"|"walk", "durationMins": number, "distanceM"?: number, "notes"?: string }',
+  log_expense:
+    'log_expense — log a spend. data: { "amount": number, "currency"?: string (default "USD"), "category"?: string, "note"?: string, "date"?: "YYYY-MM-DD"|"today" }',
+  log_medication:
+    'log_medication — mark a dose taken (or missed). data: { "name": string (medication name as the user says it), "taken"?: boolean (default true), "doseTaken"?: number, "date"?: "YYYY-MM-DD"|"today" }',
+  create_goal:
+    'create_goal — add a new goal. data: { "title": string, "category"?: string, "targetDate"?: "YYYY-MM-DD" }',
+  save_idea:
+    'save_idea — capture a quick idea (not a book/movie/link — those need a real lookup this action doesn\'t do). data: { "content": string }',
 };
 
 /** Pure gate: the action's decision BEFORE anyone writes anything. */

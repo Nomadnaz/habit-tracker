@@ -85,21 +85,21 @@ export const companions: Record<string, CompanionConfig> = {
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'schedule & tasks'),
     // Calendar/email actions are future + always-preview; none auto-run in v1.
-    actions: ['create_task', 'reschedule_task', 'remember_about_user'],
+    actions: ['create_task', 'reschedule_task', 'complete_task', 'remember_about_user'],
   },
   gym: {
     defaultName: 'Coach',
     contextSources: ['workout_done_log', 'pb_log', 'body_weight_logs', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'gym'),
-    actions: ['log_pb', 'log_set'],
+    actions: ['log_pb', 'log_set', 'gym_checkin'],
   },
   focus: {
     defaultName: 'Focus',
     contextSources: ['user_focus', 'tasks', 'focus_sessions', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'deep-work & focus'),
-    actions: [],
+    actions: ['log_focus_session'],
   },
   calorie: {
     defaultName: 'Fuel',
@@ -108,14 +108,16 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['meals', 'gym_plan', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'nutrition'),
-    actions: ['log_meal'],
+    // log_water added 2026-09-01 (Code Audit v3): this, not habitCoach, is
+    // the domain-relevant companion for "log a glass of water".
+    actions: ['log_meal', 'log_water'],
   },
   activity: {
     defaultName: 'Trail',
     contextSources: ['activities', 'daily_steps', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'hike/run/walk'),
-    actions: [],
+    actions: ['log_activity'],
   },
   sleep: {
     defaultName: 'Rest',
@@ -125,7 +127,10 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['sleep_logs', 'sleep_phone_logs', 'mood_logs', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'sleep'),
-    actions: [],
+    // log_sleep added 2026-09-01 (Code Audit v3): the executor + spec had
+    // existed since day one, but no companion was ever allowed to call it —
+    // "log 7 hours of sleep" to this companion went nowhere.
+    actions: ['log_sleep'],
   },
   goals: {
     defaultName: 'Compass',
@@ -134,7 +139,7 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['goals', 'habit_logs', 'workout_done_log', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'goals'),
-    actions: [],
+    actions: ['create_goal'],
   },
   mood: {
     defaultName: 'Anchor',
@@ -144,7 +149,8 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['mood_logs', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'mood & wellbeing'),
-    actions: [],
+    // log_mood added 2026-09-01 (Code Audit v3) — same dead-end gap as sleep.
+    actions: ['log_mood'],
   },
   // The following 3 (Code Audit v2 fix plan P3): screens/tables have existed
   // since tasks 024/065/064, but had no companion config until now — config-
@@ -154,21 +160,24 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['medications', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'medication & supplement'),
-    actions: [],
+    actions: ['log_medication'],
   },
   finance: {
     defaultName: 'Ledger',
     contextSources: ['expenses', 'bills', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'finance'),
-    actions: [],
+    actions: ['log_expense'],
   },
   library: {
     defaultName: 'Stacks',
     contextSources: ['books', 'movies', 'saved_links', 'ideas', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'reading, watching & saved ideas'),
-    actions: [],
+    // save_idea only -- books/movies/links need a real external lookup or
+    // URL this action system doesn't have; a bare voice "save this idea"
+    // has nowhere else it could honestly go wrong.
+    actions: ['save_idea'],
   },
 };
 

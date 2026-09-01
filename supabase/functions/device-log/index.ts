@@ -71,17 +71,22 @@ const LOG_SCHEMA = {
         required: [
           'kind', 'name', 'confidence', 'calories', 'protein_g', 'carbs_g',
           'fat_g', 'meal_type', 'amount_ml', 'weight_kg', 'total_hours',
-          'mood_score', 'date', 'task_hour', 'reps',
+          'mood_score', 'date', 'task_hour', 'reps', 'completed',
+          'duration_mins', 'distance_m', 'activity_type', 'amount', 'category',
         ],
         properties: {
           kind: {
             type: 'string',
-            enum: ['meal', 'water', 'weight', 'habit', 'sleep', 'mood', 'task', 'note', 'exercise'],
+            enum: [
+              'meal', 'water', 'weight', 'habit', 'sleep', 'mood', 'task', 'note', 'exercise',
+              'gym_checkin', 'focus', 'activity', 'expense', 'medication', 'goal', 'idea',
+            ],
           },
           // For kind 'exercise' this is the exercise name as spoken ("squats",
           // "bench press") -- resolved against the user's own `exercises`
           // rows after parsing (see matchExerciseName), not by the model,
-          // which never sees the user's exercise IDs.
+          // which never sees the user's exercise IDs. Same idea for
+          // 'medication' against the user's `medications`.
           name: { type: 'string' },
           confidence: { type: 'number' },
           // Nullable fields use anyOf rather than a `type: ['number','null']`
@@ -100,6 +105,18 @@ const LOG_SCHEMA = {
           date: nullable({ type: 'string' }),
           task_hour: nullable({ type: 'number' }),
           reps: nullable({ type: 'number' }),
+          // 'habit' only -- defaults to true (marking done) when the speaker
+          // doesn't say either way; only set false for an explicit "mark X
+          // NOT done" / "undo yoga" style correction.
+          completed: nullable({ type: 'boolean' }),
+          // Shared by 'gym_checkin', 'focus', 'activity'.
+          duration_mins: nullable({ type: 'number' }),
+          // 'activity' only.
+          distance_m: nullable({ type: 'number' }),
+          activity_type: nullable({ type: 'string', enum: ['run', 'hike', 'walk'] }),
+          // 'expense' only.
+          amount: nullable({ type: 'number' }),
+          category: nullable({ type: 'string' }),
         },
       },
     },
@@ -122,7 +139,15 @@ RULES
 - confidence 0-1: how sure you are this is what they meant. Below 0.5, put the phrase in "unclear" instead of guessing.
 - Anything you cannot confidently turn into an entry goes in "unclear" verbatim. Never invent a number the speaker did not say and you cannot reasonably estimate.
 - Never log something the speaker only mentioned in passing ("I should drink more water" is not a water log).
-- "exercise" is the ONE kind that needs two specific numbers to be usable: a named exercise + weight + reps, e.g. "squats, sixty kilos for eight reps" -> name "Squats", weight_kg 60, reps 8. Only emit "exercise" when BOTH a weight and a rep count were said -- "I did squats" alone with no numbers goes to "unclear". This rule is specific to "exercise" and does not apply to any other kind -- "task" and "note" in particular need no numbers or measurements at all. "Add a task to call the dentist" or "remind me to call the dentist" is straightforwardly a task, exactly as confidently as "logged a coffee" is a meal. Do not become more hesitant about task/note/habit/mood just because exercise has a stricter bar.`;
+- "exercise" is the ONE kind that needs two specific numbers to be usable: a named exercise + weight + reps, e.g. "squats, sixty kilos for eight reps" -> name "Squats", weight_kg 60, reps 8. Only emit "exercise" when BOTH a weight and a rep count were said -- "I did squats" alone with no numbers goes to "unclear". This rule is specific to "exercise" and does not apply to any other kind -- "task" and "note" in particular need no numbers or measurements at all. "Add a task to call the dentist" or "remind me to call the dentist" is straightforwardly a task, exactly as confidently as "logged a coffee" is a meal. Do not become more hesitant about task/note/habit/mood just because exercise has a stricter bar.
+- "habit": completed defaults to true (marking it done) whenever the speaker doesn't say otherwise -- "yoga done" or just "I did yoga" is completed:true. Only set completed:false for an explicit correction or undo: "actually I didn't do yoga", "mark running as not done", "undo the gym habit".
+- "gym_checkin" is a bare "I went to the gym" / "gym done today" with no exercise/weight/reps attached -- if numbers ARE given, that is an "exercise" item instead, not this.
+- "focus" needs a duration in minutes: "25 minute focus session", "focused for an hour" -> duration_mins 60. No duration said -> "unclear".
+- "activity" needs BOTH activity_type (run/hike/walk) and a duration: "ran for 25 minutes", "hiked for an hour and a half". distance_m only if a distance was actually said ("ran 5k" -> distance_m 5000) -- never estimate distance from duration alone.
+- "expense" needs an amount: "spent twelve pounds on lunch" -> amount 12, category "food", name "lunch". No amount said -> "unclear".
+- "medication" is "I took my <name>" / "missed my <name>" -- name is the medication as spoken, nothing else needed.
+- "goal" is creating a NEW goal, not progress on an existing one: "add a goal to run a marathon" -> name "Run a marathon". A vague aspiration mentioned in passing ("I really should get fitter") is not a goal creation.
+- "idea" is an explicit capture: "save this idea: ...", "note an idea about ...". A stray thought not framed as worth saving goes to "unclear", not "idea".`;
 
 // Maps one parsed item onto the executor contract in _shared/actionExecutor.ts.
 // exerciseId is pre-resolved (async, needs a DB lookup) and passed in only
@@ -156,7 +181,10 @@ function toAction(item: Record<string, unknown>, exerciseId?: string | null): Co
     case 'weight':
       return { type: 'log_weight', confidence: conf, data: { weightKg: n(item.weight_kg) } };
     case 'habit':
-      return { type: 'toggle_habit', confidence: conf, data: { name: item.name, date } };
+      return {
+        type: 'toggle_habit', confidence: conf,
+        data: { name: item.name, date, completed: typeof item.completed === 'boolean' ? item.completed : true },
+      };
     case 'sleep':
       return { type: 'log_sleep', confidence: conf, data: { totalHours: n(item.total_hours), date } };
     case 'mood':
@@ -165,6 +193,36 @@ function toAction(item: Record<string, unknown>, exerciseId?: string | null): Co
       return { type: 'create_task', confidence: conf, data: { label: item.name, date, hour: n(item.task_hour) } };
     case 'note':
       return { type: 'remember_about_user', confidence: conf, data: { note: item.name } };
+    case 'gym_checkin':
+      return { type: 'gym_checkin', confidence: conf, data: { durationMins: n(item.duration_mins), date } };
+    case 'focus': {
+      const durationMins = n(item.duration_mins);
+      if (durationMins === undefined) return null;
+      return { type: 'log_focus_session', confidence: conf, data: { durationMins, date } };
+    }
+    case 'activity': {
+      const durationMins = n(item.duration_mins);
+      const activityType = typeof item.activity_type === 'string' ? item.activity_type : undefined;
+      if (durationMins === undefined || !activityType) return null;
+      return {
+        type: 'log_activity', confidence: conf,
+        data: { type: activityType, durationMins, distanceM: n(item.distance_m) },
+      };
+    }
+    case 'expense': {
+      const amount = n(item.amount);
+      if (amount === undefined) return null;
+      return {
+        type: 'log_expense', confidence: conf,
+        data: { amount, category: item.category, note: item.name, date },
+      };
+    }
+    case 'medication':
+      return { type: 'log_medication', confidence: conf, data: { name: item.name, date } };
+    case 'goal':
+      return { type: 'create_goal', confidence: conf, data: { title: item.name } };
+    case 'idea':
+      return { type: 'save_idea', confidence: conf, data: { content: item.name } };
     default:
       return null;
   }
@@ -178,11 +236,18 @@ function summarise(item: Record<string, unknown>): string {
     case 'meal': return `${item.name} · ${r(item.calories)} kcal`;
     case 'water': return `${r(item.amount_ml)} ml water`;
     case 'weight': return `${item.weight_kg} kg`;
-    case 'habit': return `${item.name} ✓`;
+    case 'habit': return `${item.name} ${item.completed === false ? '✗' : '✓'}`;
     case 'sleep': return `${item.total_hours} h sleep`;
     case 'mood': return `mood ${r(item.mood_score)}/10`;
     case 'task': return `task: ${item.name}`;
     case 'exercise': return `${item.name} · ${item.weight_kg}kg x${r(item.reps)}`;
+    case 'gym_checkin': return 'gym session ✓';
+    case 'focus': return `${r(item.duration_mins)} min focus`;
+    case 'activity': return `${item.activity_type} · ${r(item.duration_mins)} min`;
+    case 'expense': return `${item.name ?? item.category ?? 'expense'} · ${item.amount}`;
+    case 'medication': return `${item.name} ✓`;
+    case 'goal': return `goal: ${item.name}`;
+    case 'idea': return `idea: ${item.name}`;
     default: return String(item.name ?? item.kind);
   }
 }

@@ -34,7 +34,16 @@ import {
   syncTaskDoneToApple,
 } from './apple-sync';
 import { findTaskDateKey, moveTaskInMap } from './task-schedule';
-import { genId } from './workout-data';
+import { genId, markDoneToday } from './workout-data';
+import { getActiveHabits, getLogsForHabit, isDoneOnDate, toggleToday } from './habits-data';
+import { logMood } from './mood-data';
+import { addMeal } from './meals-data';
+import { addWater, logWeight as logBodyWeight } from './body-data';
+import { logFocusSession } from './focus-data';
+import { addExpense, CATEGORIES as EXPENSE_CATEGORIES } from './finance-data';
+import { getActiveMedications, getLogsForMedication, isDoseTakenOnDate, toggleTodayDose } from './medications-data';
+import { addGoal } from './goals-data';
+import { addIdea } from './library-data';
 
 export type ActionStatus = 'auto' | 'preview' | 'clarify' | 'unsupported' | 'executed' | 'failed';
 
@@ -195,20 +204,21 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
     case 'complete_task': {
       const taskId = str(data.taskId) ?? str(data.id);
       if (!taskId) throw new Error("I couldn't tell which task to complete.");
+      const done = data.done === undefined ? true : data.done === true;
       const map = await readMap();
       const dateKey = findTaskDateKey(map, taskId);
       if (!dateKey) throw new Error("I couldn't find that task on your calendar.");
       const day = map[dateKey] ?? [];
       const target = day.find(t => t.id === taskId)!;
-      const nextDay = day.map(t => (t.id === taskId ? { ...t, done: true } : t));
+      const nextDay = day.map(t => (t.id === taskId ? { ...t, done } : t));
       const active = nextDay.filter(t => !t.archived);
       const arch = nextDay.filter(t => t.archived);
       await writeMap({ ...map, [dateKey]: [...sortActiveTasks(active), ...arch] });
-      if (userId) void supabase.from('tasks').update({ done: true }).eq('id', taskId).eq('user_id', userId);
-      void syncTaskDoneToApple(target, true, { dateKey });
+      if (userId) void supabase.from('tasks').update({ done }).eq('id', taskId).eq('user_id', userId);
+      void syncTaskDoneToApple(target, done, { dateKey });
 
-      await postWrite('task', { ...target, done: true, date: dateKey }, 'update');
-      return { summary: `Marked "${target.label}" done` };
+      await postWrite('task', { ...target, done, date: dateKey }, 'update');
+      return { summary: `Marked "${target.label}" ${done ? 'done' : 'not done'}` };
     }
 
     case 'log_pb': {
@@ -273,6 +283,180 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
       }
       await postWrite('workout', setRow, 'create');
       return { summary: `Logged set: ${exerciseId} ${weightKg}kg x${reps}${newPb ? ' — new PB!' : ''}` };
+    }
+
+    // The 7 cases below close a real gap (Code Audit v3, 2026-09-01):
+    // several companions (habitCoach, calorie, sleep, mood) could already
+    // gate these to 'auto' — meaning ai-chat tells the CLIENT to run them —
+    // but this switch had no case for them, so an auto-gated "log a coffee"
+    // in the app's own chat screen threw "log_meal isn't something I can do
+    // yet" even though the exact same action works fine from the voice
+    // device (which executes server-side instead, via device-log/
+    // _shared/actionExecutor.ts). Each one below routes through the SAME
+    // local-first data-layer function the app's own manual-entry screens
+    // use, so it shows up in the UI immediately, not just after a pull.
+
+    case 'log_meal': {
+      const name = str(data.name) ?? str(data.label);
+      if (!name) throw new Error("I couldn't tell what the meal was.");
+      const date = resolveDateKey(data.date);
+      const meal = await addMeal({
+        date, name,
+        mealType: (str(data.mealType) as any) ?? 'snack',
+        calories: numOrUndef(data.calories) ?? 0,
+        proteinG: numOrUndef(data.proteinG) ?? numOrUndef(data.protein_g) ?? 0,
+        carbsG: numOrUndef(data.carbsG) ?? numOrUndef(data.carbs_g) ?? 0,
+        fatG: numOrUndef(data.fatG) ?? numOrUndef(data.fat_g) ?? 0,
+        loggedVia: 'manual',
+      });
+      return { summary: `Logged ${meal.name} · ${meal.calories} kcal` };
+    }
+
+    case 'log_water': {
+      const amountMl = numOrUndef(data.amountMl) ?? numOrUndef(data.amount_ml);
+      if (!amountMl) throw new Error("I couldn't tell how much water.");
+      await addWater(amountMl);
+      return { summary: `Logged ${amountMl}ml water` };
+    }
+
+    case 'log_weight': {
+      const weightKg = numOrUndef(data.weightKg) ?? numOrUndef(data.weight_kg);
+      if (weightKg === undefined) throw new Error("I couldn't tell the weight.");
+      await logBodyWeight(weightKg);
+      return { summary: `Logged ${weightKg}kg` };
+    }
+
+    case 'toggle_habit': {
+      const name = str(data.name) ?? str(data.habit) ?? str(data.label);
+      if (!name) throw new Error("I couldn't tell which habit.");
+      const habits = await getActiveHabits();
+      const want = name.toLowerCase().trim();
+      const habit = habits.find(h => h.name.toLowerCase().trim() === want)
+        ?? habits.find(h => h.name.toLowerCase().includes(want));
+      if (!habit) throw new Error(`No habit matching "${name}".`);
+      const desired = data.completed === undefined ? true : data.completed === true;
+      const logs = await getLogsForHabit(habit.id);
+      const current = isDoneOnDate(logs, toDateKey(new Date()));
+      // toggleToday only ever flips -- calling it when already in the
+      // desired state would incorrectly undo it.
+      if (current !== desired) await toggleToday(habit);
+      return { summary: `${habit.name} ${desired ? '✓' : '✗'}` };
+    }
+
+    case 'log_sleep': {
+      const totalHours = numOrUndef(data.totalHours);
+      if (totalHours === undefined) throw new Error("I couldn't tell how many hours.");
+      if (!userId) throw new Error('Not signed in.');
+      // No local-first function accepts a bare totalHours (lib/sleep-data.ts's
+      // logSleep() derives it from bedtime+wakeTime, which voice/chat never
+      // have) -- same "no suitable local cache to route through" reasoning
+      // as log_set above. sleep_logs' own pullRemoteSleep() picks this up.
+      const date = resolveDateKey(data.date);
+      const { error } = await supabase.from('sleep_logs').upsert(
+        { id: genId(), user_id: userId, date, total_hours: totalHours,
+          quality_score: numOrUndef(data.qualityScore) ?? null, source_device: 'manual' },
+        { onConflict: 'user_id,date' },
+      );
+      if (error) throw new Error(error.message);
+      return { summary: `Logged ${totalHours}h sleep` };
+    }
+
+    case 'log_mood': {
+      const moodScore = numOrUndef(data.moodScore);
+      if (moodScore === undefined) throw new Error("I couldn't tell the mood score.");
+      await logMood({ moodScore, note: str(data.note), triggers: [] });
+      return { summary: `Logged mood ${moodScore}/10` };
+    }
+
+    case 'remember_about_user': {
+      const note = str(data.note) ?? str(data.fact) ?? str(data.text);
+      if (!note) throw new Error("I couldn't tell what to remember.");
+      if (!userId) throw new Error('Not signed in.');
+      const { data: existing } = await supabase
+        .from('user_context_summary').select('assistant_notes_md').eq('user_id', userId).maybeSingle();
+      const bullet = `- ${note}`;
+      const lines = (existing?.assistant_notes_md ?? '').split('\n').filter((l: string) => l.trim());
+      if (!lines.includes(bullet)) {
+        const nextMd = [...lines, bullet].slice(-30).join('\n');
+        const { error } = await supabase.from('user_context_summary').upsert(
+          { user_id: userId, assistant_notes_md: nextMd, notes_updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' },
+        );
+        if (error) throw new Error(error.message);
+      }
+      return { summary: `Remembered: ${note}` };
+    }
+
+    case 'gym_checkin': {
+      await markDoneToday('device-checkin');
+      return { summary: 'Gym session logged' };
+    }
+
+    case 'log_focus_session': {
+      const durationMins = numOrUndef(data.durationMins) ?? numOrUndef(data.duration_mins);
+      if (!durationMins) throw new Error("I couldn't tell the duration.");
+      logFocusSession(durationMins);
+      return { summary: `Logged ${durationMins} min focus session` };
+    }
+
+    case 'log_activity': {
+      const type = str(data.type);
+      const durationMins = numOrUndef(data.durationMins) ?? numOrUndef(data.duration_mins);
+      if (!type || !durationMins) throw new Error("I couldn't tell the activity type and duration.");
+      if (!userId) throw new Error('Not signed in.');
+      // No local-first function accepts a waypoint-less activity (workout-
+      // data's saveActivity computes distance FROM a GPS track) -- same
+      // "no suitable local cache" reasoning as log_sleep/log_set above.
+      const durationSecs = Math.round(durationMins * 60);
+      const end = new Date();
+      const start = new Date(end.getTime() - durationSecs * 1000);
+      const { error } = await supabase.from('activities').insert({
+        id: genId(), user_id: userId, type,
+        start_time: start.toISOString(), end_time: end.toISOString(),
+        duration_secs: durationSecs, distance_m: numOrUndef(data.distanceM) ?? numOrUndef(data.distance_m) ?? 0,
+        notes: str(data.notes) ?? null,
+      });
+      if (error) throw new Error(error.message);
+      return { summary: `Logged ${type} · ${durationMins} min` };
+    }
+
+    case 'log_expense': {
+      const amount = numOrUndef(data.amount);
+      if (amount === undefined) throw new Error("I couldn't tell the amount.");
+      const rawCategory = str(data.category)?.toLowerCase();
+      const category = (EXPENSE_CATEGORIES as readonly string[]).includes(rawCategory ?? '')
+        ? (rawCategory as any) : 'other';
+      await addExpense({ amount, category, note: str(data.note), date: resolveDateKey(data.date) });
+      return { summary: `Logged ${amount} (${category})` };
+    }
+
+    case 'log_medication': {
+      const name = str(data.name) ?? str(data.medication);
+      if (!name) throw new Error("I couldn't tell which medication.");
+      const meds = await getActiveMedications();
+      const want = name.toLowerCase().trim();
+      const med = meds.find(m => m.name.toLowerCase().trim() === want)
+        ?? meds.find(m => m.name.toLowerCase().includes(want));
+      if (!med) throw new Error(`No medication matching "${name}".`);
+      const desired = data.taken === undefined ? true : data.taken === true;
+      const logs = await getLogsForMedication(med.id);
+      const current = isDoseTakenOnDate(logs, toDateKey(new Date()));
+      if (current !== desired) await toggleTodayDose(med);
+      return { summary: `${med.name} ${desired ? '✓' : '✗'}` };
+    }
+
+    case 'create_goal': {
+      const title = str(data.title) ?? str(data.name);
+      if (!title) throw new Error("I couldn't tell the goal.");
+      await addGoal({ title, category: str(data.category), targetDate: str(data.targetDate) });
+      return { summary: `Goal added: ${title}` };
+    }
+
+    case 'save_idea': {
+      const content = str(data.content) ?? str(data.note) ?? str(data.name);
+      if (!content) throw new Error("I couldn't tell the idea.");
+      await addIdea(content);
+      return { summary: `Idea saved: ${content}` };
     }
 
     default:
