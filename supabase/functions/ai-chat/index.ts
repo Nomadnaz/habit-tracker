@@ -59,6 +59,44 @@ function extractActions(text: string): CompanionAction[] {
 // Strip the <action> blocks out of the user-visible text.
 const cleanText = (text: string) => text.replace(/<action>[\s\S]*?<\/action>/g, '').trim();
 
+// device-log/index.ts's deviceSpeech(), adapted to the CompanionAction shape
+// (camelCase `data` fields, not device-log's parsed snake_case item) --
+// same pipe-delimited contract, same firmware-side parser. Keep the two in
+// sync: any kind added to device-log's toAction()/deviceSpeech() that a
+// companion can ALSO emit as an ai-chat <action> should get a case here too.
+function deviceActionSpeech(a: CompanionAction): string | null {
+  const d = (a.data ?? {}) as Record<string, unknown>;
+  const r = (v: unknown) => Math.round(typeof v === 'number' ? v : 0);
+  const up = (v: unknown) => String(v ?? '').toUpperCase();
+  switch (a.type) {
+    case 'log_meal': {
+      const parts = [`LOGGED: ${up(d.name)}`, `${r(d.calories)}|KCAL`];
+      if (r(d.proteinG) > 0) parts.push(`${r(d.proteinG)}|G PROTEIN`);
+      if (r(d.carbsG) > 0) parts.push(`${r(d.carbsG)}|G CARBS`);
+      if (r(d.fatG) > 0) parts.push(`${r(d.fatG)}|G FAT`);
+      return parts.join('|');
+    }
+    case 'log_water': return `LOGGED: WATER|${r(d.amountMl)}|ML`;
+    case 'log_weight': return `LOGGED: WEIGHT|${d.weightKg}|KG`;
+    case 'toggle_habit': return `LOGGED: ${up(d.name)} ${d.completed === false ? 'UNDONE' : 'DONE'}`;
+    case 'log_sleep': return `LOGGED: SLEEP|${d.totalHours}|HOURS`;
+    case 'log_mood': return `LOGGED: MOOD|${r(d.moodScore)}|/10`;
+    case 'create_task': return `TASK ADDED: ${up(d.label)}`;
+    case 'log_set': return `LOGGED: SET|${d.weightKg}|KG|${r(d.reps)}|REPS`;
+    case 'log_pb': return 'NEW PB';
+    case 'gym_checkin': return 'LOGGED: GYM SESSION';
+    case 'log_focus_session': return `LOGGED: FOCUS|${r(d.durationMins)}|MIN`;
+    case 'log_activity': return `LOGGED: ${up(d.type)}|${r(d.durationMins)}|MIN`;
+    case 'log_expense': return `LOGGED: ${up(d.note ?? d.category ?? 'EXPENSE')}|${d.amount}|GBP`;
+    case 'log_medication': return `LOGGED: ${up(d.name)}`;
+    case 'create_goal': return `GOAL ADDED: ${up(d.title)}`;
+    case 'save_idea': return 'IDEA SAVED';
+    case 'set_gym_plan': return `PLAN SET: ${up(d.day)} = ${up(d.sessionType)}`;
+    case 'remember_about_user': return 'REMEMBERED';
+    default: return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
@@ -206,6 +244,24 @@ Deno.serve(async (req: Request) => {
         .join(' ');
     }
     if (!responseText) responseText = 'Done.';
+
+    // Device only, single clean action: replace whatever prose the model
+    // wrote with the SAME pipe-delimited structured confirmation
+    // device-log's deviceSpeech() produces -- the firmware's screen_ask.c
+    // parses this into big stat-number chips (calories, macros, etc)
+    // beside the checkmark. Without this override, a request that reaches
+    // ai-chat instead of device-log (an unusual phrasing device-log's own
+    // classifier didn't confidently catch, or any other fallback reason)
+    // showed the model's natural sentence instead -- "Logged: ~1840 cal,
+    // 72g protein from a 10" pizza" -- with the numbers embedded in text
+    // rather than broken out, even though the underlying log_meal write
+    // itself was correct (found on hardware 2026-09-04, confirmed via a
+    // companion_messages row proving this exact path was what handled it).
+    if (isDevice && actions.length === 1 && (actions[0].status === 'executed' || actions[0].status === 'auto')) {
+      const structured = deviceActionSpeech(actions[0]);
+      if (structured) responseText = structured;
+    }
+
     // Safety net, not the primary fix: the DEVICE MODE instruction above is
     // what actually stops the model rambling, but instructions aren't a
     // hard guarantee. Cut at the nearest sentence/word boundary under the
