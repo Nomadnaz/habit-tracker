@@ -68,6 +68,9 @@ const BLE_CMD_SET_ANSWER = 0x05;
 const BLE_CMD_SYNC_BEGIN = 0x08; // payload: total byte length, u16 LE
 const BLE_CMD_SYNC_CHUNK = 0x09;
 const BLE_CMD_SYNC_END = 0x0a;
+// Voice-driven lift_begin() -- see companion-hud's ble_svc.h for the wire
+// format (weight_kg as a 4-byte LE float, then the exercise name as UTF-8).
+const BLE_CMD_LIFT_BEGIN = 0x0b;
 
 const SAMPLE_RATE_HZ = 16000; // must match MIC_SAMPLE_RATE_HZ in main/mic.c
 const MAX_TEXT_BYTES = 200;   // matches gatt_svr.c write buffer
@@ -109,6 +112,7 @@ class BleBridgeManager {
   private realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
   private syncInFlight = false;
   private noteMode = false; // next audio session is a vault capture, not a question
+  private liftSetupMode = false; // next audio session starts a lift, not a question
   private adpcmState: AdpcmState = makeAdpcmState();
   private samples: number[] = [];
   private history: Array<{ role: string; content: string }> = [];
@@ -305,6 +309,7 @@ class BleBridgeManager {
     this.adpcmState = makeAdpcmState();
     const isNote = this.noteMode;
     this.noteMode = false;
+    const isLiftSetup = this.liftSetupMode;
 
     if (captured.length < 1600) return; // < 0.1s — likely silence, skip
 
@@ -315,6 +320,16 @@ class BleBridgeManager {
       const transcript = await transcribeViaSupabase(base64Wav);
       if (!transcript) {
         this.emit({ status: 'connected' });
+        return;
+      }
+
+      // Hold-to-talk from the LIFT tab: "tricep pulldown, twenty kilos"
+      // starts a set, it isn't a question or a log entry — parsed by a
+      // dedicated tiny endpoint (no DB writes, so it doesn't share
+      // device-log's items/kind schema) and sent back as a command the
+      // firmware turns straight into lift_begin(), not spoken prose.
+      if (isLiftSetup) {
+        await this._tryLiftSetup(transcript);
         return;
       }
 
@@ -411,6 +426,33 @@ class BleBridgeManager {
     });
     if (error) throw error;
     return (data?.response ?? '').trim();
+  }
+
+  /** "tricep pulldown, twenty kilos" -> lift_begin("TRICEP PULLDOWN", 20.0)
+   *  on the device. Never throws into the caller (matches _tryDeviceLog) —
+   *  a parse failure should say so out loud, not break hold-to-talk. */
+  private async _tryLiftSetup(transcript: string): Promise<void> {
+    let name = '';
+    let weightKg = 0;
+    try {
+      const { data, error } = await supabase.functions.invoke('lift-setup', {
+        body: { transcript },
+      });
+      if (error) throw error;
+      name = String(data?.name ?? '').trim();
+      weightKg = typeof data?.weightKg === 'number' ? data.weightKg : 0;
+    } catch (e: any) {
+      console.warn('[ble-bridge] lift-setup failed:', e?.message);
+    }
+
+    const confirm = name
+      ? `Starting ${name}${weightKg > 0 ? ` at ${weightKg}kg` : ''}`
+      : "Didn't catch the exercise — try again";
+    this.emit({ lastQuestion: transcript, lastAnswer: confirm });
+    if (this.device) {
+      await writeCmd(this.device, BLE_CMD_SET_ANSWER, confirm);
+      if (name) await writeLiftBegin(this.device, weightKg, name.toUpperCase());
+    }
   }
 
   private async _syncTime(device: Device) {
@@ -563,10 +605,17 @@ class BleBridgeManager {
     if (action?.op === 'ask_context') {
       const tabToCompanion: Record<string, string> = {
         HUB: 'habitCoach', TIMER: 'focus', TASKS: 'life', GYM: 'gym',
-        HABITS: 'habitCoach', RUN: 'activity', BRAIN: 'habitCoach',
+        HABITS: 'habitCoach', RUN: 'activity', BRAIN: 'habitCoach', LIFT: 'gym',
       };
-      const mapped = tabToCompanion[String(action.tab ?? '')];
+      const tab = String(action.tab ?? '');
+      const mapped = tabToCompanion[tab];
       if (mapped) this._companionType = mapped;
+      // A hold-to-talk press made from the LIFT tab means "start a lift" —
+      // handled entirely differently in _finishSession (parsed name+weight,
+      // sent back as a BLE_CMD_LIFT_BEGIN command, not a spoken answer).
+      // This fires on every press, tab-driven, so it never needs resetting
+      // the way noteMode does (that one's only sometimes set explicitly).
+      this.liftSetupMode = tab === 'LIFT';
       return;
     }
     const { error } = await supabase.functions.invoke('device-state', {
@@ -660,6 +709,17 @@ async function writeCmd(device: Device, opcode: number, text: string) {
   const payload = new Uint8Array(1 + textBytes.length);
   payload[0] = opcode;
   payload.set(textBytes, 1);
+  await device.writeCharacteristicWithResponseForService(
+    SERVICE_UUID, CMD_CHAR_UUID, bytesToBase64(payload)
+  );
+}
+
+async function writeLiftBegin(device: Device, weightKg: number, name: string) {
+  const nameBytes = truncateUtf8(name, MAX_TEXT_BYTES - 5); // opcode(1) + float(4)
+  const payload = new Uint8Array(5 + nameBytes.length);
+  payload[0] = BLE_CMD_LIFT_BEGIN;
+  new DataView(payload.buffer).setFloat32(1, weightKg, true); // true = little-endian
+  payload.set(nameBytes, 5);
   await device.writeCharacteristicWithResponseForService(
     SERVICE_UUID, CMD_CHAR_UUID, bytesToBase64(payload)
   );
