@@ -137,11 +137,12 @@ const SYSTEM_PROMPT = `You turn one spoken sentence into structured log entries 
 The speaker is standing in a shop, a gym, or a kitchen. They talk in one breath and expect everything they mentioned to be recorded. Your job is to catch ALL of it.
 
 RULES
+- This device cannot ask a follow-up question -- every utterance gets exactly one attempt, silent or spoken back in one short line. Default to acting on the single most typical interpretation rather than second-guessing. A bare "log a banana" is one medium banana, logged now, at confidence >=0.7 -- do not withhold it for want of a size, brand, or ripeness nobody was ever going to give you.
 - One utterance often contains SEVERAL items. "Meal deal - egg and cress sandwich, coffee, and a protein bar" is THREE separate meal items, not one.
-- Estimate macros for every food from the name alone. There is no photo. A rough, honest estimate beats refusing: use typical UK supermarket portions. An egg and cress sandwich is ~330 kcal / 14g protein. A flat white is ~120 kcal. A protein bar is ~200 kcal / 20g protein.
+- Estimate macros for every food from the name alone, using the most common/typical size when none is said (a banana with no size given is one medium banana, ~105 kcal). There is no photo. A rough, honest estimate beats refusing: use typical UK supermarket portions. An egg and cress sandwich is ~330 kcal / 14g protein. A flat white is ~120 kcal. A protein bar is ~200 kcal / 20g protein.
 - Convert spoken quantities to the field's unit: "half a litre" -> amount_ml 500. "two pints" -> 1136. "twelve and a half stone" -> weight_kg 79.4.
 - meal_type: infer from the food and the hour if the speaker doesn't say. A sandwich at midday is lunch; a protein bar on its own is a snack.
-- confidence 0-1: how sure you are this is what they meant. Below 0.5, put the phrase in "unclear" instead of guessing.
+- confidence 0-1: how sure you are this is what they meant. Below 0.5, put the phrase in "unclear" instead of guessing. Missing secondary detail (portion size, meal type, exact brand) is NOT a reason to lower confidence or go to "unclear" -- only the identity of WHAT to log (kind + name) needs to be clear. "log a banana" is high confidence; "log something" is not.
 - Anything you cannot confidently turn into an entry goes in "unclear" verbatim. Never invent a number the speaker did not say and you cannot reasonably estimate.
 - Never log something the speaker only mentioned in passing ("I should drink more water" is not a water log).
 - "exercise" is the ONE kind that needs two specific numbers to be usable: a named exercise + weight + reps, e.g. "squats, sixty kilos for eight reps" -> name "Squats", weight_kg 60, reps 8. Only emit "exercise" when BOTH a weight and a rep count were said -- "I did squats" alone with no numbers goes to "unclear". This rule is specific to "exercise" and does not apply to any other kind -- "task" and "note" in particular need no numbers or measurements at all. "Add a task to call the dentist" or "remind me to call the dentist" is straightforwardly a task, exactly as confidently as "logged a coffee" is a meal. Do not become more hesitant about task/note/habit/mood just because exercise has a stricter bar.
@@ -236,6 +237,43 @@ function toAction(item: Record<string, unknown>, exerciseId?: string | null): Co
     }
     default:
       return null;
+  }
+}
+
+// The device's confirmation for a SINGLE logged item -- pipe-delimited
+// segments, not a sentence. The firmware (screen_ask.c) splits on '|': the
+// first segment types out like a normal reply, any segments after it render
+// as big standalone stat numbers next to the checkmark (calories, macros,
+// etc.) instead of being folded into prose. Only meaningful for kind='meal'
+// today (the only one with more than one number worth a stat chip); every
+// other kind is just a short label in one segment.
+function deviceSpeech(item: Record<string, unknown>): string {
+  const r = (v: unknown) => Math.round(typeof v === 'number' ? v : 0);
+  const up = (v: unknown) => String(v ?? '').toUpperCase();
+  switch (item.kind) {
+    case 'meal': {
+      const parts = [`LOGGED: ${up(item.name)}`, `${r(item.calories)}|KCAL`];
+      if (r(item.protein_g) > 0) parts.push(`${r(item.protein_g)}|G PROTEIN`);
+      if (r(item.carbs_g) > 0) parts.push(`${r(item.carbs_g)}|G CARBS`);
+      if (r(item.fat_g) > 0) parts.push(`${r(item.fat_g)}|G FAT`);
+      return parts.join('|');
+    }
+    case 'water': return `LOGGED: WATER|${r(item.amount_ml)}|ML`;
+    case 'weight': return `LOGGED: WEIGHT|${item.weight_kg}|KG`;
+    case 'habit': return `LOGGED: ${up(item.name)} ${item.completed === false ? 'UNDONE' : 'DONE'}`;
+    case 'sleep': return `LOGGED: SLEEP|${item.total_hours}|HOURS`;
+    case 'mood': return `LOGGED: MOOD|${r(item.mood_score)}|/10`;
+    case 'task': return `TASK ADDED: ${up(item.name)}`;
+    case 'exercise': return `LOGGED: ${up(item.name)}|${item.weight_kg}|KG|${r(item.reps)}|REPS`;
+    case 'gym_checkin': return 'LOGGED: GYM SESSION';
+    case 'focus': return `LOGGED: FOCUS|${r(item.duration_mins)}|MIN`;
+    case 'activity': return `LOGGED: ${up(item.activity_type)}|${r(item.duration_mins)}|MIN`;
+    case 'expense': return `LOGGED: ${up(item.name ?? item.category ?? 'EXPENSE')}|${item.amount}|GBP`;
+    case 'medication': return `LOGGED: ${up(item.name)}`;
+    case 'goal': return `GOAL ADDED: ${up(item.name)}`;
+    case 'idea': return 'IDEA SAVED';
+    case 'gym_plan': return `PLAN SET: ${up(item.plan_day)} = ${up(item.name)}`;
+    default: return `LOGGED: ${up(item.name ?? item.kind)}`;
   }
 }
 
@@ -360,11 +398,13 @@ Deno.serve(async (req: Request) => {
     const results = await processActions(admin, userId, actionable.map((p) => p.action), { execute: true, tzOffsetMinutes: tz });
 
     const logged: { kind: string; summary: string }[] = [];
+    const loggedItems: Record<string, unknown>[] = []; // parallel to `logged`, for deviceSpeech
     const failed: { summary: string; reason: string }[] = [];
     results.forEach((r, i) => {
       const summary = summarise(actionable[i]?.item ?? {});
       if (r.status === 'executed') {
         logged.push({ kind: String(actionable[i]?.item.kind ?? ''), summary });
+        loggedItems.push(actionable[i]?.item ?? {});
       } else if (r.status === 'failed') {
         // A write was genuinely attempted and errored (bad data, a real
         // DB error) -- report it, never silently drop it.
@@ -406,10 +446,18 @@ Deno.serve(async (req: Request) => {
       }, { onConflict: 'user_id,date', ignoreDuplicates: false });
     }
 
+    // A single clean log (the common case -- one item, nothing failed) gets
+    // the structured pipe-delimited form so the device can show real stat
+    // numbers instead of a sentence. Anything messier (multiple items, a
+    // partial failure) falls back to the flat sentence -- there's no clean
+    // "big number" layout for three items at once, and a sentence listing
+    // them is still short.
     const speech = logged.length === 0
       ? (failed.length ? `Couldn't log that: ${failed[0].reason}` : "Didn't catch anything to log.")
-      : `Logged ${logged.map((l) => l.summary).join(', ')}` +
-        (failed.length ? `. ${failed.length} didn't save.` : '');
+      : logged.length === 1 && failed.length === 0
+        ? deviceSpeech(loggedItems[0])
+        : `Logged ${logged.map((l) => l.summary).join(', ')}` +
+          (failed.length ? `. ${failed.length} didn't save.` : '');
 
     return new Response(JSON.stringify({ handled, logged, failed, unclear, speech }), { headers: cors });
   } catch (err) {

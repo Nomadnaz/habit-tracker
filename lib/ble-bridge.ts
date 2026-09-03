@@ -437,6 +437,7 @@ class BleBridgeManager {
         companionType: this._companionType,
         conversationHistory: this.history.slice(-10),
         execute: true, // high-confidence actions execute server-side
+        source: 'device', // ai-chat: no confirm screen here, no way to hear a follow-up question either
         // The phone (not the ESP32) sends this — same fix as ChatScreen.tsx,
         // see supabase/functions/_shared/localDate.ts (audit 2026-07-06).
         // Matters more here than in-app: execute:true means the server

@@ -84,6 +84,11 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: 'message required' }), { status: 400, headers: cors });
     }
     const companionType: string = companions[body.companionType] ? body.companionType : DEFAULT_COMPANION;
+    // ble-bridge.ts sends this when the request came from the voice device
+    // rather than the in-app chat screen -- see the device-terseness addendum
+    // below. The app's own ChatScreen never sets it, so its replies are
+    // unaffected.
+    const isDevice: boolean = body.source === 'device';
     const history: { role: 'user' | 'assistant'; content: string }[] =
       Array.isArray(body.conversationHistory) ? body.conversationHistory.slice(-10) : [];
     // Client's `new Date().getTimezoneOffset()` — see _shared/localDate.ts.
@@ -128,12 +133,24 @@ Deno.serve(async (req: Request) => {
     // names/schema is what makes the model reliably emit a usable <action> block.
     const allowedActions = (cfg.actions ?? []).map((a: string) => ACTION_SPECS[a]).filter(Boolean);
     const actionGuide = allowedActions.length
-      ? `\n\nACTIONS YOU CAN TAKE (besides your normal reply, emit at most one <action> block per requested change, with the JSON on a single line):\n${allowedActions.map((s: string) => `- ${s}`).join('\n')}\n\nRules:\n- Only emit an action when the user clearly asks you to change their data.\n- For an explicit, unambiguous request (e.g. "add a task to call mum tomorrow at 6pm"), set "confidence": 0.95 so it happens immediately.\n- If you are unsure which task they mean or details are missing, use a lower "confidence" (0.6-0.8) so they can confirm first.\n- For reschedule_task / complete_task, use the exact id shown in TASKS.\n- Resolve relative dates against TODAY above.`
+      ? `\n\nACTIONS YOU CAN TAKE (besides your normal reply, emit at most one <action> block per requested change, with the JSON on a single line):\n${allowedActions.map((s: string) => `- ${s}`).join('\n')}\n\nRules:\n- Only emit an action when the user clearly asks you to change their data.\n- For an explicit, unambiguous request (e.g. "add a task to call mum tomorrow at 6pm"), set "confidence": 0.95 so it happens immediately.\n- If you are unsure which task they mean or details are missing, use a lower "confidence" (0.6-0.8) so they can confirm first.${isDevice ? ' EXCEPT from the device (see DEVICE MODE below): it has no confirm screen, so use 0.85+ and your best-guess interpretation instead of a low confidence -- a gated, unconfirmed action here just reads back as a question nobody can answer.' : ''}\n- For reschedule_task / complete_task, use the exact id shown in TASKS.\n- Resolve relative dates against TODAY above.`
+      : '';
+    // Device calls reach here only when device-log's own classifier couldn't
+    // confidently turn the utterance into a write (see device-log/index.ts) --
+    // a genuine question, or something ambiguous enough that device-log gave
+    // up. Either way, this device has no screen to hold a back-and-forth on
+    // and no way to hear a follow-up question: it shows one line, then
+    // closes. A normal chatty reply ("is this a snack? what size?") is a
+    // dead end here, not a clarification -- there's no next turn for the
+    // user to answer into. Force a single short, direct line instead: best
+    // guess and act, or answer as tightly as possible.
+    const deviceAddendum = isDevice
+      ? '\n\nDEVICE MODE: this message came from a voice device with a one-line display and no way to hear a reply to a question. NEVER ask a clarifying question -- make the single most reasonable assumption and answer directly. Reply in ONE short sentence, ideally under 12 words. No lists, no multi-part explanations.'
       : '';
     const systemPrompt = cfg.systemPromptTemplate
       .replace('{name}', companionName)
       .replace('{user_nickname}', nickname)
-      .replace('{context}', ctx.text) + actionGuide;
+      .replace('{context}', ctx.text) + actionGuide + deviceAddendum;
 
     // 5. Claude call — prompt caching on the system+context prefix (mandatory).
     // BYOK: use the user's own saved Anthropic key when present (task 020),
@@ -189,6 +206,18 @@ Deno.serve(async (req: Request) => {
         .join(' ');
     }
     if (!responseText) responseText = 'Done.';
+    // Safety net, not the primary fix: the DEVICE MODE instruction above is
+    // what actually stops the model rambling, but instructions aren't a
+    // hard guarantee. Cut at the nearest sentence/word boundary under the
+    // cap rather than mid-word -- the firmware's own budget is 220 bytes
+    // (screen_ask.c's ASK_TEXT_MAX), this stays well under that with room
+    // for a pipe-delimited stat suffix from other callers.
+    if (isDevice && responseText.length > 140) {
+      const cut = responseText.slice(0, 140);
+      const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+      const lastSpace = cut.lastIndexOf(' ');
+      responseText = lastStop > 40 ? cut.slice(0, lastStop + 1) : cut.slice(0, lastSpace > 0 ? lastSpace : 140);
+    }
 
     const tokensIn = completion.usage?.input_tokens ?? null;
     const tokensOut = completion.usage?.output_tokens ?? null;
