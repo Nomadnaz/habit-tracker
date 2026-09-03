@@ -430,23 +430,39 @@ class BleBridgeManager {
     }
   }
 
+  /**
+   * Never throws (found on hardware 2026-09-03: it used to `throw error` on
+   * any non-2xx response -- e.g. a 429 from FREE_DAILY_CAP -- with no
+   * try/catch here or in the caller's synchronous chain up to the BLE
+   * write, so the device got NOTHING at all: no tick, no text, totally
+   * blank, with the failure only ever visible as a console.warn on the
+   * phone nobody was looking at). This device has no other way to learn a
+   * request failed, so a failure has to still produce a real spoken/shown
+   * line, same as a genuine answer would.
+   */
   private async _callAiChat(question: string): Promise<string> {
-    const { data, error } = await supabase.functions.invoke('ai-chat', {
-      body: {
-        message: question,
-        companionType: this._companionType,
-        conversationHistory: this.history.slice(-10),
-        execute: true, // high-confidence actions execute server-side
-        source: 'device', // ai-chat: no confirm screen here, no way to hear a follow-up question either
-        // The phone (not the ESP32) sends this — same fix as ChatScreen.tsx,
-        // see supabase/functions/_shared/localDate.ts (audit 2026-07-06).
-        // Matters more here than in-app: execute:true means the server
-        // actually writes the task's date, not just displays it.
-        tzOffsetMinutes: new Date().getTimezoneOffset(),
-      },
-    });
-    if (error) throw error;
-    return (data?.response ?? '').trim();
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-chat', {
+        body: {
+          message: question,
+          companionType: this._companionType,
+          conversationHistory: this.history.slice(-10),
+          execute: true, // high-confidence actions execute server-side
+          source: 'device', // ai-chat: no confirm screen here, no way to hear a follow-up question either
+          // The phone (not the ESP32) sends this — same fix as ChatScreen.tsx,
+          // see supabase/functions/_shared/localDate.ts (audit 2026-07-06).
+          // Matters more here than in-app: execute:true means the server
+          // actually writes the task's date, not just displays it.
+          tzOffsetMinutes: new Date().getTimezoneOffset(),
+        },
+      });
+      if (error) throw error;
+      return (data?.response ?? '').trim() || "Didn't get a reply — try again.";
+    } catch (e: any) {
+      console.warn('[ble-bridge] ai-chat failed:', e?.message);
+      const status = e?.context?.status ?? e?.status;
+      return status === 429 ? "Hit today's AI limit." : "Couldn't reach the AI — try again.";
+    }
   }
 
   /** "tricep pulldown, twenty kilos" -> lift_begin("TRICEP PULLDOWN", 20.0)
