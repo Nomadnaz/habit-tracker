@@ -571,7 +571,7 @@ export const ACTION_SPECS: Record<string, string> = {
   log_set:
     'log_set — log one set (weight x reps). Always logs to exercise_sets; also updates pb_log if this set beats the exercise\'s best estimated-1RM. data: { "exerciseId": string, "weightKg": number, "reps": number, "date"?: "YYYY-MM-DD" }',
   log_meal:
-    'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }',
+    'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }. There is no photo -- ALWAYS estimate calories/proteinG/carbsG/fatG from the food name and a typical portion, even when no size was given (assume one typical individual serving). Never omit calories or send 0 for a real, named food.',
   remember_about_user:
     'remember_about_user — save a fact the user wants remembered for future conversations. data: { "note": string }',
   log_water:
