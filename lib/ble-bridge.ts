@@ -113,6 +113,7 @@ class BleBridgeManager {
   private syncInFlight = false;
   private noteMode = false; // next audio session is a vault capture, not a question
   private liftSetupMode = false; // next audio session starts a lift, not a question
+  private _attachedId: string | null = null; // device id currently subscribed -- guards double-attach
   private adpcmState: AdpcmState = makeAdpcmState();
   private samples: number[] = [];
   private history: Array<{ role: string; content: string }> = [];
@@ -232,6 +233,24 @@ class BleBridgeManager {
    *  and only needs its characteristic monitors re-attached — the OS does
    *  not preserve JS-side listeners across a relaunch. */
   private async _attachToDevice(device: Device) {
+    // Guards against attaching twice to the SAME live connection — found on
+    // hardware 2026-09-03: iOS state restoration (getBleManager's
+    // restoreStateFunction) can hand back an already-connected peripheral
+    // concurrently with the normal _connect() path also reaching here for
+    // the same device (both plausible right at app launch). Each call to
+    // monitorCharacteristicForService below creates a fresh subscription,
+    // so attaching twice raced two subscribe attempts on the action
+    // characteristic — observed as the CCCD flipping enabled then disabled
+    // ~200ms later and STAYING disabled, silently dropping every
+    // device-originated action (ask_context, complete_task, ...) for the
+    // rest of the connection with zero error anywhere. Real subscriptions
+    // already present for this exact device id -> nothing to do.
+    if (this._attachedId === device.id && this.actionSub && this.audioSub) {
+      this.device = device;
+      return;
+    }
+    this._attachedId = device.id;
+
     // State restoration can hand back a peripheral whose GATT cache didn't
     // survive the relaunch; re-discovering is a no-op if it did.
     const connected = await device.discoverAllServicesAndCharacteristics();
@@ -243,6 +262,7 @@ class BleBridgeManager {
       this.audioSub = null;
       this.actionSub?.remove();
       this.actionSub = null;
+      this._attachedId = null;
       if (this.timerId) { clearInterval(this.timerId); this.timerId = null; }
       if (this.syncTimerId) { clearInterval(this.syncTimerId); this.syncTimerId = null; }
       this.device = null;
