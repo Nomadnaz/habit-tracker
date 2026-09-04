@@ -61,7 +61,12 @@ Today's context:
 export const companions: Record<string, CompanionConfig> = {
   habitCoach: {
     defaultName: 'Coach',
-    contextSources: ['tasks', 'user_focus', 'habit_logs', 'user_context_summary', 'vault'],
+    // daily_steps added 2026-09-05: this is DEFAULT_COMPANION (see below) --
+    // it's what answers "how many steps have I done today" from the
+    // device's HUB page (no companionType routing applies there), and
+    // without it in contextSources the model correctly says it has no
+    // access, which reads as broken from a user asking a plain question.
+    contextSources: ['tasks', 'user_focus', 'habit_logs', 'daily_steps', 'user_context_summary', 'vault'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'habit & task'),
     // habitCoach is DEFAULT_COMPANION -- what the voice device gets when no
