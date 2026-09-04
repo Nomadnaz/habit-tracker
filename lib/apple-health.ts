@@ -1,7 +1,8 @@
 // Apple Health (HealthKit) — read steps, walking distance, activity, sleep, weight.
 // Requires a custom iOS dev build (not Expo Go). Run: npx expo prebuild && npx expo run:ios
 
-import { Platform } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { AppState, Platform } from 'react-native';
 import { dateKey, type BodyData } from './body-data';
 
 export type AppleHealthActivityToday = {
@@ -275,6 +276,45 @@ export async function connectAndSyncAppleHealth(historyDays = 56): Promise<{
     const message = e instanceof Error ? e.message : 'Apple Health sync failed.';
     return { ok: false, error: message };
   }
+}
+
+const AUTO_SYNC_MIN_INTERVAL_MS = 15 * 60 * 1000; // 15 min -- avoid a HealthKit round trip on every glance at the app
+
+/**
+ * Keeps today's steps/activity fresh without the user having to remember to
+ * hit a manual sync button. Companion HUD's HUB screen reads steps_today
+ * from device-state, which reads it from Supabase's daily_steps table,
+ * which previously only ever got a row when connectAndSyncAppleHealth() was
+ * called from the onboarding connect screen or a manual gym-tab sync --
+ * meaning it went stale the moment the user stopped tapping that button
+ * (confirmed on 2026-09-04: the newest row was over a month old). This re-
+ * syncs automatically on launch and every foreground, but only if the user
+ * has already connected Health at least once -- it never triggers the
+ * permission prompt itself. historyDays=2 keeps each auto-sync cheap (only
+ * today + yesterday need refreshing); the deep 56-day pull stays a manual,
+ * explicit action. Mirrors lib/ble-bridge.ts's useBleAutoConnect. */
+export function useAppleHealthAutoSync(): void {
+  const lastSyncRef = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function trySync() {
+      if (!isAppleHealthSupported()) return;
+      if (Date.now() - lastSyncRef.current < AUTO_SYNC_MIN_INTERVAL_MS) return;
+      const { loadBodyData } = await import('./body-data');
+      const data = await loadBodyData();
+      if (cancelled || !data.appleHealthConnected) return;
+      lastSyncRef.current = Date.now();
+      await connectAndSyncAppleHealth(2);
+    }
+
+    void trySync();
+    const sub = AppState.addEventListener('change', next => {
+      if (next === 'active') void trySync();
+    });
+    return () => { cancelled = true; sub.remove(); };
+  }, []);
 }
 
 export function formatActiveTimeHrs(mins: number): string {

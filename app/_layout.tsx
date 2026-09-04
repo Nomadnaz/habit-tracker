@@ -41,6 +41,11 @@ import { useRemoteTaskSync } from '@/lib/use-remote-task-sync';
 // Auto-reconnect the Companion HUD BLE bridge on launch/foreground.
 import { useBleAutoConnect } from '@/lib/ble-bridge';
 
+// Auto-refresh today's Apple Health steps/activity on launch/foreground —
+// see lib/apple-health.ts's useAppleHealthAutoSync for why this exists
+// (daily_steps was going stale between manual syncs).
+import { useAppleHealthAutoSync } from '@/lib/apple-health';
+
 // Slide-down banner + buzz when a task arrives live from the device.
 import { RemoteTaskBanner } from '@/components/RemoteTaskBanner';
 
@@ -104,6 +109,11 @@ export default function RootLayout() {
   // the app not open on that exact screen had no live connection to relay
   // over. No-op for anyone who has never paired a device.
   useBleAutoConnect();
+
+  // Same idea for steps: re-pull from HealthKit on launch/foreground so the
+  // Companion HUD's KCAL/STEPS stats don't read from a month-old sync.
+  // No-op for anyone who has never connected Apple Health.
+  useAppleHealthAutoSync();
 
   // Load our custom fonts. fontsLoaded becomes true once they're downloaded and ready.
   // Until then, we don't render anything (to avoid text flashing with the wrong font).
