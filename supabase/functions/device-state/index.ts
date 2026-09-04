@@ -51,7 +51,7 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
   const weekAgoIso = new Date(Date.now() - 7 * 86400000).toISOString();
   const todayName = WEEKDAYS[localWeekday(tz)];
 
-  const [tasksQ, habitsQ, logsQ, streaksQ, gymPlanQ, gymDoneQ, actsQ, focusQ, vaultQ, vaultCountQ, inboxQ] =
+  const [tasksQ, habitsQ, logsQ, streaksQ, gymPlanQ, gymDoneQ, actsQ, focusQ, vaultQ, vaultCountQ, inboxQ, mealsQ, stepsQ] =
     await Promise.all([
       admin.from('tasks')
         .select('id, label, date, hour, minute, done')
@@ -77,6 +77,8 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
         .eq('user_id', userId).is('deleted_at', null),
       admin.from('vault_inbox').select('id', { count: 'exact', head: true })
         .eq('user_id', userId).is('synced_at', null),
+      admin.from('meals').select('calories').eq('user_id', userId).eq('date', today),
+      admin.from('daily_steps').select('steps').eq('user_id', userId).eq('date', today).maybeSingle(),
     ]);
 
   const tasks = (tasksQ.data ?? []).map((t: Record<string, unknown>) => ({
@@ -108,6 +110,10 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
   // vault_inbox may not exist until migration 027 is applied — degrade to 0.
   const inboxPending = typeof inboxQ.count === 'number' ? inboxQ.count : 0;
 
+  const kcalToday = (mealsQ.data ?? []).reduce(
+    (s: number, m: { calories?: number }) => s + (m.calories ?? 0), 0);
+  const stepsToday = stepsQ.data?.steps ?? 0;
+
   return {
     v: 1,
     ts: Date.now(),
@@ -132,6 +138,8 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
       tasks_done: tasks.length - pending.length,
       tasks_total: tasks.length,
       focus_min_today: focusMin,
+      kcal_today: kcalToday,
+      steps_today: stepsToday,
     },
     brain: {
       files: vaultCountQ.count ?? 0,
