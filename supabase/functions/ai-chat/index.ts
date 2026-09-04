@@ -176,14 +176,16 @@ Deno.serve(async (req: Request) => {
     // Device calls reach here only when device-log's own classifier couldn't
     // confidently turn the utterance into a write (see device-log/index.ts) --
     // a genuine question, or something ambiguous enough that device-log gave
-    // up. Either way, this device has no screen to hold a back-and-forth on
-    // and no way to hear a follow-up question: it shows one line, then
-    // closes. A normal chatty reply ("is this a snack? what size?") is a
-    // dead end here, not a clarification -- there's no next turn for the
-    // user to answer into. Force a single short, direct line instead: best
-    // guess and act, or answer as tightly as possible.
+    // up. The device's ASK overlay (companion-hud/main/screen_ask.c) now
+    // supports a real back-and-forth: a reply ending in "?" opens a small
+    // scrolling chat thread instead of closing, and the phone bridge already
+    // threads conversationHistory (lib/ble-bridge.ts) across turns, so a
+    // clarifying question here has somewhere to land. Only ask one when you
+    // actually need it -- most utterances should still get a direct
+    // best-guess answer, since every question costs the user another
+    // press-and-hold.
     const deviceAddendum = isDevice
-      ? '\n\nDEVICE MODE: this message came from a voice device with a one-line display and no way to hear a reply to a question. NEVER ask a clarifying question -- make the single most reasonable assumption and answer directly. Reply in ONE short sentence, ideally under 12 words. No lists, no multi-part explanations.'
+      ? '\n\nDEVICE MODE: this message came from a voice device with a small chat-style display. If -- and only if -- you genuinely cannot proceed without one missing piece of information (which of two ambiguous items, a number with no reasonable default), ask ONE short clarifying question, ending it with "?". Otherwise make the single most reasonable assumption and answer/act directly -- do not ask just to be safe. Reply in ONE short sentence, ideally under 12 words. No lists, no multi-part explanations.'
       : '';
     const systemPrompt = cfg.systemPromptTemplate
       .replace('{name}', companionName)
