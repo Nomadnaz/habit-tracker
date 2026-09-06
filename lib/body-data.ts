@@ -377,6 +377,12 @@ export async function logWeight(weightKg: number): Promise<BodyData> {
     if (!userId) return;
     await supabase.from('body_weight_logs').insert({ id: genId(), user_id: userId, weight_kg: weightKg, logged_at: entry.at });
   });
+  if (data.appleHealthConnected) {
+    bg(async () => {
+      const { saveWeightToAppleHealth } = await import('./apple-health');
+      await saveWeightToAppleHealth(weightKg, entry.at);
+    });
+  }
   postWrite('weight', entry, 'create');
   return data;
 }

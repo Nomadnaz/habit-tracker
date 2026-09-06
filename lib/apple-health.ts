@@ -17,6 +17,7 @@ export type AppleHealthSyncResult = {
   activityToday: AppleHealthActivityToday;
   sleepMins: number | null;
   weightKg: number | null;
+  weightAt: string | null;
 };
 
 type HealthSample = { value: number; startDate: string; endDate: string };
@@ -51,7 +52,9 @@ function getPermissions(kit: HealthKitModule) {
         Permissions.Weight,
         Permissions.Height,
       ],
-      write: [],
+      write: [
+        Permissions.Weight,
+      ],
     },
   };
 }
@@ -184,8 +187,8 @@ async function fetchLastNightSleepMins(kit: HealthKitModule): Promise<number | n
   return bestMins > 0 ? bestMins : null;
 }
 
-async function fetchLatestWeightKg(kit: HealthKitModule): Promise<number | null> {
-  type WeightResult = { value: number };
+async function fetchLatestWeightKg(kit: HealthKitModule): Promise<{ kg: number; at: string } | null> {
+  type WeightResult = { value: number; endDate: string };
   const unit = kit.Constants?.Units?.gram ?? 'gram';
   const latest = await promisify<WeightResult>(
     kit.getLatestWeight.bind(kit),
@@ -194,21 +197,37 @@ async function fetchLatestWeightKg(kit: HealthKitModule): Promise<number | null>
   if (!latest?.value) return null;
   // Library returns grams when unit is gram.
   const kg = latest.value >= 1000 ? latest.value / 1000 : latest.value;
-  return Math.round(kg * 10) / 10;
+  return { kg: Math.round(kg * 10) / 10, at: latest.endDate };
 }
 
 export async function fetchAppleHealthMetrics(historyDays = 56): Promise<AppleHealthSyncResult | null> {
   const kit = getHealthKit();
   if (!kit) return null;
 
-  const [dailySteps, activityToday, sleepMins, weightKg] = await Promise.all([
+  const [dailySteps, activityToday, sleepMins, weight] = await Promise.all([
     fetchDailySteps(kit, historyDays),
     fetchTodayActivity(kit),
     fetchLastNightSleepMins(kit),
     fetchLatestWeightKg(kit),
   ]);
 
-  return { dailySteps, activityToday, sleepMins, weightKg };
+  return { dailySteps, activityToday, sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null };
+}
+
+/** Writes a manually-logged weight into HealthKit so it shows up in the Health app too. */
+export async function saveWeightToAppleHealth(weightKg: number, at: string): Promise<boolean> {
+  if (!isAppleHealthSupported()) return false;
+  try {
+    const granted = await initAppleHealth();
+    if (!granted) return false;
+    const kit = getHealthKit();
+    if (!kit) return false;
+    const unit = kit.Constants?.Units?.gram ?? 'gram';
+    await promisify<unknown>(kit.saveWeight.bind(kit), { value: weightKg * 1000, unit, date: at });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function stepsThisYearFromHistory(stepsHistory: Record<string, number>): number {
@@ -233,12 +252,16 @@ export function mergeAppleHealthIntoBodyData(
     appleHealthLastSync: new Date().toISOString(),
   };
   if (sync.sleepMins != null) next.sleepMins = sync.sleepMins;
-  if (sync.weightKg != null && sync.weightKg > 0) {
+  if (sync.weightKg != null && sync.weightKg > 0 && sync.weightAt) {
     const logs = [...data.weightLogs];
-    const last = logs[logs.length - 1];
-    const differs = !last || Math.abs(last.weightKg - sync.weightKg) > 0.05;
-    if (differs) {
-      logs.push({ weightKg: sync.weightKg, at: new Date().toISOString() });
+    const sampleAt = new Date(sync.weightAt).getTime();
+    // Dedupe on the sample's OWN recorded time (not "now") -- else the same
+    // HealthKit reading gets re-inserted with a fresh timestamp on every tab
+    // focus, perpetually outranking a genuinely newer manual log.
+    const alreadyLogged = logs.some(l => Math.abs(new Date(l.at).getTime() - sampleAt) < 1000);
+    if (!alreadyLogged) {
+      logs.push({ weightKg: sync.weightKg, at: sync.weightAt });
+      logs.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
       next.weightLogs = logs;
     }
   }
