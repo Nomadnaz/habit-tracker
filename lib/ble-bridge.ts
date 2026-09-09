@@ -392,6 +392,11 @@ class BleBridgeManager {
       // (see the auto-reconnect work above — that's no longer true, so the
       // implicit trigger is gone and has to be explicit here instead).
       void this._reconcileTasksAfterAction();
+      // Same reasoning as _onDeviceAction: without this the HUB's kcal/water
+      // totals only refresh on the 60s syncTimerId tick (or a `tasks` realtime
+      // event, which meals/water aren't part of) — reported on hardware as
+      // "took ages to appear" after a voice-logged meal.
+      await this._pushSnapshot();
 
       this.history.push({ role: 'user', content: question });
       this.history.push({ role: 'assistant', content: answer });
