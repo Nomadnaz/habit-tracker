@@ -132,7 +132,10 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
       archived: false,
       priority: str(data.priority) ?? null,
       hour: num(data.hour) ?? null,
-      minute: num(data.minute) ?? null,
+      // Same hour-without-minute default as reschedule_task below -- "3pm"
+      // with no minute must not leave minute null, or apple-sync.ts's
+      // hasTime gate treats the task as untimed and defaults to 9am.
+      minute: num(data.minute) ?? (num(data.hour) !== undefined ? 0 : null),
       duration_mins: num(data.durationMins) ?? num(data.duration_mins) ?? null,
       location: str(data.location) ?? null,
     };
@@ -147,9 +150,29 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     const patch: Record<string, unknown> = {};
     if (str(data.date)) patch.date = resolveDateKey(data.date, tzOffsetMinutes);
     if (num(data.hour) !== undefined) patch.hour = num(data.hour);
-    if (num(data.minute) !== undefined) patch.minute = num(data.minute);
+    if (num(data.minute) !== undefined) {
+      patch.minute = num(data.minute);
+    } else if (num(data.hour) !== undefined) {
+      // "set it to 11am" gives hour with no minute -- default to :00 rather
+      // than leaving minute null. apple-sync.ts's hasTime gate requires BOTH
+      // hour and minute non-null to treat a task as timed; a bare hour patch
+      // left minute null and silently fell back to a hardcoded 9am on the
+      // synced Apple Calendar event (found on hardware 2026-09-09: task
+      // showed 11am in-app, 9am on the phone's calendar).
+      patch.minute = 0;
+    }
     if (str(data.priority)) patch.priority = str(data.priority);
-    if (Object.keys(patch).length === 0) throw new Error('reschedule_task needs a new date, time, or priority');
+    // label/location/durationMins added 2026-09-09: reschedule_task was
+    // date/time-only, so a rename or "add a location" request had no real
+    // action to land in -- the model either hallucinated success (claimed a
+    // rename that never touched the row) or bolted the location onto the
+    // label text ("Survey Lees Street") since create_task's real `location`
+    // column wasn't reachable from an edit. This is the one edit action for
+    // an existing task; keep its field set in sync with create_task's.
+    if (str(data.label)) patch.label = str(data.label);
+    if (str(data.location)) patch.location = str(data.location);
+    if (num(data.durationMins) !== undefined) patch.duration_mins = num(data.durationMins);
+    if (Object.keys(patch).length === 0) throw new Error('reschedule_task needs a new date, time, label, location, duration, or priority');
     // The model reads taskId out of TASKS in its own context, but nothing
     // stops it hallucinating one — the .eq('user_id', ...) filter already
     // makes a wrong id a no-op rather than a cross-user write, but a plain
@@ -563,7 +586,7 @@ export const ACTION_SPECS: Record<string, string> = {
   create_task:
     'create_task — add a new task. data: { "label": string, "date": "YYYY-MM-DD" | "today" | "tomorrow", "hour"?: 0-23, "minute"?: 0-59, "priority"?: "LOW"|"MEDIUM"|"HIGH" }',
   reschedule_task:
-    'reschedule_task — change an existing task\'s date/time/priority. data: { "taskId": string (the id shown in TASKS), "date"?: "YYYY-MM-DD"|"today"|"tomorrow", "hour"?: 0-23, "minute"?: 0-59, "priority"?: "LOW"|"MEDIUM"|"HIGH" }',
+    'reschedule_task — edit ANY field of an existing task: date/time/priority, rename it, set/change its location, or set its duration. This is the ONLY way to edit an existing task -- never emit create_task for an edit, that makes a duplicate. Include every field you are changing in ONE call. data: { "taskId": string (the id shown in TASKS), "date"?: "YYYY-MM-DD"|"today"|"tomorrow", "hour"?: 0-23, "minute"?: 0-59 (omit only if hour is also omitted -- a bare hour defaults minute to :00), "label"?: string (renames the task), "location"?: string, "durationMins"?: number, "priority"?: "LOW"|"MEDIUM"|"HIGH" }',
   complete_task:
     'complete_task — mark a task done (or not done). data: { "taskId": string (the id shown in TASKS), "done"?: boolean (default true) }',
   log_pb:
