@@ -31,6 +31,7 @@ import {
   syncNewTaskToApple,
   syncTaskDoneToApple,
   syncTaskRemovedFromApple,
+  syncTaskScheduleToApple,
 } from '@/lib/apple-sync';
 import { sortActiveTasks, type Task, type TaskMap } from '@/lib/tasks-core';
 import { findTaskDateKey } from '@/lib/task-schedule';
@@ -134,6 +135,25 @@ async function applyRow(row: Record<string, unknown>, notify = false): Promise<v
             mergeAppleIdsIntoTaskMap(await readMap(), dateKey, id, { appleReminderId: reminderId }),
           );
         }
+      }
+      // Any OTHER field edit (rename, reschedule, location, duration) on a
+      // task already linked to Apple — e.g. reschedule_task run server-side
+      // by the voice device/AI. This only updated @tasks before (the app's
+      // own UI looked right), never the linked Reminder/Event, because this
+      // path previously only handled the done-status toggle above. Found on
+      // hardware 2026-09-09: a device-edited task renamed + relocated
+      // correctly in-app but never moved in Apple Calendar.
+      if (
+        existing &&
+        (existing.appleReminderId || existing.appleEventId) &&
+        (existing.label !== merged.label ||
+          (existing.hour ?? null) !== (merged.hour ?? null) ||
+          (existing.minute ?? null) !== (merged.minute ?? null) ||
+          (existing.location ?? null) !== (merged.location ?? null) ||
+          (existing.durationMins ?? null) !== (merged.durationMins ?? null) ||
+          existingKey !== dateKey)
+      ) {
+        void syncTaskScheduleToApple(merged, { dateKey });
       }
       return;
     }
