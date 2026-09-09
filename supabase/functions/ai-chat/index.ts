@@ -171,7 +171,7 @@ Deno.serve(async (req: Request) => {
     // names/schema is what makes the model reliably emit a usable <action> block.
     const allowedActions = (cfg.actions ?? []).map((a: string) => ACTION_SPECS[a]).filter(Boolean);
     const actionGuide = allowedActions.length
-      ? `\n\nACTIONS YOU CAN TAKE (besides your normal reply, emit at most one <action> block per requested change, with the JSON on a single line):\n${allowedActions.map((s: string) => `- ${s}`).join('\n')}\n\nRules:\n- Only emit an action when the user clearly asks you to change their data.\n- For an explicit, unambiguous request (e.g. "add a task to call mum tomorrow at 6pm"), set "confidence": 0.95 so it happens immediately.\n- If you are unsure which task they mean or details are missing, use a lower "confidence" (0.6-0.8) so they can confirm first.${isDevice ? ' EXCEPT from the device (see DEVICE MODE below): it has no confirm screen, so use 0.85+ and your best-guess interpretation instead of a low confidence -- a gated, unconfirmed action here just reads back as a question nobody can answer.' : ''}\n- For reschedule_task / complete_task, use the exact id shown in TASKS.\n- Resolve relative dates against TODAY above.`
+      ? `\n\nACTIONS YOU CAN TAKE (besides your normal reply, emit one <action> block per requested change, each with the JSON on a single line):\n${allowedActions.map((s: string) => `- ${s}`).join('\n')}\n\nRules:\n- Only emit an action when the user clearly asks you to change their data.\n- A single message can request MULTIPLE changes -- a brain dump like "add tasks to call mum, buy milk, and book the dentist" is THREE separate create_task actions. Emit ONE <action> block PER ITEM, never merged into one, never dropped: if the user listed 5 things, this reply must contain exactly 5 <action> blocks.\n- If the user's message is a short confirmation of something YOU already proposed (e.g. "go ahead", "yes", "do it") -- look back through conversationHistory to recover exactly what was proposed, then emit the <action> block for EVERY one of those items in THIS reply. Never write a sentence claiming something was added, logged, or changed unless you emitted the matching <action> block(s) in this same reply -- a confirmation with no action blocks behind it is a lie the user has no way to catch.\n- For an explicit, unambiguous request (e.g. "add a task to call mum tomorrow at 6pm"), set "confidence": 0.95 so it happens immediately.\n- If you are unsure which task they mean or details are missing, use a lower "confidence" (0.6-0.8) so they can confirm first.${isDevice ? ' EXCEPT from the device (see DEVICE MODE below): it has no confirm screen, so use 0.85+ and your best-guess interpretation instead of a low confidence -- a gated, unconfirmed action here just reads back as a question nobody can answer.' : ''}\n- For reschedule_task / complete_task, use the exact id shown in TASKS.\n- Resolve relative dates against TODAY above.`
       : '';
     // Device calls reach here only when device-log's own classifier couldn't
     // confidently turn the utterance into a write (see device-log/index.ts) --
@@ -185,7 +185,7 @@ Deno.serve(async (req: Request) => {
     // best-guess answer, since every question costs the user another
     // press-and-hold.
     const deviceAddendum = isDevice
-      ? '\n\nDEVICE MODE: this message came from a voice device with a small chat-style display. If -- and only if -- you genuinely cannot proceed without one missing piece of information (which of two ambiguous items, a number with no reasonable default), ask ONE short clarifying question, ending it with "?". Otherwise make the single most reasonable assumption and answer/act directly -- do not ask just to be safe. Reply in ONE short sentence, ideally under 12 words. No lists, no multi-part explanations.'
+      ? '\n\nDEVICE MODE: this message came from a voice device with a small chat-style display. If -- and only if -- you genuinely cannot proceed without one missing piece of information (which of two ambiguous items, a number with no reasonable default), ask ONE short clarifying question, ending it with "?". Otherwise make the single most reasonable assumption and answer/act directly -- do not ask just to be safe. Reply in ONE short sentence, ideally under 12 words. No lists, no multi-part explanations. This "one short sentence" rule is about the spoken reply text ONLY -- it does not limit how many <action> blocks you emit; those are stripped out before the device ever sees them, so a 5-item brain dump still gets 5 <action> blocks plus one short sentence.'
       : '';
     const systemPrompt = cfg.systemPromptTemplate
       .replace('{name}', companionName)
@@ -229,7 +229,15 @@ Deno.serve(async (req: Request) => {
     // The model sometimes replies with ONLY an <action> block (no prose), which
     // would leave the device's ASK screen showing "...". Always give the caller
     // a human sentence by summarising what happened.
-    if (!responseText && actions.length) {
+    //
+    // For the device specifically, this ALSO overrides prose the model DID
+    // write (not just the empty case) whenever there's more than one action --
+    // ground truth for "what happened" is the actions array (what actually got
+    // gated/written), never the model's own narration of it. The model
+    // narrating "5 tasks added" in freeform prose has no guaranteed
+    // correspondence to what's in `actions`, and the device has no screen to
+    // cross-check that claim against.
+    if (actions.length && (!responseText || (isDevice && actions.length > 1))) {
       responseText = actions
         .map((a) => {
           const label = (a.result?.label as string) ?? (a.data?.label as string) ?? (a.data?.title as string);
@@ -244,6 +252,16 @@ Deno.serve(async (req: Request) => {
         })
         .filter(Boolean)
         .join(' ');
+    }
+    // Safety net: the model can narrate a completed action in prose without
+    // emitting the matching <action> block(s) -- e.g. a "go ahead" confirming
+    // a multi-item brain dump listed in a prior turn replying "5 tasks added
+    // today" with zero real <action> blocks, so nothing was written but the
+    // device spoke a false confirmation with no way for the user to tell
+    // (found on hardware 2026-09-04). Only the device needs this: the app has
+    // its own local-first write path and a screen to notice a no-op on.
+    else if (isDevice && !actions.length && /\b(added|logged|saved|created|done|updated|completed)\b/i.test(responseText)) {
+      responseText = "Didn't catch that clearly — say it again?";
     }
     if (!responseText) responseText = 'Done.';
 

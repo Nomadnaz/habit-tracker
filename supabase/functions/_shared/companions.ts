@@ -66,7 +66,10 @@ export const companions: Record<string, CompanionConfig> = {
     // device's HUB page (no companionType routing applies there), and
     // without it in contextSources the model correctly says it has no
     // access, which reads as broken from a user asking a plain question.
-    contextSources: ['tasks', 'user_focus', 'habit_logs', 'daily_steps', 'user_context_summary', 'vault'],
+    // meals added 2026-09-09: same bug, same fix, for "what's my total
+    // calories for today" (reported on hardware) -- buildContext's MEALS
+    // TODAY line needs 'meals' in contextSources to run at all.
+    contextSources: ['tasks', 'user_focus', 'habit_logs', 'daily_steps', 'meals', 'user_context_summary', 'vault'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'habit & task'),
     // habitCoach is DEFAULT_COMPANION -- what the voice device gets when no
