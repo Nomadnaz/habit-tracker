@@ -100,7 +100,11 @@ export const companions: Record<string, CompanionConfig> = {
     contextSources: ['workout_done_log', 'pb_log', 'body_weight_logs', 'user_context_summary'],
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'gym'),
-    actions: ['log_pb', 'log_set', 'gym_checkin', 'set_gym_plan'],
+    // log_weight added 2026-09-09: gym already reads body_weight_logs into
+    // context (can say the latest reading) but had no action to write one --
+    // same class of bug as habitCoach's daily_steps/meals fixes above, found
+    // on hardware asking to log weight from the GYM/LIFT tab.
+    actions: ['log_pb', 'log_set', 'gym_checkin', 'set_gym_plan', 'log_weight'],
   },
   focus: {
     defaultName: 'Focus',
