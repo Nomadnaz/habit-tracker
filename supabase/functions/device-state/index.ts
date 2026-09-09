@@ -51,7 +51,7 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
   const weekAgoIso = new Date(Date.now() - 7 * 86400000).toISOString();
   const todayName = WEEKDAYS[localWeekday(tz)];
 
-  const [tasksQ, habitsQ, logsQ, streaksQ, gymPlanQ, gymDoneQ, actsQ, focusQ, vaultQ, vaultCountQ, inboxQ, mealsQ, stepsQ] =
+  const [tasksQ, habitsQ, logsQ, streaksQ, gymPlanQ, gymDoneQ, actsQ, focusQ, vaultQ, vaultCountQ, inboxQ, mealsQ, stepsQ, waterQ] =
     await Promise.all([
       admin.from('tasks')
         .select('id, label, date, hour, minute, done')
@@ -77,8 +77,9 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
         .eq('user_id', userId).is('deleted_at', null),
       admin.from('vault_inbox').select('id', { count: 'exact', head: true })
         .eq('user_id', userId).is('synced_at', null),
-      admin.from('meals').select('calories').eq('user_id', userId).eq('date', today),
+      admin.from('meals').select('calories, protein_g').eq('user_id', userId).eq('date', today),
       admin.from('daily_steps').select('steps').eq('user_id', userId).eq('date', today).maybeSingle(),
+      admin.from('water_logs').select('amount_ml').eq('user_id', userId).gte('logged_at', `${today}T00:00:00`),
     ]);
 
   const tasks = (tasksQ.data ?? []).map((t: Record<string, unknown>) => ({
@@ -112,7 +113,11 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
 
   const kcalToday = (mealsQ.data ?? []).reduce(
     (s: number, m: { calories?: number }) => s + (m.calories ?? 0), 0);
+  const proteinToday = (mealsQ.data ?? []).reduce(
+    (s: number, m: { protein_g?: number }) => s + (m.protein_g ?? 0), 0);
   const stepsToday = stepsQ.data?.steps ?? 0;
+  const waterToday = (waterQ.data ?? []).reduce(
+    (s: number, w: { amount_ml?: number }) => s + (w.amount_ml ?? 0), 0);
 
   return {
     v: 1,
@@ -140,6 +145,8 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
       focus_min_today: focusMin,
       kcal_today: kcalToday,
       steps_today: stepsToday,
+      protein_today: proteinToday,
+      water_today_ml: waterToday,
     },
     brain: {
       files: vaultCountQ.count ?? 0,
