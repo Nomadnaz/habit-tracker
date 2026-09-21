@@ -265,21 +265,45 @@ Deno.serve(async (req: Request) => {
     }
     if (!responseText) responseText = 'Done.';
 
-    // Device only, single clean action: replace whatever prose the model
-    // wrote with the SAME pipe-delimited structured confirmation
-    // device-log's deviceSpeech() produces -- the firmware's screen_ask.c
-    // parses this into big stat-number chips (calories, macros, etc)
-    // beside the checkmark. Without this override, a request that reaches
-    // ai-chat instead of device-log (an unusual phrasing device-log's own
-    // classifier didn't confidently catch, or any other fallback reason)
-    // showed the model's natural sentence instead -- "Logged: ~1840 cal,
-    // 72g protein from a 10" pizza" -- with the numbers embedded in text
-    // rather than broken out, even though the underlying log_meal write
-    // itself was correct (found on hardware 2026-09-04, confirmed via a
-    // companion_messages row proving this exact path was what handled it).
-    if (isDevice && actions.length === 1 && (actions[0].status === 'executed' || actions[0].status === 'auto')) {
-      const structured = deviceActionSpeech(actions[0]);
-      if (structured) responseText = structured;
+    // Device only, single action: the action's own gate status is the ONLY
+    // ground truth for what happened -- never the model's prose, even when
+    // that prose emitted alongside a real <action> block (found on hardware
+    // 2026-09-21: "log 100 grams chicken breast grilled" gated to 'clarify'
+    // -- the model omitted "confidence", so gateAction() defaulted it to 0 --
+    // yet responseText still read "LOGGED: CHICKEN BREAST GRILLED | 165 KCAL
+    // | 31G PROTEIN", apparently copying the pipe-format pattern it had seen
+    // earlier in conversationHistory. Nothing was written to `meals` at all,
+    // but the device spoke a confident false confirmation, and its malformed
+    // 3-segment shape (label + 2 segments instead of label + value/unit
+    // pairs) also mis-parsed on the firmware side -- the calorie figure
+    // landed in the "value" slot and the protein figure landed in the
+    // "unit" slot, rendering it in the small grey style instead of a proper
+    // big-number chip). The `!actions.length` safety net above and the
+    // executed/auto branch below each cover one end of this; a single
+    // *non*-executed action fell through both.
+    if (isDevice && actions.length === 1) {
+      const a = actions[0];
+      if (a.status === 'executed' || a.status === 'auto') {
+        // Replace whatever prose the model wrote with the SAME pipe-
+        // delimited structured confirmation device-log's deviceSpeech()
+        // produces -- the firmware's screen_ask.c parses this into big
+        // stat-number chips (calories, macros, etc) beside the checkmark.
+        // Without this override, a request that reaches ai-chat instead of
+        // device-log (an unusual phrasing device-log's own classifier
+        // didn't confidently catch, or any other fallback reason) showed
+        // the model's natural sentence instead -- "Logged: ~1840 cal, 72g
+        // protein from a 10" pizza" -- with the numbers embedded in text
+        // rather than broken out, even though the underlying log_meal write
+        // itself was correct (found on hardware 2026-09-04, confirmed via a
+        // companion_messages row proving this exact path handled it).
+        const structured = deviceActionSpeech(a);
+        if (structured) responseText = structured;
+      } else {
+        // clarify / preview / unsupported / failed: nothing was written.
+        // Always speak the gate's own honest message, never the model's
+        // free text -- see the 2026-09-21 incident above.
+        responseText = a.message ?? "Didn't catch that clearly — say it again?";
+      }
     }
 
     // Safety net, not the primary fix: the DEVICE MODE instruction above is
