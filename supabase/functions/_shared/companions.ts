@@ -93,7 +93,16 @@ export const companions: Record<string, CompanionConfig> = {
     model: 'haiku',
     systemPromptTemplate: BASE_PERSONA.replace('{domain}', 'schedule & tasks'),
     // Calendar/email actions are future + always-preview; none auto-run in v1.
-    actions: ['create_task', 'reschedule_task', 'complete_task', 'remember_about_user'],
+    // log_meal/log_water/log_weight/toggle_habit added 2026-09-21: the device
+    // maps the TASKS tab's hold-to-talk to this companion (lib/ble-bridge.ts
+    // ask_context handler), so "log 300ml of water" from that tab landed here
+    // with no logging verb available -- same bug class as habitCoach's
+    // 2026-08-28 fix (companion_messages showed the model either declining
+    // outright or hallucinating "Got it, logged" with no <action> block).
+    actions: [
+      'create_task', 'reschedule_task', 'complete_task', 'remember_about_user',
+      'log_meal', 'log_water', 'log_weight', 'toggle_habit',
+    ],
   },
   gym: {
     defaultName: 'Coach',
