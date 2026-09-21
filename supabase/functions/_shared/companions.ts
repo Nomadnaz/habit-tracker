@@ -84,7 +84,8 @@ const ALL_CONTEXT_SOURCES = [
 
 const ALL_ACTIONS = [
   'create_task', 'reschedule_task', 'complete_task', 'remember_about_user',
-  'log_pb', 'log_set', 'log_meal', 'log_water', 'log_weight', 'toggle_habit',
+  'log_pb', 'log_set', 'log_meal', 'update_meal', 'delete_meal',
+  'log_water', 'log_weight', 'toggle_habit',
   'log_sleep', 'log_mood', 'gym_checkin', 'log_focus_session', 'log_activity',
   'log_expense', 'log_medication', 'create_goal', 'save_idea', 'set_gym_plan',
 ];

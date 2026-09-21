@@ -37,7 +37,7 @@ import { findTaskDateKey, moveTaskInMap } from './task-schedule';
 import { genId, markDoneToday, setGymPlanDay, WEEKDAYS as GYM_WEEKDAYS, type PlanDayValue } from './workout-data';
 import { getActiveHabits, getLogsForHabit, isDoneOnDate, toggleToday } from './habits-data';
 import { logMood } from './mood-data';
-import { addMeal } from './meals-data';
+import { addMeal, getMealsForDate, updateMeal, deleteMeal } from './meals-data';
 import { addWater, logWeight as logBodyWeight } from './body-data';
 import { logFocusSession } from './focus-data';
 import { addExpense, CATEGORIES as EXPENSE_CATEGORIES } from './finance-data';
@@ -120,6 +120,34 @@ async function currentUserId(): Promise<string | null> {
  * Mirrors the manual add/edit path in app/calendar/day.tsx. Throws on failure
  * so the caller (ChatScreen) can surface it.
  */
+/**
+ * Local twin of resolveMeal() in the shared server executor: find the meal
+ * the user is correcting, by id when the model quoted one from context, else
+ * by its current name. Refuses an ambiguous partial match rather than editing
+ * the wrong row — a silent wrong edit is worse than a question.
+ */
+async function resolveLocalMeal(data: Record<string, unknown>) {
+  const dateKey = resolveDateKey(data.date);
+  const meals = await getMealsForDate(dateKey);
+  const id = str(data.id) ?? str(data.mealId);
+  if (id) {
+    const byId = meals.find(m => m.id === id);
+    if (byId) return byId;
+  }
+  const phrase = (str(data.match) ?? str(data.name))?.toLowerCase().trim();
+  if (!phrase) throw new Error("I couldn't tell which meal you meant.");
+  const exact = meals.filter(m => m.name.toLowerCase().trim() === phrase);
+  if (exact.length) return exact[exact.length - 1];
+  const partial = meals.filter(
+    m => m.name.toLowerCase().includes(phrase) || phrase.includes(m.name.toLowerCase()),
+  );
+  if (!partial.length) throw new Error(`I couldn't find "${phrase}" in that day's log.`);
+  if (new Set(partial.map(m => m.name.toLowerCase())).size > 1) {
+    throw new Error(`"${phrase}" matches more than one thing — which did you mean?`);
+  }
+  return partial[partial.length - 1];
+}
+
 export async function executeAction(action: ProcessedAction): Promise<{ summary: string }> {
   const data = action.data ?? {};
   const userId = await currentUserId();
@@ -310,6 +338,31 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
         loggedVia: 'manual',
       });
       return { summary: `Logged ${meal.name} · ${meal.calories} kcal` };
+    }
+
+    // Corrections (2026-09-21). Mirrors update_meal/delete_meal in
+    // supabase/functions/_shared/actionExecutor.ts, but through the
+    // local-first data layer so the change shows in the UI immediately
+    // rather than waiting for the next pullRemoteMeals().
+    case 'update_meal': {
+      const target = await resolveLocalMeal(data);
+      const updated = {
+        ...target,
+        name: str(data.name) ?? target.name,
+        mealType: (str(data.mealType) as any) ?? target.mealType,
+        calories: numOrUndef(data.calories) ?? target.calories,
+        proteinG: numOrUndef(data.proteinG) ?? numOrUndef(data.protein_g) ?? target.proteinG,
+        carbsG: numOrUndef(data.carbsG) ?? numOrUndef(data.carbs_g) ?? target.carbsG,
+        fatG: numOrUndef(data.fatG) ?? numOrUndef(data.fat_g) ?? target.fatG,
+      };
+      await updateMeal(updated);
+      return { summary: `Updated ${updated.name} · ${updated.calories} kcal` };
+    }
+
+    case 'delete_meal': {
+      const target = await resolveLocalMeal(data);
+      await deleteMeal(target.date, target.id);
+      return { summary: `Removed ${target.name}` };
     }
 
     case 'log_water': {

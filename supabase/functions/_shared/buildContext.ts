@@ -197,7 +197,12 @@ export async function buildContext(
       const [{ data }, { data: targets }] = await Promise.all([
         supabase
           .from('meals')
-          .select('date, meal_type, name, calories, protein_g')
+          // id added 2026-09-21: update_meal/delete_meal need a handle on a
+          // specific row, exactly like reschedule_task/complete_task do for
+          // TASKS. Without it the model could only ever append -- asked to
+          // fix a meal it had just logged, its only move was a second
+          // log_meal row, double-counting the item.
+          .select('id, date, meal_type, name, calories, protein_g')
           .eq('user_id', userId)
           .gte('date', localDateKeyPlusDays(-3, tzOffsetMinutes))
           .order('date', { ascending: false })
@@ -212,7 +217,7 @@ export async function buildContext(
         lines.push(`MEALS TODAY: ${todayTotal} cal logged so far.`);
         if (targets?.calories) lines.push(`CALORIE TARGET: ${targets.calories}/day, protein target ${targets.protein_g ?? '?'}g/day.`);
         lines.push('RECENT MEALS (last 3 days):');
-        for (const m of data.slice(0, 10)) lines.push(`- ${m.date} ${m.meal_type}: ${m.name} (${m.calories} cal, ${m.protein_g ?? 0}g protein)`);
+        for (const m of data.slice(0, 10)) lines.push(`- (id:${m.id}) ${m.date} ${m.meal_type}: ${m.name} (${m.calories} cal, ${m.protein_g ?? 0}g protein)`);
       } else {
         lines.push('MEALS: none logged in the last 3 days.');
       }

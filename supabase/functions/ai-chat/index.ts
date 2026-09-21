@@ -76,6 +76,18 @@ function deviceActionSpeech(a: CompanionAction): string | null {
       if (r(d.fatG) > 0) parts.push(`${r(d.fatG)}|G FAT`);
       return parts.join('|');
     }
+    // Corrections read from `result` (the merged post-write row), not `data`:
+    // an update only carries the fields that CHANGED, so building chips from
+    // `data` would show "0 KCAL" for a rename that didn't restate calories.
+    case 'update_meal': {
+      const m = (a.result ?? d) as Record<string, unknown>;
+      const parts = [`UPDATED: ${up(m.name)}`, `${r(m.calories)}|KCAL`];
+      if (r(m.protein_g) > 0) parts.push(`${r(m.protein_g)}|G PROTEIN`);
+      if (r(m.carbs_g) > 0) parts.push(`${r(m.carbs_g)}|G CARBS`);
+      if (r(m.fat_g) > 0) parts.push(`${r(m.fat_g)}|G FAT`);
+      return parts.join('|');
+    }
+    case 'delete_meal': return `REMOVED: ${up(((a.result ?? d) as Record<string, unknown>).name)}`;
     case 'log_water': return `LOGGED: WATER|${r(d.amountMl)}|ML`;
     case 'log_weight': return `LOGGED: WEIGHT|${d.weightKg}|KG`;
     case 'toggle_habit': return `LOGGED: ${up(d.name)} ${d.completed === false ? 'UNDONE' : 'DONE'}`;

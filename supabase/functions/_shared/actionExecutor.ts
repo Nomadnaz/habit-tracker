@@ -455,6 +455,7 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
 
   // Calorie companion's only declared action (used to return 'unsupported'
   // unconditionally — audit 2026-07-06 found it was never wired).
+  // (resolveMeal for update_meal/delete_meal is defined below the table.)
   log_meal: async (supabase, userId, data, tzOffsetMinutes) => {
     const name = str(data.name) ?? str(data.label) ?? 'Meal';
     const calories = num(data.calories) ?? 0;
@@ -473,6 +474,53 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     const { error } = await supabase.from('meals').insert(row);
     if (error) throw new Error(error.message);
     return { id: row.id, table: 'meals', date: row.date, name: row.name, calories: row.calories };
+  },
+
+  // Amending an already-logged meal. Added 2026-09-21: every logging action
+  // here was create-only, so "it had two sugars in it, adjust it" had no
+  // action to land on -- the model's only available move was log_meal, which
+  // appended a SECOND "Turkish tea with 2 sugars" row beside the original
+  // 5-kcal one, double-counting the drink. Saying so ("no, adjust the
+  // original") then produced no action at all and fell to the "didn't catch
+  // that" safety net, because there was still nothing to emit. A logger
+  // people speak into needs a correction primitive, not just an append.
+  update_meal: async (supabase, userId, data, tzOffsetMinutes) => {
+    const target = await resolveMeal(supabase, userId, data, tzOffsetMinutes);
+    const patch: Record<string, unknown> = {};
+    const newName = str(data.name);
+    if (newName) patch.name = newName;
+    const calories = num(data.calories);
+    if (calories !== undefined) patch.calories = calories;
+    const protein = num(data.proteinG) ?? num(data.protein_g);
+    if (protein !== undefined) patch.protein_g = protein;
+    const carbs = num(data.carbsG) ?? num(data.carbs_g);
+    if (carbs !== undefined) patch.carbs_g = carbs;
+    const fat = num(data.fatG) ?? num(data.fat_g);
+    if (fat !== undefined) patch.fat_g = fat;
+    const mealType = str(data.mealType) ?? str(data.meal_type);
+    if (mealType) patch.meal_type = mealType;
+    if (!Object.keys(patch).length) throw new Error('update_meal needs at least one field to change');
+    const { error } = await supabase.from('meals').update(patch).eq('id', target.id).eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    return {
+      id: target.id, table: 'meals', date: target.date,
+      name: patch.name ?? target.name,
+      calories: patch.calories ?? target.calories,
+      protein_g: patch.protein_g ?? target.protein_g,
+      carbs_g: patch.carbs_g ?? target.carbs_g,
+      fat_g: patch.fat_g ?? target.fat_g,
+    };
+  },
+
+  // The other half of correcting a spoken log: "delete that", "I logged the
+  // cheddar twice". Hard delete -- `meals` has no deleted_at column (checked
+  // against information_schema, not assumed), and adding one is a migration
+  // this doesn't need.
+  delete_meal: async (supabase, userId, data, tzOffsetMinutes) => {
+    const target = await resolveMeal(supabase, userId, data, tzOffsetMinutes);
+    const { error } = await supabase.from('meals').delete().eq('id', target.id).eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    return { id: target.id, table: 'meals', date: target.date, name: target.name, calories: target.calories };
   },
 
   // ── Device voice-logging actions (task: device-log) ──────────────────────
@@ -576,6 +624,56 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
   },
 };
 
+/**
+ * Which already-logged meal did the user mean? Prefers an explicit `id`
+ * (buildContext now prints meal ids for exactly this reason), then a `match`
+ * phrase, then `name`. `match` exists separately from `name` because an
+ * update usually CHANGES the name -- "Turkish tea" is what to find,
+ * "Turkish tea with 2 sugars" is what to set -- and collapsing the two
+ * would make a rename unresolvable.
+ *
+ * Never guesses across days, and never picks when the phrase is ambiguous
+ * between two different foods: a wrong edit silently corrupts a log the
+ * user believes is correct, which is worse than asking.
+ */
+async function resolveMeal(
+  supabase: SupabaseClient,
+  userId: string,
+  data: Record<string, unknown>,
+  tzOffsetMinutes: number,
+): Promise<Record<string, unknown>> {
+  const cols = 'id, name, date, meal_type, calories, protein_g, carbs_g, fat_g';
+  const id = str(data.id) ?? str(data.mealId) ?? str(data.meal_id);
+  if (id) {
+    const { data: row } = await supabase.from('meals').select(cols)
+      .eq('id', id).eq('user_id', userId).maybeSingle();
+    if (!row) throw new Error("couldn't find that meal in your log");
+    return row;
+  }
+
+  const phrase = str(data.match) ?? str(data.name);
+  if (!phrase) throw new Error('needs the meal id or its name');
+  const date = resolveDateKey(data.date, tzOffsetMinutes);
+  const { data: rows } = await supabase.from('meals').select(cols)
+    .eq('user_id', userId).eq('date', date)
+    .order('created_at', { ascending: false }).limit(50);
+
+  const needle = phrase.toLowerCase().trim();
+  const all = (rows ?? []) as Array<Record<string, unknown>>;
+  const nameOf = (r: Record<string, unknown>) => String(r.name ?? '').toLowerCase().trim();
+
+  const exact = all.filter((r) => nameOf(r) === needle);
+  if (exact.length) return exact[0]; // most recent wins on a genuine repeat
+
+  const partial = all.filter((r) => nameOf(r).includes(needle) || needle.includes(nameOf(r)));
+  if (!partial.length) throw new Error(`no "${phrase}" in your log for ${date}`);
+  // Two DIFFERENT foods both matching loosely ("cheese" vs cheddar and
+  // mozzarella) -- editing the wrong one is unrecoverable, so stop.
+  const distinct = new Set(partial.map(nameOf));
+  if (distinct.size > 1) throw new Error(`"${phrase}" matches more than one thing in your log — which one?`);
+  return partial[0];
+}
+
 /** True for action types the app/device can run as internal Supabase writes. */
 export const isInternalAction = (type: string): boolean => type in INTERNAL_EXECUTORS;
 export const isExternalAction = (type: string): boolean => EXTERNAL_ACTIONS.has(type);
@@ -595,6 +693,10 @@ export const ACTION_SPECS: Record<string, string> = {
     'log_set — log one set (weight x reps). Always logs to exercise_sets; also updates pb_log if this set beats the exercise\'s best estimated-1RM. data: { "exerciseId": string, "weightKg": number, "reps": number, "date"?: "YYYY-MM-DD" }',
   log_meal:
     'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }. There is no photo -- ALWAYS estimate calories/proteinG/carbsG/fatG from the food name and a typical portion, even when no size was given (assume one typical individual serving). Never omit calories or send 0 for a real, named food.',
+  update_meal:
+    'update_meal — CORRECT a meal already in the log. Use this, NEVER a second log_meal, whenever the user amends something they just logged: "it had two sugars in it", "that was a large one", "make it 300 calories", "it was semi-skimmed". data: { "id"?: string (the id shown beside the meal in RECENT MEALS — always prefer this), "match"?: string (the meal\'s CURRENT name, only if you have no id), "date"?: "YYYY-MM-DD"|"today", plus ONLY the fields that change: "name"?, "calories"?, "proteinG"?, "carbsG"?, "fatG"?, "mealType"? }. Re-estimate the macros for the corrected description and send the NEW TOTAL for the whole item, never the difference. When renaming, "match" is the OLD name and "name" is the new one.',
+  delete_meal:
+    'delete_meal — remove a meal from the log: "delete that", "I logged the cheddar twice", "remove the banana". data: { "id"?: string (preferred, from RECENT MEALS), "match"?: string (its name), "date"?: "YYYY-MM-DD"|"today" }',
   remember_about_user:
     'remember_about_user — save a fact the user wants remembered for future conversations. data: { "note": string }',
   log_water:
@@ -704,7 +806,8 @@ export async function processActions(
 /** Internal action id → a phrase that makes sense spoken aloud. */
 function humanAction(type: string): string {
   const verbs: Record<string, string> = {
-    log_meal: 'food log', log_water: 'water log', log_weight: 'weight log',
+    log_meal: 'food log', update_meal: 'correction', delete_meal: 'removal',
+    log_water: 'water log', log_weight: 'weight log',
     toggle_habit: 'habit', log_sleep: 'sleep log', log_mood: 'mood log',
     log_set: 'set', log_pb: 'PB', gym_checkin: 'gym check-in',
     log_focus_session: 'focus session', log_activity: 'activity',
