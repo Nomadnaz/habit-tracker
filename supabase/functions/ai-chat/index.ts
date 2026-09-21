@@ -223,7 +223,7 @@ Deno.serve(async (req: Request) => {
     // Diagnostic: surfaces in Supabase dashboard → Edge Functions → Logs.
     console.log('[ai-chat] parsed actions:', JSON.stringify(parsedActions));
     const actions = parsedActions.length
-      ? await processActions(admin, userId, parsedActions, { execute: body.execute === true, tzOffsetMinutes })
+      ? await processActions(admin, userId, parsedActions, { execute: body.execute === true, tzOffsetMinutes, deviceMode: isDevice })
       : [];
 
     // The model sometimes replies with ONLY an <action> block (no prose), which

@@ -398,7 +398,15 @@ Deno.serve(async (req: Request) => {
 
     // execute:true is the whole point -- the device has no local store to
     // confirm a gated action into, so the write happens here or nowhere.
-    const results = await processActions(admin, userId, actionable.map((p) => p.action), { execute: true, tzOffsetMinutes: tz });
+    // deviceMode: this function EXISTS because the device has no confirm
+    // screen -- every caller of it is the puck. The model's `unclear` bucket
+    // is the real "I don't know" channel here; a second confidence gate on
+    // top of it was throwing away items the classifier had already parsed
+    // cleanly (hardware 2026-09-21: "log another 250 of water" and "20ml
+    // water" both parsed, both gated below 0.6, both dropped to handled:false
+    // and fell through to ai-chat, which then answered "Didn't catch that
+    // clearly" for a sentence that could hardly be clearer).
+    const results = await processActions(admin, userId, actionable.map((p) => p.action), { execute: true, tzOffsetMinutes: tz, deviceMode: true });
 
     const logged: { kind: string; summary: string }[] = [];
     const loggedItems: Record<string, unknown>[] = []; // parallel to `logged`, for deviceSpeech

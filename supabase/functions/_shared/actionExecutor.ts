@@ -625,12 +625,42 @@ export const ACTION_SPECS: Record<string, string> = {
     'set_gym_plan — set the weekly gym plan for one day. data: { "day": "monday".."sunday"|"today"|"tomorrow", "sessionType": string (e.g. "push", "pull", "legs", "rest") }',
 };
 
+// Confidence for a well-formed action block that simply DIDN'T SAY. This used
+// to be 0, which is the worst possible reading: 0 means 'clarify', so the
+// action was silently dropped and the user was asked to repeat themselves --
+// or worse, the model's own "LOGGED: ..." prose went out while nothing was
+// written (hardware 2026-09-21: chicken breast, cheddar cheese, Turkish tea
+// all parsed into perfectly valid log_meal blocks with no `confidence` field,
+// and none of them reached the `meals` table). A model that emitted a
+// complete, valid action block intended the action; omitting an optional
+// self-report is not evidence of doubt. Real doubt has explicit channels --
+// a low confidence number, device-log's `unclear` bucket, or a clarifying
+// question -- and those are still honoured.
+const ASSUMED_CONFIDENCE = 0.9;
+
+// The device (voice puck) has NO confirm screen and no way to show a preview
+// card. Every non-executed status there is indistinguishable from "nothing
+// happened", so the app's confirm-first thresholds don't just fail to help --
+// they silently discard writes the user clearly asked for. The model still
+// has honest ways to decline (device-log's `unclear`, ai-chat's one-question
+// device mode), and every executor validates its own data and fails loudly on
+// bad input, so an emitted action here is treated as intent to act unless the
+// model explicitly flagged real doubt.
+export const DEVICE_EXECUTE_THRESHOLD = 0.4;
+
 /** Pure gate: the action's decision BEFORE anyone writes anything. */
-export function gateAction(action: CompanionAction): 'auto' | 'preview' | 'clarify' | 'unsupported' {
-  const confidence = num(action.confidence) ?? 0;
+export function gateAction(
+  action: CompanionAction,
+  opts: { deviceMode?: boolean } = {},
+): 'auto' | 'preview' | 'clarify' | 'unsupported' {
+  const confidence = num(action.confidence) ?? ASSUMED_CONFIDENCE;
   // External/irreversible: never auto, never silently drop — always preview.
   if (isExternalAction(action.type)) return 'preview';
   if (!isInternalAction(action.type)) return 'unsupported';
+  if (opts.deviceMode) {
+    // No confirm screen: act, or say plainly that you didn't.
+    return confidence >= DEVICE_EXECUTE_THRESHOLD ? 'auto' : 'clarify';
+  }
   if (confidence > EXECUTE_THRESHOLD) return 'auto';
   if (confidence >= PREVIEW_THRESHOLD) return 'preview';
   return 'clarify';
@@ -647,11 +677,11 @@ export async function processActions(
   supabase: SupabaseClient,
   userId: string,
   actions: CompanionAction[],
-  opts: { execute?: boolean; tzOffsetMinutes?: number } = {},
+  opts: { execute?: boolean; tzOffsetMinutes?: number; deviceMode?: boolean } = {},
 ): Promise<ProcessedAction[]> {
   const out: ProcessedAction[] = [];
   for (const action of actions) {
-    const gate = gateAction(action);
+    const gate = gateAction(action, { deviceMode: opts.deviceMode });
     if (gate !== 'auto' || !opts.execute) {
       out.push({ ...action, status: gate, message: statusMessage(gate, action) });
       continue;
@@ -671,6 +701,20 @@ export async function processActions(
   return out;
 }
 
+/** Internal action id → a phrase that makes sense spoken aloud. */
+function humanAction(type: string): string {
+  const verbs: Record<string, string> = {
+    log_meal: 'food log', log_water: 'water log', log_weight: 'weight log',
+    toggle_habit: 'habit', log_sleep: 'sleep log', log_mood: 'mood log',
+    log_set: 'set', log_pb: 'PB', gym_checkin: 'gym check-in',
+    log_focus_session: 'focus session', log_activity: 'activity',
+    log_expense: 'expense', log_medication: 'medication', create_goal: 'goal',
+    save_idea: 'idea', set_gym_plan: 'gym plan', create_task: 'task',
+    reschedule_task: 'reschedule', complete_task: 'task', remember_about_user: 'note',
+  };
+  return verbs[type] ?? type.replace(/_/g, ' ');
+}
+
 function statusMessage(status: 'auto' | 'preview' | 'clarify' | 'unsupported', action: CompanionAction): string {
   switch (status) {
     case 'auto':
@@ -678,10 +722,15 @@ function statusMessage(status: 'auto' | 'preview' | 'clarify' | 'unsupported', a
     case 'preview':
       return isExternalAction(action.type)
         ? `${action.type} needs your confirmation (external action).`
-        : `Confirm to ${action.type}.`;
+        : `Confirm this ${humanAction(action.type)}.`;
     case 'clarify':
-      return `Not sure what you meant by "${action.type}" — can you clarify?`;
+      // Speak the user's language, not the executor's. `action.type` is an
+      // internal identifier -- "Not sure what you meant by "log_meal"" was
+      // being read out verbatim on the device (hardware 2026-09-21), which
+      // is both confusing and slightly absurd, since log_meal is the one
+      // thing the user plainly DID mean.
+      return `Didn't catch the details for that ${humanAction(action.type)} — say it again?`;
     case 'unsupported':
-      return `"${action.type}" is not yet supported.`;
+      return `I can't ${humanAction(action.type)} yet.`;
   }
 }
