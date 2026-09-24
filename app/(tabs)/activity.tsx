@@ -1,8 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────
 // ACTIVITY TAB — hike/run/walk RECORDING only (task 032 + the Strava-style
-// split: this tab records, app/activity-summary.tsx shows the finished
-// result, app/activity-history.tsx browses past activities). On stop(), this
-// screen routes straight to the summary instead of refreshing an inline list.
+// split: this tab records, app/activity-receipt.tsx is the landing result
+// screen, app/activity-summary.tsx holds the full analytical view, and
+// app/activity-history.tsx browses past activities). On stop(), this screen
+// routes straight to the receipt instead of refreshing an inline list.
 //
 // Background location IS now implemented (lib/locationTask.ts) but is
 // IMPLEMENTED-BUT-UNVERIFIED THIS SESSION — no physical device, no EAS dev
@@ -110,7 +111,7 @@ export default function ActivityScreen() {
     const saved = await saveActivity({ type, startTime: startedAt, endTime: new Date().toISOString(), waypoints: finalWaypoints });
     setStartedAt(null);
     setWaypoints([]);
-    router.push({ pathname: '/activity-summary', params: { id: saved.id } });
+    router.push({ pathname: '/activity-receipt', params: { id: saved.id } });
   }
 
   const liveDistance = computeDistanceM(waypoints);
