@@ -38,7 +38,10 @@ import { genId, markDoneToday, setGymPlanDay, WEEKDAYS as GYM_WEEKDAYS, type Pla
 import { getActiveHabits, getLogsForHabit, isDoneOnDate, toggleToday } from './habits-data';
 import { logMood } from './mood-data';
 import { addMeal, getMealsForDate, updateMeal, deleteMeal } from './meals-data';
-import { addWater, logWeight as logBodyWeight } from './body-data';
+import {
+  addWater, logWeight as logBodyWeight,
+  updateWaterEntry, deleteWaterEntry, updateWeightEntry, deleteWeightEntry,
+} from './body-data';
 import { logFocusSession } from './focus-data';
 import { addExpense, CATEGORIES as EXPENSE_CATEGORIES } from './finance-data';
 import { getActiveMedications, getLogsForMedication, isDoseTakenOnDate, toggleTodayDose } from './medications-data';
@@ -377,6 +380,32 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
       if (weightKg === undefined) throw new Error("I couldn't tell the weight.");
       await logBodyWeight(weightKg);
       return { summary: `Logged ${weightKg}kg` };
+    }
+
+    // Water/weight corrections — same shape as update_meal/delete_meal above,
+    // targeted by `at` (these entries have no id) or the most recent entry.
+    case 'update_water': {
+      const amountMl = numOrUndef(data.amountMl) ?? numOrUndef(data.amount_ml);
+      if (!amountMl || amountMl <= 0) throw new Error("I couldn't tell the corrected amount.");
+      await updateWaterEntry(amountMl, str(data.at));
+      return { summary: `Water corrected to ${amountMl}ml` };
+    }
+
+    case 'delete_water': {
+      const removed = await deleteWaterEntry(str(data.at));
+      return { summary: `Removed ${removed.amountMl}ml water` };
+    }
+
+    case 'update_weight': {
+      const weightKg = numOrUndef(data.weightKg) ?? numOrUndef(data.weight_kg);
+      if (weightKg === undefined) throw new Error("I couldn't tell the corrected weight.");
+      await updateWeightEntry(weightKg, str(data.at));
+      return { summary: `Weight corrected to ${weightKg}kg` };
+    }
+
+    case 'delete_weight': {
+      const removed = await deleteWeightEntry(str(data.at));
+      return { summary: `Removed ${removed.weightKg}kg reading` };
     }
 
     case 'toggle_habit': {

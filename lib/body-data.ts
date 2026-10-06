@@ -387,6 +387,81 @@ export async function logWeight(weightKg: number): Promise<BodyData> {
   return data;
 }
 
+// ── Corrections (AI "actually that was 500 not 250") ────────────────────────
+// Entries have no local id, so `at` is the handle -- the same timestamp the
+// server row carries as logged_at. No `at` means the most recent entry.
+// Mirrors update_water/delete_water/update_weight/delete_weight in
+// supabase/functions/_shared/actionExecutor.ts.
+
+type TimedField = 'waterLogs' | 'weightLogs';
+
+async function editTimedEntry<K extends TimedField>(
+  field: K,
+  at: string | undefined,
+  edit: (entry: BodyData[K][number]) => BodyData[K][number] | null,
+): Promise<{ before: BodyData[K][number]; after: BodyData[K][number] | null }> {
+  return withStorageLock(BODY_KEY, async () => {
+    const data = await loadBodyData();
+    const list = data[field] as BodyData[K][number][];
+    if (!list.length) throw new Error('Nothing logged yet to correct.');
+    const idx = at
+      ? list.findIndex((e) => epoch(e.at) === epoch(at))
+      : list.reduce((best, e, i) => (epoch(e.at) > epoch(list[best].at) ? i : best), 0);
+    if (idx < 0) throw new Error("Couldn't find that entry.");
+    const before = list[idx];
+    const after = edit(before);
+    if (after) list[idx] = after; else list.splice(idx, 1);
+    await save(data);
+    return { before, after };
+  });
+}
+
+export async function updateWaterEntry(amountMl: number, at?: string): Promise<WaterLog> {
+  const { after } = await editTimedEntry('waterLogs', at, (e) => ({ ...e, amountMl }));
+  const entry = after!;
+  bg(async () => {
+    const userId = await getUid();
+    if (!userId) return;
+    await supabase.from('water_logs').update({ amount_ml: amountMl }).eq('user_id', userId).eq('logged_at', entry.at);
+  });
+  postWrite('water', entry, 'update');
+  return entry;
+}
+
+export async function deleteWaterEntry(at?: string): Promise<WaterLog> {
+  const { before } = await editTimedEntry('waterLogs', at, () => null);
+  bg(async () => {
+    const userId = await getUid();
+    if (!userId) return;
+    await supabase.from('water_logs').delete().eq('user_id', userId).eq('logged_at', before.at);
+  });
+  postWrite('water', before, 'delete');
+  return before;
+}
+
+export async function updateWeightEntry(weightKg: number, at?: string): Promise<WeightLog> {
+  const { after } = await editTimedEntry('weightLogs', at, (e) => ({ ...e, weightKg }));
+  const entry = after!;
+  bg(async () => {
+    const userId = await getUid();
+    if (!userId) return;
+    await supabase.from('body_weight_logs').update({ weight_kg: weightKg }).eq('user_id', userId).eq('logged_at', entry.at);
+  });
+  postWrite('weight', entry, 'update');
+  return entry;
+}
+
+export async function deleteWeightEntry(at?: string): Promise<WeightLog> {
+  const { before } = await editTimedEntry('weightLogs', at, () => null);
+  bg(async () => {
+    const userId = await getUid();
+    if (!userId) return;
+    await supabase.from('body_weight_logs').delete().eq('user_id', userId).eq('logged_at', before.at);
+  });
+  postWrite('weight', before, 'delete');
+  return before;
+}
+
 // ── Derived / compute helpers ───────────────────────────────────────────────
 
 export function todaySteps(d: BodyData): number {

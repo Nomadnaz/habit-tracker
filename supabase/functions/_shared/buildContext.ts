@@ -133,7 +133,8 @@ export async function buildContext(
         .order('logged_at', { ascending: false })
         .limit(1);
       raw.body_weight_logs = data ?? [];
-      if (data?.length) lines.push(`BODY WEIGHT: ${data[0].weight_kg}kg (latest).`);
+      // at: is the handle update_weight/delete_weight target (see update_meal's id note below).
+      if (data?.length) lines.push(`BODY WEIGHT: ${data[0].weight_kg}kg (latest, at:${data[0].logged_at}).`);
     })());
   }
 
@@ -147,7 +148,12 @@ export async function buildContext(
         .limit(50);
       raw.water_logs = data ?? [];
       const total = (data ?? []).reduce((s: number, r: { amount_ml?: number }) => s + (r.amount_ml ?? 0), 0);
-      if (total > 0) lines.push(`WATER TODAY: ${total}ml.`);
+      if (total > 0) {
+        lines.push(`WATER TODAY: ${total}ml.`);
+        // Per-entry at: handles so update_water/delete_water can target one.
+        const recent = [...(data ?? [])].sort((a, b) => String(b.logged_at).localeCompare(String(a.logged_at))).slice(0, 8);
+        for (const w of recent) lines.push(`- (at:${w.logged_at}) ${w.amount_ml}ml`);
+      }
     })());
   }
 

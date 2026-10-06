@@ -19,7 +19,7 @@ import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 import { companions, MODEL_IDS, DEFAULT_COMPANION } from '../_shared/companions.ts';
 import { buildContext } from '../_shared/buildContext.ts';
-import { processActions, ACTION_SPECS, type CompanionAction } from '../_shared/actionExecutor.ts';
+import { processActions, ACTION_SPECS, type CompanionAction, type ProcessedAction } from '../_shared/actionExecutor.ts';
 import { getUserApiKey } from '../_shared/byok.ts';
 import { localDateKey } from '../_shared/localDate.ts';
 
@@ -64,7 +64,7 @@ const cleanText = (text: string) => text.replace(/<action>[\s\S]*?<\/action>/g, 
 // same pipe-delimited contract, same firmware-side parser. Keep the two in
 // sync: any kind added to device-log's toAction()/deviceSpeech() that a
 // companion can ALSO emit as an ai-chat <action> should get a case here too.
-function deviceActionSpeech(a: CompanionAction): string | null {
+function deviceActionSpeech(a: ProcessedAction): string | null {
   const d = (a.data ?? {}) as Record<string, unknown>;
   const r = (v: unknown) => Math.round(typeof v === 'number' ? v : 0);
   const up = (v: unknown) => String(v ?? '').toUpperCase();
@@ -90,6 +90,10 @@ function deviceActionSpeech(a: CompanionAction): string | null {
     case 'delete_meal': return `REMOVED: ${up(((a.result ?? d) as Record<string, unknown>).name)}`;
     case 'log_water': return `LOGGED: WATER|${r(d.amountMl)}|ML`;
     case 'log_weight': return `LOGGED: WEIGHT|${d.weightKg}|KG`;
+    case 'update_water': return `UPDATED: WATER|${r(d.amountMl)}|ML`;
+    case 'delete_water': return `REMOVED: WATER|${r(((a.result ?? d) as Record<string, unknown>).amount_ml)}|ML`;
+    case 'update_weight': return `UPDATED: WEIGHT|${d.weightKg}|KG`;
+    case 'delete_weight': return `REMOVED: WEIGHT|${((a.result ?? d) as Record<string, unknown>).weight_kg}|KG`;
     case 'toggle_habit': return `LOGGED: ${up(d.name)} ${d.completed === false ? 'UNDONE' : 'DONE'}`;
     case 'log_sleep': return `LOGGED: SLEEP|${d.totalHours}|HOURS`;
     case 'log_mood': return `LOGGED: MOOD|${r(d.moodScore)}|/10`;

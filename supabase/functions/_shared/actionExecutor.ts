@@ -551,6 +551,46 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     return { id: row.id, table: 'body_weight_logs', weight_kg: kg };
   },
 
+  // Corrections for water/weight -- same gap update_meal closed for meals:
+  // "actually that was 500 not 250" had nothing to land on but a second
+  // log_water, double-counting. Targeted by `at` (the row's logged_at),
+  // because that timestamp is the only key the app's local store shares with
+  // the server -- local water/weight entries carry no id. No `at` means the
+  // most recent entry, which is what a spoken correction almost always means.
+  update_water: async (supabase, userId, data, _tz) => {
+    const ml = num(data.amountMl) ?? num(data.amount_ml);
+    if (ml === undefined || ml <= 0 || ml > 3000) throw new Error('update_water needs the corrected amountMl (1-3000)');
+    const target = await resolveTimedLog(supabase, userId, 'water_logs', 'amount_ml', data);
+    const { error } = await supabase.from('water_logs').update({ amount_ml: Math.round(ml) })
+      .eq('id', target.id).eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    return { table: 'water_logs', at: target.logged_at, amount_ml: Math.round(ml), previous_ml: target.amount_ml };
+  },
+
+  delete_water: async (supabase, userId, data, _tz) => {
+    const target = await resolveTimedLog(supabase, userId, 'water_logs', 'amount_ml', data);
+    const { error } = await supabase.from('water_logs').delete().eq('id', target.id).eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    return { table: 'water_logs', at: target.logged_at, amount_ml: target.amount_ml };
+  },
+
+  update_weight: async (supabase, userId, data, _tz) => {
+    const kg = num(data.weightKg) ?? num(data.weight_kg);
+    if (kg === undefined || kg < 20 || kg > 400) throw new Error('update_weight needs the corrected weightKg (20-400)');
+    const target = await resolveTimedLog(supabase, userId, 'body_weight_logs', 'weight_kg', data);
+    const { error } = await supabase.from('body_weight_logs').update({ weight_kg: kg })
+      .eq('id', target.id).eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    return { table: 'body_weight_logs', at: target.logged_at, weight_kg: kg, previous_kg: target.weight_kg };
+  },
+
+  delete_weight: async (supabase, userId, data, _tz) => {
+    const target = await resolveTimedLog(supabase, userId, 'body_weight_logs', 'weight_kg', data);
+    const { error } = await supabase.from('body_weight_logs').delete().eq('id', target.id).eq('user_id', userId);
+    if (error) throw new Error(error.message);
+    return { table: 'body_weight_logs', at: target.logged_at, weight_kg: target.weight_kg };
+  },
+
   // Resolves either a direct habitId (device-state's button-tap path, which
   // already has one from the snapshot it just rendered) or a spoken habit
   // NAME (voice/chat, which never has an id and must not invent one).
@@ -674,6 +714,27 @@ async function resolveMeal(
   return partial[0];
 }
 
+/**
+ * Which water/weight entry did the user mean? `at` (the logged_at printed in
+ * context) if given, otherwise the most recent entry. Timestamps are compared
+ * by Postgres as timestamptz, so `...Z` and `...+00:00` spellings both match.
+ */
+async function resolveTimedLog(
+  supabase: SupabaseClient,
+  userId: string,
+  table: 'water_logs' | 'body_weight_logs',
+  valueCol: 'amount_ml' | 'weight_kg',
+  data: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const at = str(data.at) ?? str(data.loggedAt) ?? str(data.logged_at);
+  let q = supabase.from(table).select(`id, logged_at, ${valueCol}`).eq('user_id', userId);
+  q = at ? q.eq('logged_at', at) : q.order('logged_at', { ascending: false });
+  const { data: rows, error } = await q.limit(1);
+  if (error) throw new Error(error.message);
+  if (!rows?.length) throw new Error(at ? "couldn't find that entry in your log" : 'nothing logged yet to correct');
+  return rows[0];
+}
+
 /** True for action types the app/device can run as internal Supabase writes. */
 export const isInternalAction = (type: string): boolean => type in INTERNAL_EXECUTORS;
 export const isExternalAction = (type: string): boolean => EXTERNAL_ACTIONS.has(type);
@@ -703,6 +764,14 @@ export const ACTION_SPECS: Record<string, string> = {
     'log_water — log drinking water. data: { "amountMl": number }',
   log_weight:
     'log_weight — log a body-weight reading. data: { "weightKg": number }',
+  update_water:
+    'update_water — CORRECT a water entry already logged. Use this, NEVER a second log_water, when the user amends one: "actually that was 500 not 250", "make that last one a litre". data: { "amountMl": number (the corrected TOTAL for that entry, never the difference), "at"?: string (the at: value shown beside the entry in WATER TODAY; omit to mean the most recent entry) }',
+  delete_water:
+    'delete_water — remove a water entry: "delete that water", "I logged that twice". data: { "at"?: string (from WATER TODAY; omit for the most recent entry) }',
+  update_weight:
+    'update_weight — CORRECT a weight reading already logged: "that should have been 82.4". Never a second log_weight for a correction. data: { "weightKg": number, "at"?: string (from BODY WEIGHT; omit for the most recent reading) }',
+  delete_weight:
+    'delete_weight — remove a weight reading logged by mistake. data: { "at"?: string (from BODY WEIGHT; omit for the most recent reading) }',
   toggle_habit:
     'toggle_habit — mark a habit done for a day. data: { "name": string (the habit\'s name as the user says it), "date"?: "YYYY-MM-DD"|"today", "completed"?: boolean }',
   log_sleep:
@@ -808,6 +877,8 @@ function humanAction(type: string): string {
   const verbs: Record<string, string> = {
     log_meal: 'food log', update_meal: 'correction', delete_meal: 'removal',
     log_water: 'water log', log_weight: 'weight log',
+    update_water: 'water correction', delete_water: 'water removal',
+    update_weight: 'weight correction', delete_weight: 'weight removal',
     toggle_habit: 'habit', log_sleep: 'sleep log', log_mood: 'mood log',
     log_set: 'set', log_pb: 'PB', gym_checkin: 'gym check-in',
     log_focus_session: 'focus session', log_activity: 'activity',
