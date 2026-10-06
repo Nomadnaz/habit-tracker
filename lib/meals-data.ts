@@ -15,6 +15,7 @@ import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
 import { postWrite } from './postWrite';
 import { withStorageLock } from './storageLock';
+import { mergeRemote } from './syncMerge';
 import {
   computeTargets, DEFAULT_TARGETS,
   type NutritionTargets, type ProfileForTargets,
@@ -46,6 +47,7 @@ export type Meal = {
   photoUrl?: string;     // local file URI for MVP (Storage upload is a later step)
   loggedVia: 'manual' | 'photo' | 'quick_add';
   createdAt: string;     // ISO timestamp
+  synced?: boolean;      // last pull saw the server agree (see lib/syncMerge.ts)
 };
 
 export type DailyTotals = { calories: number; proteinG: number; carbsG: number; fatG: number };
@@ -130,13 +132,16 @@ export async function pullRemoteMeals(dateKey: string): Promise<boolean> {
 
     return await withStorageLock(MEALS_KEY, async () => {
       const map = await loadMealMap();
-      const local = map[dateKey] ?? [];
-      const localIds = new Set(local.map((m) => m.id));
+      // Remote edits/deletes (e.g. a correction spoken to the device) now
+      // land too; unsynced local writes are still never touched.
+      const { merged, changed } = mergeRemote(
+        map[dateKey] ?? [], data.map(fromDbRow), (m) => m.id, sameMealValues, undefined,
+        (l, r) => ({ ...l, name: r.name, mealType: r.mealType, calories: r.calories,
+                     proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG }),
+      );
+      if (!changed) return false;
 
-      const incoming = data.filter((r) => !localIds.has(String(r.id))).map(fromDbRow);
-      if (incoming.length === 0) return false;
-
-      map[dateKey] = [...local, ...incoming].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      map[dateKey] = merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       await saveMealMap(map);
       return true;
     });
@@ -144,6 +149,10 @@ export async function pullRemoteMeals(dateKey: string): Promise<boolean> {
     return false;
   }
 }
+
+const sameMealValues = (a: Meal, b: Meal) =>
+  a.name === b.name && a.mealType === b.mealType && a.calories === b.calories
+  && a.proteinG === b.proteinG && a.carbsG === b.carbsG && a.fatG === b.fatG;
 
 function toDbRow(m: Meal, userId: string) {
   return {
@@ -199,7 +208,9 @@ export async function addMeal(input: Omit<Meal, 'id' | 'createdAt'>): Promise<Me
   return meal;
 }
 
-export async function updateMeal(meal: Meal): Promise<void> {
+export async function updateMeal(edited: Meal): Promise<void> {
+  // A local edit is unsynced until a pull sees the server agree.
+  const { synced: _synced, ...meal } = edited;
   await withStorageLock(MEALS_KEY, async () => {
     const map = await loadMealMap();
     const day = map[meal.date] ?? [];

@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { postWrite } from './postWrite';
 import { withStorageLock } from './storageLock';
+import { mergeRemote } from './syncMerge';
 import { toDateKey as dateKey, addDaysToKey } from './dateKey';
 export { dateKey };
 import {
@@ -55,8 +56,9 @@ const BODY_KEY = '@body';
 export type SquareState = 'hit' | 'partial' | 'missed' | 'empty';
 export type Movement = 'push' | 'pull' | 'legs' | 'upper' | 'lower';
 
-export type WeightLog = { weightKg: number; at: string };
-export type WaterLog = { amountMl: number; at: string };
+// synced: the last pull saw the server agree (see lib/syncMerge.ts).
+export type WeightLog = { weightKg: number; at: string; synced?: boolean };
+export type WaterLog = { amountMl: number; at: string; synced?: boolean };
 
 export type BodyActivityToday = {
   activeMinutes: number;
@@ -317,27 +319,28 @@ export async function pullRemoteBody(days = 14): Promise<boolean> {
 
     return await withStorageLock(BODY_KEY, async () => {
       const data = await loadBodyData();
-      let changed = false;
+      // Remote edits/deletes (device corrections) land too; unsynced local
+      // writes are never touched. Only rows inside the pulled window can be
+      // judged deleted.
+      const sinceMs = epoch(since);
+      const inWindow = (e: { at: string }) => epoch(e.at) >= sinceMs;
 
-      const haveWater = new Set((data.waterLogs ?? []).map((w) => epoch(w.at)));
-      for (const r of waterQ.data ?? []) {
-        const at = String(r.logged_at);
-        if (haveWater.has(epoch(at))) continue;
-        data.waterLogs.push({ amountMl: Number(r.amount_ml ?? 0), at });
-        haveWater.add(epoch(at));
-        changed = true;
-      }
+      const water = mergeRemote<WaterLog>(
+        data.waterLogs ?? [],
+        (waterQ.data ?? []).map((r) => ({ amountMl: Number(r.amount_ml ?? 0), at: String(r.logged_at) })),
+        (w) => epoch(w.at), (a, b) => a.amountMl === b.amountMl, inWindow,
+        (l, r) => ({ ...l, amountMl: r.amountMl }),
+      );
+      const weight = mergeRemote<WeightLog>(
+        data.weightLogs ?? [],
+        (weightQ.data ?? []).map((r) => ({ weightKg: Number(r.weight_kg ?? 0), at: String(r.logged_at) })),
+        (w) => epoch(w.at), (a, b) => a.weightKg === b.weightKg, inWindow,
+        (l, r) => ({ ...l, weightKg: r.weightKg }),
+      );
 
-      const haveWeight = new Set((data.weightLogs ?? []).map((w) => epoch(w.at)));
-      for (const r of weightQ.data ?? []) {
-        const at = String(r.logged_at);
-        if (haveWeight.has(epoch(at))) continue;
-        data.weightLogs.push({ weightKg: Number(r.weight_kg ?? 0), at });
-        haveWeight.add(epoch(at));
-        changed = true;
-      }
-
-      if (!changed) return false;
+      if (!water.changed && !weight.changed) return false;
+      data.waterLogs = water.merged;
+      data.weightLogs = weight.merged;
       data.waterLogs.sort((a, b) => epoch(a.at) - epoch(b.at));
       data.weightLogs.sort((a, b) => epoch(a.at) - epoch(b.at));
       await save(data);
@@ -390,6 +393,7 @@ export async function logWeight(weightKg: number): Promise<BodyData> {
 // ── Corrections (AI "actually that was 500 not 250") ────────────────────────
 // Entries have no local id, so `at` is the handle -- the same timestamp the
 // server row carries as logged_at. No `at` means the most recent entry.
+// Edited entries are rebuilt without `synced`: unsynced until a pull agrees.
 // Mirrors update_water/delete_water/update_weight/delete_weight in
 // supabase/functions/_shared/actionExecutor.ts.
 
@@ -417,7 +421,7 @@ async function editTimedEntry<K extends TimedField>(
 }
 
 export async function updateWaterEntry(amountMl: number, at?: string): Promise<WaterLog> {
-  const { after } = await editTimedEntry('waterLogs', at, (e) => ({ ...e, amountMl }));
+  const { after } = await editTimedEntry('waterLogs', at, (e) => ({ amountMl, at: e.at }));
   const entry = after!;
   bg(async () => {
     const userId = await getUid();
@@ -440,7 +444,7 @@ export async function deleteWaterEntry(at?: string): Promise<WaterLog> {
 }
 
 export async function updateWeightEntry(weightKg: number, at?: string): Promise<WeightLog> {
-  const { after } = await editTimedEntry('weightLogs', at, (e) => ({ ...e, weightKg }));
+  const { after } = await editTimedEntry('weightLogs', at, (e) => ({ weightKg, at: e.at }));
   const entry = after!;
   bg(async () => {
     const userId = await getUid();
