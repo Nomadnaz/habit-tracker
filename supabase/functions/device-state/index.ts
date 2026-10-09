@@ -46,11 +46,53 @@ type Admin = any;
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+// Which days this (local) year the user did anything: completed a task or a
+// habit, logged a meal, water, a workout, a focus session or an activity.
+// Packed as 366 bits, bit (doy-1) of byte (doy-1)>>3, as hex -- the puck's
+// year-of-dots home screen lights those days and leaves the rest dark.
+async function activeDays(admin: Admin, userId: string, tz: number, today: string) {
+  const year = Number(today.slice(0, 4));
+  const from = `${year}-01-01`;
+  const fromIso = new Date(Date.UTC(year, 0, 1) - 86400000).toISOString(); // a day early: tz shift
+  const bits = new Uint8Array(46);
+  const mark = (key: unknown) => {
+    const [y, m, d] = String(key ?? '').slice(0, 10).split('-').map(Number);
+    if (y !== year || !m || !d) return;
+    const doy = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86400000);
+    if (doy >= 0 && doy < 366) bits[doy >> 3] |= 1 << (doy & 7);
+  };
+  const markTs = (iso: unknown) => {
+    const t = Date.parse(String(iso ?? ''));
+    if (!Number.isNaN(t)) mark(new Date(t - tz * 60000).toISOString());
+  };
+  // PostgREST caps a response at 1000 rows: page until a short page.
+  // deno-lint-ignore no-explicit-any
+  const each = async (q: () => any, col: string, fn: (v: unknown) => void) => {
+    for (let off = 0; off < 20000; off += 1000) {
+      const { data, error } = await q().range(off, off + 999);
+      if (error || !data) return;
+      for (const row of data) fn(row[col]);
+      if (data.length < 1000) return;
+    }
+  };
+  await Promise.all([
+    each(() => admin.from('tasks').select('date').eq('user_id', userId).eq('done', true).gte('date', from), 'date', mark),
+    each(() => admin.from('habit_logs').select('date').eq('user_id', userId).eq('completed', true).gte('date', from), 'date', mark),
+    each(() => admin.from('meals').select('date').eq('user_id', userId).gte('date', from), 'date', mark),
+    each(() => admin.from('focus_sessions').select('date').eq('user_id', userId).gte('date', from), 'date', mark),
+    each(() => admin.from('workout_done_log').select('logged_at').eq('user_id', userId).gte('logged_at', fromIso), 'logged_at', markTs),
+    each(() => admin.from('water_logs').select('logged_at').eq('user_id', userId).gte('logged_at', fromIso), 'logged_at', markTs),
+    each(() => admin.from('activities').select('start_time').eq('user_id', userId).gte('start_time', fromIso), 'start_time', markTs),
+  ]);
+  return { year, bits: Array.from(bits, (b) => b.toString(16).padStart(2, '0')).join('') };
+}
+
 async function buildSnapshot(admin: Admin, userId: string, tz: number) {
   const today = localDateKey(tz);
   const weekAgoIso = new Date(Date.now() - 7 * 86400000).toISOString();
   const todayName = WEEKDAYS[localWeekday(tz)];
 
+  const activeQ = activeDays(admin, userId, tz, today).catch(() => null);
   const [tasksQ, habitsQ, logsQ, streaksQ, gymPlanQ, gymDoneQ, actsQ, focusQ, vaultQ, vaultCountQ, inboxQ, mealsQ, stepsQ, waterQ] =
     await Promise.all([
       admin.from('tasks')
@@ -123,6 +165,7 @@ async function buildSnapshot(admin: Admin, userId: string, tz: number) {
     v: 1,
     ts: Date.now(),
     date: today,
+    active_days: await activeQ,
     tasks,
     habits,
     gym: {
