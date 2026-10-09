@@ -25,14 +25,10 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
 
 type ResultType = 'page' | 'habit' | 'goal' | 'book' | 'movie' | 'link' | 'idea' | 'expense' | 'bill' | 'workout' | 'task';
 type SearchResult = { id: string; type: ResultType; title: string; subtitle?: string; navigate: () => void };
@@ -133,13 +129,13 @@ export default function GlobalSearch({ onClose }: { onClose: () => void }) {
         <TextInput
           style={styles.input}
           placeholder="Search everything…"
-          placeholderTextColor={MUTED}
+          placeholderTextColor={C.dim}
           value={query}
           onChangeText={setQuery}
           autoFocus
         />
         <TouchableOpacity onPress={onClose} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={INK} />
+          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
         </TouchableOpacity>
       </View>
 
@@ -158,12 +154,12 @@ export default function GlobalSearch({ onClose }: { onClose: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  input: { flex: 1, borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 13, color: INK, backgroundColor: CARD },
+  input: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 8 },
-  empty: { fontFamily: REG, fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 24, lineHeight: 18 },
-  row: { backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 12 },
-  rowTitle: { fontFamily: BOLD, fontSize: 12, color: INK },
-  rowSub: { fontFamily: REG, fontSize: 10, color: MUTED, marginTop: 2 },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 24, lineHeight: 18 },
+  row: { backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 12 },
+  rowTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  rowSub: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 2 },
 });

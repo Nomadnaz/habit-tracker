@@ -11,14 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const REG = F.mono;
 
 const CARDS: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; route: string }[] = [
   { label: 'CALORIES', icon: 'food-apple-outline', route: '/calorie' },
@@ -44,7 +38,7 @@ export default function HealthScreen() {
             activeOpacity={0.85}
             onPress={() => router.push(c.route as any)}
           >
-            <MaterialCommunityIcons name={c.icon} size={26} color={ORANGE} />
+            <MaterialCommunityIcons name={c.icon} size={26} color={C.hot} />
             <Text style={styles.cardLabel}>{c.label}</Text>
           </TouchableOpacity>
         ))}
@@ -54,13 +48,13 @@ export default function HealthScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
-  title: { fontFamily: BOLD, fontSize: 24, color: INK, letterSpacing: 2 },
+  title: { fontFamily: F.dot, fontSize: 24, color: C.ink, letterSpacing: 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 12, paddingBottom: 40 },
   card: {
-    width: '46%', backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    width: '46%', backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line,
     paddingVertical: 20, paddingHorizontal: 12, alignItems: 'center', gap: 10, minHeight: 100,
   },
-  cardLabel: { fontFamily: REG, fontSize: 10, color: INK, textAlign: 'center', letterSpacing: 0.5 },
+  cardLabel: { fontFamily: REG, fontSize: 11, color: C.ink, textAlign: 'center', letterSpacing: 0.5 },
 });

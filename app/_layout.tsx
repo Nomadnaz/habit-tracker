@@ -21,6 +21,12 @@ import { Session } from '@supabase/supabase-js';
 
 // Our custom fonts. Pixeloid Sans is a pixel font used throughout the app.
 import { useFonts } from 'expo-font';
+import { Doto_700Bold, Doto_900Black } from '@expo-google-fonts/doto';
+import { ShareTechMono_400Regular } from '@expo-google-fonts/share-tech-mono';
+import { C } from '@/lib/theme';
+
+// Hold-to-talk overlay + saved chats, mounted once above every screen.
+import { AssistantHost } from '@/components/assistant/AssistantHost';
 
 // SplashScreen is the loading screen shown while the app starts up.
 // We control it manually so we can keep it visible until fonts are ready.
@@ -119,7 +125,11 @@ export default function RootLayout() {
   // Until then, we don't render anything (to avoid text flashing with the wrong font).
   const [fontsLoaded] = useFonts({
     PixeloidSans_400Regular: require('@/assets/fonts/PixeloidSans.ttf'),
-    PixeloidSans_700Bold: require('@/assets/fonts/PixeloidSans-Bold.ttf'),
+    PixeloidSans_700Bold: require('@/assets/fonts/PixeloidSans-Bold.ttf'), // receipt printer only
+    LondonUnderground_Heavy: require('@/assets/fonts/LondonUnderground-Heavy.ttf'), // SIL OFL, see LondonUnderground-OFL.txt
+    Doto_700Bold,
+    Doto_900Black,
+    ShareTechMono_400Regular,
   });
 
   // Once fonts are ready AND the date-key migration has finished AND we know
@@ -236,13 +246,13 @@ export default function RootLayout() {
   if (onboardingDone === null) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* Dark icons/text in the status bar (time, battery) to contrast with our light background. */}
-      <StatusBar style="dark" />
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.bg }}>
+      {/* Light status bar text on the black UI. */}
+      <StatusBar style="light" />
 
       {/* Stack is the navigation system. It manages moving between screens.
           headerShown: false hides the default navigation header bar on every screen. */}
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.bg } }}>
         {/* Register the main sections of the app as navigable destinations. */}
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
@@ -268,6 +278,8 @@ export default function RootLayout() {
 
       {/* Floats above every screen; shows when a task syncs in from the device. */}
       <RemoteTaskBanner />
+
+      {session && <AssistantHost />}
     </GestureHandlerRootView>
   );
 }

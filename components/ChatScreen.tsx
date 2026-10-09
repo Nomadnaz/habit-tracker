@@ -11,12 +11,11 @@ import type { Task } from '@/lib/tasks-core';
 import { executeAction, type ProcessedAction } from '@/lib/actionExecutor';
 import { companions, type CompanionType } from '@/lib/companions';
 
-const ORANGE = '#FF4D00';
-const INK = '#1A1714';
-const MUTED = '#8C857B';
-const FAINT = '#C7C1B8';
-const BORDER = '#E5E1DA';
-const CARD = '#FCFBF9';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const INK = C.ink;
+const FAINT = C.faint;
+const CARD = C.surface;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -188,7 +187,7 @@ export default function ChatScreen({
             <View style={styles.dragHandle} />
             <Text style={styles.title}>✨ {cfg.defaultName}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <MaterialCommunityIcons name="close" size={28} color={INK} />
+              <MaterialCommunityIcons name="close" size={28} color={C.ink} />
             </TouchableOpacity>
           </View>
 
@@ -241,7 +240,7 @@ export default function ChatScreen({
             <TextInput
               style={styles.input}
               placeholder={`Ask ${cfg.defaultName} anything...`}
-              placeholderTextColor={FAINT}
+              placeholderTextColor={C.faint}
               value={userInput}
               onChangeText={setUserInput}
               editable={!loading}
@@ -253,9 +252,9 @@ export default function ChatScreen({
               disabled={loading || !userInput.trim()}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color={C.onHot} size="small" />
               ) : (
-                <MaterialCommunityIcons name="send" size={20} color="#fff" />
+                <MaterialCommunityIcons name="send" size={20} color={C.onHot} />
               )}
             </TouchableOpacity>
           </View>
@@ -266,7 +265,7 @@ export default function ChatScreen({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FCFBF9' },
+  container: { flex: 1, backgroundColor: C.surface },
   header: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
@@ -275,41 +274,41 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1, 
-    borderBottomColor: BORDER 
+    borderBottomColor: C.line 
   },
   dragHandle: {
     width: 40,
     height: 4,
-    backgroundColor: FAINT,
+    backgroundColor: C.raised,
     borderRadius: 2,
     position: 'absolute',
     top: 8,
     alignSelf: 'center',
   },
-  title: { fontFamily: 'PixeloidSans_700Bold', fontSize: 16, color: INK, flex: 1, textAlign: 'center' },
+  title: { fontFamily: F.mono, fontSize: 16, color: C.ink, flex: 1, textAlign: 'center' },
   closeButton: { padding: 8 },
   messagesContainer: { flex: 1, paddingHorizontal: 12, paddingVertical: 12 },
   messageBubble: { marginVertical: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, maxWidth: '85%' },
-  userMessage: { alignSelf: 'flex-end', backgroundColor: ORANGE },
-  aiMessage: { alignSelf: 'flex-start', backgroundColor: '#F5F5F5' },
-  messageText: { fontFamily: 'PixeloidSans_400Regular', fontSize: 13 },
-  userMessageText: { color: '#fff' },
+  userMessage: { alignSelf: 'flex-end', backgroundColor: C.hot },
+  aiMessage: { alignSelf: 'flex-start', backgroundColor: C.bg },
+  messageText: { fontFamily: F.mono, fontSize: 13 },
+  userMessageText: { color: C.surface },
   aiMessageText: { color: INK },
   previewContainer: { marginVertical: 12, paddingHorizontal: 8 },
-  previewLabel: { fontFamily: 'PixeloidSans_700Bold', fontSize: 11, color: ORANGE, marginBottom: 8 },
-  actionCard: { backgroundColor: CARD, borderRadius: 10, padding: 12, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: ORANGE },
+  previewLabel: { fontFamily: F.mono, fontSize: 12, color: C.hot, marginBottom: 8 },
+  actionCard: { backgroundColor: CARD, borderRadius: 10, padding: 12, marginBottom: 10, borderLeftWidth: 4, borderLeftColor: C.hot },
   actionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  actionType: { fontFamily: 'PixeloidSans_700Bold', fontSize: 10, color: ORANGE },
-  confidence: { fontFamily: 'PixeloidSans_400Regular', fontSize: 9, color: MUTED },
-  explanation: { fontFamily: 'PixeloidSans_400Regular', fontSize: 10, color: INK, marginBottom: 10 },
+  actionType: { fontFamily: F.mono, fontSize: 11, color: C.hot },
+  confidence: { fontFamily: F.mono, fontSize: 10, color: C.dim },
+  explanation: { fontFamily: F.mono, fontSize: 11, color: C.ink, marginBottom: 10 },
   actionButtons: { flexDirection: 'row', gap: 8 },
   button: { flex: 1, paddingVertical: 8, borderRadius: 6, alignItems: 'center' },
   confirmButton: { backgroundColor: ORANGE },
-  confirmButtonText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 9, color: '#fff' },
+  confirmButtonText: { fontFamily: F.mono, fontSize: 10, color: C.onHot },
   rejectButton: { backgroundColor: FAINT },
-  rejectButtonText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 9, color: INK },
-  inputContainer: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 12, gap: 8, borderTopWidth: 1, borderTopColor: BORDER },
-  input: { flex: 1, backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'PixeloidSans_400Regular', fontSize: 12, color: INK, maxHeight: 100 },
+  rejectButtonText: { fontFamily: F.mono, fontSize: 10, color: C.ink },
+  inputContainer: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 12, gap: 8, borderTopWidth: 1, borderTopColor: C.line },
+  input: { flex: 1, backgroundColor: C.surface, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.mono, fontSize: 12, color: C.ink, maxHeight: 100 },
   sendButton: { backgroundColor: ORANGE, width: 44, height: 44, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   sendButtonDisabled: { opacity: 0.5 },
 });

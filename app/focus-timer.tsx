@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { C, F } from '@/lib/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   FOCUS_SESSION_KEY,
@@ -39,17 +40,17 @@ type ColorTheme = 'dark' | 'light';
 
 const PALETTE = {
   dark: {
-    bg: '#0D0C0B',
-    timer: '#FCFBF9',
-    timerDim: '#3A3836',
-    label: '#5A5653',
-    muted: '#3A3836',
-    track: '#2A2826',
-    trackBorder: '#3A3836',
-    pillBg: '#1E1D1C',
-    cancelBorder: '#2A2826',
-    startBorder: '#FF4D00',
-    pauseIcon: '#FCFBF9',
+    bg: C.bg,
+    timer: C.hot,
+    timerDim: C.faint,
+    label: C.dim,
+    muted: C.faint,
+    track: C.ghost,
+    trackBorder: C.lineHi,
+    pillBg: C.raised,
+    cancelBorder: C.line,
+    startBorder: C.hot,
+    pauseIcon: C.onHot,
   },
   light: {
     bg: '#FCFBF9',
@@ -64,7 +65,7 @@ const PALETTE = {
     startBorder: '#FF4D00',
     pauseIcon: '#FCFBF9',
   },
-} as const;
+};
 
 const CIRCLE_BTN_SIZE = 72;
 const THEME_SLIDER_W = 64;
@@ -275,7 +276,7 @@ export default function FocusTimerScreen() {
   });
 
   const palette = PALETTE[colorTheme];
-  const phaseLabelColor = colorTheme === 'dark' ? '#FCFBF9' : '#0D0C0B';
+  const phaseLabelColor = C.onHot; // always on the white phase pill
 
   // ── Restore saved session on mount (resume without params, or matching launch) ──
   useEffect(() => {
@@ -708,14 +709,14 @@ export default function FocusTimerScreen() {
         style={[
           styles.settingsBtn,
           {
-            borderColor: settingsOpen ? '#FF4D00' : palette.cancelBorder,
+            borderColor: settingsOpen ? C.hot : palette.cancelBorder,
             backgroundColor: palette.pillBg,
           },
         ]}
         onPress={toggleSettings}
         activeOpacity={0.7}
       >
-        <Text style={[styles.settingsBtnText, { color: settingsOpen ? '#FF4D00' : palette.label }]}>
+        <Text style={[styles.settingsBtnText, { color: settingsOpen ? C.hot : palette.label }]}>
           SETTINGS
         </Text>
       </TouchableOpacity>
@@ -784,7 +785,7 @@ export default function FocusTimerScreen() {
             activeOpacity={0.85}
             accessibilityLabel="Leave timer running"
           >
-            <MaterialCommunityIcons name="close" size={32} color="#FCFBF9" />
+            <MaterialCommunityIcons name="close" size={32} color={C.ink} />
           </TouchableOpacity>
         </View>
       </View>
@@ -892,7 +893,7 @@ export default function FocusTimerScreen() {
               activeOpacity={0.85}
               accessibilityLabel="Leave timer running"
             >
-              <MaterialCommunityIcons name="close" size={28} color="#FCFBF9" />
+              <MaterialCommunityIcons name="close" size={28} color={C.ink} />
             </TouchableOpacity>
           </View>
           <View style={styles.landscapeContainer}>
@@ -951,14 +952,14 @@ export default function FocusTimerScreen() {
                     style={[
                       styles.settingsBtn,
                       {
-                        borderColor: settingsOpen ? '#FF4D00' : palette.cancelBorder,
+                        borderColor: settingsOpen ? C.hot : palette.cancelBorder,
                         backgroundColor: palette.pillBg,
                       },
                     ]}
                     onPress={toggleSettings}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.settingsBtnText, { color: settingsOpen ? '#FF4D00' : palette.label }]}>
+                    <Text style={[styles.settingsBtnText, { color: settingsOpen ? C.hot : palette.label }]}>
                       SETTINGS
                     </Text>
                   </TouchableOpacity>
@@ -999,13 +1000,13 @@ const styles = StyleSheet.create({
   banner: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     paddingVertical: 14,
     paddingHorizontal: 24,
     zIndex: 100,
   },
   bannerText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 9,
     color: '#FCFBF9',
     letterSpacing: 1,
@@ -1030,7 +1031,7 @@ const styles = StyleSheet.create({
     width: THEME_SLIDER_W,
     height: THEME_SLIDER_H,
     borderRadius: THEME_SLIDER_H / 2,
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     overflow: 'hidden',
   },
   themeSliderTrack: {
@@ -1072,13 +1073,13 @@ const styles = StyleSheet.create({
     width: CIRCLE_BTN_SIZE,
     height: CIRCLE_BTN_SIZE,
     borderRadius: CIRCLE_BTN_SIZE / 2,
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     alignItems: 'center',
     justifyContent: 'center',
   },
   roundLabel: {
     flex: 1,
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 11,
     letterSpacing: 2,
     paddingTop: 8,
@@ -1098,9 +1099,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   focusName: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.dot,
     fontSize: 28,
-    color: '#FF4D00',
+    color: C.hot,
     letterSpacing: 0,
     textAlign: 'center',
     width: '100%',
@@ -1118,13 +1119,13 @@ const styles = StyleSheet.create({
   },
   phasePill: {
     alignSelf: 'center',
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     borderRadius: 999,
     paddingHorizontal: 28,
     paddingVertical: 14,
   },
   phaseText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 11,
     letterSpacing: 2,
   },
@@ -1134,7 +1135,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   timer: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.dot,
     fontSize: 80,
     letterSpacing: -2,
     textAlign: 'center',
@@ -1148,7 +1149,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     borderRadius: 2,
   },
   strikeRow: {
@@ -1164,17 +1165,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   strikePipUsed: {
-    backgroundColor: '#FF4D00',
-    borderColor: '#FF4D00',
+    backgroundColor: C.hot,
+    borderColor: C.hot,
   },
   strikeText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 7,
     letterSpacing: 1,
   },
-  strikeTextWarn: { color: '#FF4D00' },
+  strikeTextWarn: { color: C.hot },
   accountLine: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 10,
     letterSpacing: 0.5,
     marginBottom: 12,
@@ -1202,9 +1203,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   startBtnText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 11,
-    color: '#FF4D00',
+    color: C.hot,
     letterSpacing: 2,
   },
 
@@ -1235,7 +1236,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   settingsCancelText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 9,
     color: '#E53935',
     letterSpacing: 1,
@@ -1254,7 +1255,7 @@ const styles = StyleSheet.create({
     borderRadius: CIRCLE_BTN_SIZE / 2,
   },
   settingsBtnText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 10,
     letterSpacing: 1.5,
   },
@@ -1274,12 +1275,12 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   failX: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.dot,
     fontSize: 36,
-    color: '#FF4D00',
+    color: C.hot,
   },
   failTitle: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.dot,
     fontSize: 32,
     color: '#FCFBF9',
     lineHeight: 52,
@@ -1287,19 +1288,19 @@ const styles = StyleSheet.create({
   },
   failDivider: {
     height: 2,
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     width: 60,
     marginBottom: 28,
   },
   failMessage: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 15,
     color: '#FCFBF9',
     lineHeight: 24,
     marginBottom: 14,
   },
   failSub: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 12,
     color: '#5A5653',
     lineHeight: 20,
@@ -1307,13 +1308,13 @@ const styles = StyleSheet.create({
   },
   failBtns: { gap: 12 },
   failRetryBtn: {
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     borderRadius: 4,
     paddingVertical: 18,
     alignItems: 'center',
   },
   failRetryText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 11,
     color: '#FCFBF9',
     letterSpacing: 2,
@@ -1326,7 +1327,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   failExitText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 10,
     color: '#5A5653',
     letterSpacing: 2,
@@ -1352,7 +1353,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingRight: 12,
     borderRightWidth: 2,
-    borderRightColor: '#FF4D00',
+    borderRightColor: C.hot,
   },
   landscapeRight: {
     flex: 1,
@@ -1363,7 +1364,7 @@ const styles = StyleSheet.create({
   strikeBox: {
     backgroundColor: 'rgba(255, 77, 0, 0.08)',
     borderWidth: 2,
-    borderColor: '#FF4D00',
+    borderColor: C.hot,
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',

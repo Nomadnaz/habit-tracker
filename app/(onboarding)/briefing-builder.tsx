@@ -13,13 +13,10 @@ import { useRouter } from 'expo-router';
 import OnboardingShell from '@/components/OnboardingShell';
 import { updateAnswers, flushOnboardingIfNeeded } from '@/lib/onboarding-data';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const ORANGE = '#FF4D00';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const REG    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const REG = F.mono;
+const BOLD = F.mono;
 
 const MODULES: { key: string; label: string }[] = [
   { key: 'tasks', label: 'Tasks & schedule' },
@@ -64,16 +61,16 @@ export default function BriefingBuilder() {
           </TouchableOpacity>
         );
       })}
-      {finishing && <ActivityIndicator color={ORANGE} style={{ marginTop: 8 }} />}
+      {finishing && <ActivityIndicator color={C.hot} style={{ marginTop: 8 }} />}
     </OnboardingShell>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    padding: 14, borderRadius: 10, borderWidth: 1, borderColor: BORDER, backgroundColor: CARD,
+    padding: 14, borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
   },
-  rowActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  label: { fontFamily: REG, fontSize: 13, color: INK },
-  labelActive: { color: '#FFFFFF', fontFamily: BOLD },
+  rowActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  label: { fontFamily: REG, fontSize: 13, color: C.ink },
+  labelActive: { color: C.surface, fontFamily: BOLD },
 });

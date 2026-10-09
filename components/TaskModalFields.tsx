@@ -10,6 +10,7 @@ import { PriorityDropdown } from '@/components/PriorityDropdown';
 import { buildDateOptions } from '@/lib/task-schedule';
 import type { Priority } from '@/lib/tasks-core';
 
+import { C, F } from '@/lib/theme';
 type TaskModalFieldsProps = {
   dateIndex: number;
   onDatePreview: (index: number) => void;
@@ -88,9 +89,9 @@ export function TaskModalFields({
 
 const styles = StyleSheet.create({
   fieldLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 9,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.hot,
     letterSpacing: 1,
     marginTop: 4,
     marginBottom: 4,

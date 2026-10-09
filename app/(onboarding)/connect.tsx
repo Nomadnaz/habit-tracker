@@ -11,14 +11,11 @@ import { updateAnswers } from '@/lib/onboarding-data';
 import { connectAndSyncAppleHealth, isAppleHealthSupported } from '@/lib/apple-health';
 import { featureFlags } from '@/lib/featureFlags';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const ORANGE = '#FF4D00';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const GREEN  = '#3B7A57';
-const REG    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
+import { C, F } from '@/lib/theme';
+const MUTED  = C.dim;
+const GREEN  = C.live;
+const REG = F.mono;
+const BOLD = F.mono;
 
 const COMING_SOON: { icon: string; label: string }[] = [
   { icon: 'gmail', label: 'Gmail' },
@@ -51,9 +48,9 @@ export default function Connect() {
           onPress={connectHealthKit}
           disabled={connecting || connected || !isAppleHealthSupported()}
         >
-          <MaterialCommunityIcons name="heart-pulse" size={22} color={connected ? GREEN : ORANGE} />
+          <MaterialCommunityIcons name="heart-pulse" size={22} color={connected ? C.live : C.hot} />
           <Text style={styles.label}>Apple Health</Text>
-          {connecting ? <ActivityIndicator size="small" color={ORANGE} /> : (
+          {connecting ? <ActivityIndicator size="small" color={C.hot} /> : (
             <Text style={[styles.status, connected && styles.statusConnected]}>
               {connected ? 'CONNECTED' : isAppleHealthSupported() ? 'CONNECT' : 'NEEDS DEV BUILD'}
             </Text>
@@ -62,7 +59,7 @@ export default function Connect() {
       )}
       {COMING_SOON.map(c => (
         <View key={c.label} style={[styles.row, styles.rowDisabled]}>
-          <MaterialCommunityIcons name={c.icon as any} size={22} color={MUTED} />
+          <MaterialCommunityIcons name={c.icon as any} size={22} color={C.dim} />
           <Text style={[styles.label, styles.labelDisabled]}>{c.label}</Text>
           <Text style={styles.status}>COMING SOON</Text>
         </View>
@@ -74,12 +71,12 @@ export default function Connect() {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14,
-    borderRadius: 10, borderWidth: 1, borderColor: BORDER, backgroundColor: CARD,
+    borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
   },
   rowConnected: { borderColor: GREEN },
   rowDisabled: { opacity: 0.5 },
-  label: { fontFamily: REG, fontSize: 13, color: INK, flex: 1 },
+  label: { fontFamily: REG, fontSize: 13, color: C.ink, flex: 1 },
   labelDisabled: { color: MUTED },
-  status: { fontFamily: BOLD, fontSize: 9, color: ORANGE },
+  status: { fontFamily: BOLD, fontSize: 10, color: C.hot },
   statusConnected: { color: GREEN },
 });

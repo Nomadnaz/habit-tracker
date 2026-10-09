@@ -1,64 +1,56 @@
 // ─────────────────────────────────────────────────────────────────────────
-// LIFE — card-grid hub (Code Audit v2 fix plan, P1). Pure navigation: each
-// card routes to an existing screen, no new logic. Owns goals, finance,
-// library, focus timer, calendar. Gives the `life` AI companion (configured
-// but previously unreachable — Code Audit v2 §1.5) a real entry point.
+// LIFE — everything that isn't today, the body or training, as one
+// departure board. Pure navigation: each row routes to an existing screen.
+// HABITS lives here now that it has no tab slot of its own.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { C, F } from '@/lib/theme';
+import { Board, BoardRow } from '@/components/Board';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
-
-const CARDS: { label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; route: string }[] = [
-  { label: 'GOALS',       icon: 'flag-checkered', route: '/modals/goals' },
-  { label: 'FINANCE',     icon: 'cash-multiple', route: '/modals/finance' },
-  { label: 'LIBRARY',     icon: 'book-outline', route: '/modals/library' },
-  { label: 'FOCUS TIMER', icon: 'timer-outline', route: '/focus-timer' },
-  { label: 'CALENDAR',    icon: 'calendar-month-outline', route: '/calendar' },
+const ROUTINE = [
+  { label: 'HABITS', sub: 'Streaks, check-ins, meds', route: '/(tabs)/habits' },
+  { label: 'FOCUS', sub: 'Timed deep-work blocks', route: '/focus-timer' },
+  { label: 'CALENDAR', sub: 'Month view and day plans', route: '/calendar' },
+];
+const AMBITION = [
+  { label: 'GOALS', sub: 'Targets and milestones', route: '/modals/goals' },
+  { label: 'FINANCE', sub: 'Spending, budgets, bills', route: '/modals/finance' },
+  { label: 'LIBRARY', sub: 'Books, ideas, links, films', route: '/modals/library' },
+];
+const SYSTEM = [
+  { label: 'PUCK DEVICE', sub: 'Pair and sync the puck', route: '/ble-bridge' },
+  { label: 'SETTINGS', sub: 'Account, companion, export', route: '/settings' },
 ];
 
 export default function LifeScreen() {
   const router = useRouter();
+  const arrow = <MaterialCommunityIcons name="arrow-right" size={16} color={C.dim} />;
+  const rows = (list: typeof ROUTINE) => list.map((r, i) => (
+    <BoardRow key={r.label} index={i + 1} label={r.label} sub={r.sub} right={arrow}
+      last={i === list.length - 1} onPress={() => router.push(r.route as any)} />
+  ));
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>LIFE</Text>
-      </View>
-      <ScrollView contentContainerStyle={styles.grid}>
-        {CARDS.map(c => (
-          <TouchableOpacity
-            key={c.label}
-            style={styles.card}
-            activeOpacity={0.85}
-            onPress={() => router.push(c.route as any)}
-          >
-            <MaterialCommunityIcons name={c.icon} size={26} color={ORANGE} />
-            <Text style={styles.cardLabel}>{c.label}</Text>
-          </TouchableOpacity>
-        ))}
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>DEPARTURES</Text>
+          <Text style={styles.title}>LIFE</Text>
+        </View>
+        <Board title="ROUTINE">{rows(ROUTINE)}</Board>
+        <Board title="AMBITION">{rows(AMBITION)}</Board>
+        <Board title="SYSTEM">{rows(SYSTEM)}</Board>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
-  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 },
-  title: { fontFamily: BOLD, fontSize: 24, color: INK, letterSpacing: 2 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 12, paddingBottom: 40 },
-  card: {
-    width: '46%', backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
-    paddingVertical: 20, paddingHorizontal: 12, alignItems: 'center', gap: 10, minHeight: 100,
-  },
-  cardLabel: { fontFamily: REG, fontSize: 10, color: INK, textAlign: 'center', letterSpacing: 0.5 },
+  safe: { flex: 1, backgroundColor: C.bg },
+  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 6 },
+  eyebrow: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 3 },
+  title: { fontFamily: F.dot, fontSize: 40, color: C.ink, letterSpacing: 2, marginTop: 4 },
 });

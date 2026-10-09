@@ -6,13 +6,10 @@ import { useRouter } from 'expo-router';
 import OnboardingShell from '@/components/OnboardingShell';
 import { updateAnswers } from '@/lib/onboarding-data';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const ORANGE = '#FF4D00';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const REG    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const REG = F.mono;
+const BOLD = F.mono;
 
 const SEXES = ['Female', 'Male', 'Other', 'Prefer not to say'];
 
@@ -37,8 +34,8 @@ export default function Basics() {
 
   return (
     <OnboardingShell step={2} title="Tell us about you" subtitle="Everything here is optional except your name." onNext={next} nextDisabled={!name.trim()}>
-      <TextInput style={styles.input} placeholder="Your name" placeholderTextColor={MUTED} value={name} onChangeText={setName} autoFocus />
-      <TextInput style={styles.input} placeholder="Age (optional)" placeholderTextColor={MUTED} value={age} onChangeText={setAge} keyboardType="number-pad" />
+      <TextInput style={styles.input} placeholder="Your name" placeholderTextColor={C.dim} value={name} onChangeText={setName} autoFocus />
+      <TextInput style={styles.input} placeholder="Age (optional)" placeholderTextColor={C.dim} value={age} onChangeText={setAge} keyboardType="number-pad" />
       <View style={styles.chipRow}>
         {SEXES.map(s => (
           <TouchableOpacity key={s} style={[styles.chip, sex === s && styles.chipActive]} onPress={() => setSex(s)}>
@@ -47,8 +44,8 @@ export default function Basics() {
         ))}
       </View>
       <View style={styles.row}>
-        <TextInput style={[styles.input, styles.half]} placeholder="Height (cm)" placeholderTextColor={MUTED} value={heightCm} onChangeText={setHeightCm} keyboardType="decimal-pad" />
-        <TextInput style={[styles.input, styles.half]} placeholder="Weight (kg)" placeholderTextColor={MUTED} value={weightKg} onChangeText={setWeightKg} keyboardType="decimal-pad" />
+        <TextInput style={[styles.input, styles.half]} placeholder="Height (cm)" placeholderTextColor={C.dim} value={heightCm} onChangeText={setHeightCm} keyboardType="decimal-pad" />
+        <TextInput style={[styles.input, styles.half]} placeholder="Weight (kg)" placeholderTextColor={C.dim} value={weightKg} onChangeText={setWeightKg} keyboardType="decimal-pad" />
       </View>
     </OnboardingShell>
   );
@@ -56,14 +53,14 @@ export default function Basics() {
 
 const styles = StyleSheet.create({
   input: {
-    borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 14,
-    fontFamily: REG, fontSize: 13, color: INK, backgroundColor: CARD,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 14,
+    fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
   row: { flexDirection: 'row', gap: 10 },
   half: { flex: 1 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: BORDER },
-  chipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  chipText: { fontFamily: REG, fontSize: 11, color: MUTED },
-  chipTextActive: { color: '#FFFFFF', fontFamily: BOLD },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line },
+  chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
+  chipTextActive: { color: C.surface, fontFamily: BOLD },
 });

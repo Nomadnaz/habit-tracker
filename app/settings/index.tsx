@@ -20,14 +20,11 @@ import { supabase } from '@/lib/supabase';
 import { companions } from '@/lib/companions';
 import { exportToObsidian } from '@/lib/obsidianExport';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
 
 export default function Settings() {
   const router = useRouter();
@@ -91,7 +88,7 @@ export default function Settings() {
   if (!loaded) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ActivityIndicator style={{ marginTop: 40 }} color={ORANGE} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={C.hot} />
       </SafeAreaView>
     );
   }
@@ -100,7 +97,7 @@ export default function Settings() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={INK} />
+          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
         </TouchableOpacity>
         <Text style={styles.title}>SETTINGS</Text>
         <View style={{ width: 22 }} />
@@ -119,7 +116,7 @@ export default function Settings() {
             <TextInput
               style={styles.input}
               placeholder="sk-ant-…"
-              placeholderTextColor={MUTED}
+              placeholderTextColor={C.dim}
               value={apiKeyInput}
               onChangeText={setApiKeyInput}
               autoCapitalize="none"
@@ -138,35 +135,35 @@ export default function Settings() {
             style={styles.companionRow}
             onPress={() => router.push({ pathname: '/settings/companion-persona', params: { companionType: type } })}
           >
-            <MaterialCommunityIcons name="account-circle-outline" size={22} color={ORANGE} />
+            <MaterialCommunityIcons name="account-circle-outline" size={22} color={C.hot} />
             <Text style={styles.companionLabel}>{cfg.defaultName} ({type})</Text>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
+            <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
           </TouchableOpacity>
         ))}
 
         <Text style={styles.sectionLabel}>SECOND BRAIN</Text>
         <TouchableOpacity style={styles.companionRow} onPress={handleExport} disabled={exporting}>
-          <MaterialCommunityIcons name="brain" size={22} color={ORANGE} />
+          <MaterialCommunityIcons name="brain" size={22} color={C.hot} />
           <Text style={styles.companionLabel}>
             {exporting ? 'Preparing export…' : 'Export to Obsidian (.zip)'}
           </Text>
           {exporting
-            ? <ActivityIndicator size="small" color={ORANGE} />
-            : <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />}
+            ? <ActivityIndicator size="small" color={C.hot} />
+            : <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />}
         </TouchableOpacity>
 
         <Text style={styles.sectionLabel}>CONNECTED DEVICES</Text>
         <TouchableOpacity style={styles.companionRow} onPress={() => router.push('/ble-bridge')}>
-          <MaterialCommunityIcons name="bluetooth" size={22} color={ORANGE} />
+          <MaterialCommunityIcons name="bluetooth" size={22} color={C.hot} />
           <Text style={styles.companionLabel}>Companion HUD (BLE bridge)</Text>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
+          <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
         </TouchableOpacity>
 
         <Text style={styles.sectionLabel}>PRIVACY</Text>
         <TouchableOpacity style={styles.companionRow} onPress={() => router.push('/modals/cycle-tracking')}>
-          <MaterialCommunityIcons name="calendar-heart" size={22} color={ORANGE} />
+          <MaterialCommunityIcons name="calendar-heart" size={22} color={C.hot} />
           <Text style={styles.companionLabel}>Cycle tracking (off by default)</Text>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
+          <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -174,24 +171,24 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
   },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK },
+  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
-  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14, gap: 10 },
+  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontFamily: BOLD, fontSize: 11, color: INK, flex: 1 },
-  sub: { fontFamily: REG, fontSize: 11, color: MUTED },
-  input: { borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: INK },
+  cardTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink, flex: 1 },
+  sub: { fontFamily: REG, fontSize: 12, color: C.dim },
+  input: { borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: C.ink },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  saveBtnText: { fontFamily: BOLD, fontSize: 11, color: '#FFFFFF' },
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: MUTED, marginTop: 4 },
+  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
+  sectionLabel: { fontFamily: BOLD, fontSize: 12, color: C.dim, marginTop: 4 },
   companionRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12,
-    borderRadius: 10, borderWidth: 1, borderColor: BORDER, backgroundColor: CARD,
+    borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
   },
-  companionLabel: { fontFamily: REG, fontSize: 12, color: INK, flex: 1 },
+  companionLabel: { fontFamily: REG, fontSize: 12, color: C.ink, flex: 1 },
 });

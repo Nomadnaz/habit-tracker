@@ -1,9 +1,10 @@
 import { View, StyleSheet } from 'react-native';
 
+import { C } from '@/lib/theme';
 const PX = 2;
 
 /** Tiny 8-bit map pin (head + point). */
-export function PixelLocationPin({ color = '#FF4D00' }: { color?: string }) {
+export function PixelLocationPin({ color = C.hot }: { color?: string }) {
   return (
     <View style={styles.wrap}>
       <View style={[styles.head, { backgroundColor: color }]} />

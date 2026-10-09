@@ -9,10 +9,9 @@ import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Polyline } from 'react-native-svg';
 import type { Waypoint } from '@/lib/activity-data';
 
-const ORANGE = '#FF4D00';
-const MUTED  = '#8C857B';
-const BG     = '#F4F2EE';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const BG     = C.bg;
+const REG = F.mono;
 
 export function ElevationGraph({ waypoints, width = 280, height = 100 }: { waypoints: Waypoint[]; width?: number; height?: number }) {
   const altitudes = waypoints.map(w => w.altitude).filter((a): a is number => a != null);
@@ -36,8 +35,8 @@ export function ElevationGraph({ waypoints, width = 280, height = 100 }: { waypo
 
   return (
     <View>
-      <Svg width={width} height={height} style={{ backgroundColor: BG, borderRadius: 8 }}>
-        <Polyline points={points} fill="none" stroke={ORANGE} strokeWidth={2} />
+      <Svg width={width} height={height} style={{ backgroundColor: C.bg, borderRadius: 8 }}>
+        <Polyline points={points} fill="none" stroke={C.hot} strokeWidth={2} />
       </Svg>
       <View style={s.range}>
         <Text style={s.rangeText}>{Math.round(min)}M</Text>
@@ -49,7 +48,7 @@ export function ElevationGraph({ waypoints, width = 280, height = 100 }: { waypo
 
 const s = StyleSheet.create({
   empty: { backgroundColor: BG, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { fontFamily: REG, fontSize: 11, color: MUTED },
+  emptyText: { fontFamily: REG, fontSize: 12, color: C.dim },
   range: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  rangeText: { fontFamily: REG, fontSize: 9, color: MUTED },
+  rangeText: { fontFamily: REG, fontSize: 10, color: C.dim },
 });

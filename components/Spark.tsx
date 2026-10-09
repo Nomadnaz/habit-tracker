@@ -4,7 +4,8 @@
 import { View } from 'react-native';
 import Svg, { Polyline, Circle } from 'react-native-svg';
 
-const ORANGE = '#FF4D00';
+import { C } from '@/lib/theme';
+const ORANGE = C.hot;
 
 export function Spark({
   points, width = 72, height = 26, color = ORANGE, dots = false,

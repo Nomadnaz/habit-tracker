@@ -38,6 +38,7 @@ import { buildDateOptions, findTaskDateKey, moveTaskInMap, parseDateKey } from '
 import { taskToDbRow } from '@/lib/task-supabase';
 import { TASKS_CHANGED_EVENT } from '@/lib/use-remote-task-sync';
 
+import { C, F } from '@/lib/theme';
 const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 const MONTH_NAMES = [
   'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
@@ -253,7 +254,7 @@ export default function DayScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <MaterialCommunityIcons name="arrow-left" size={20} color="#FF4D00" />
+          <MaterialCommunityIcons name="arrow-left" size={20} color={C.hot} />
           <Text style={styles.backLabel}>BACK</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -296,7 +297,7 @@ export default function DayScreen() {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={styles.backBtn}
         >
-          <MaterialCommunityIcons name="arrow-left" size={20} color="#FF4D00" />
+          <MaterialCommunityIcons name="arrow-left" size={20} color={C.hot} />
           <Text style={styles.backLabel}>CALENDAR</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -315,7 +316,7 @@ export default function DayScreen() {
           style={styles.askCoachBtn}
           activeOpacity={0.7}
         >
-          <MaterialCommunityIcons name="lightbulb-on" size={18} color="#FF4D00" />
+          <MaterialCommunityIcons name="lightbulb-on" size={18} color={C.hot} />
           <Text style={styles.askCoachText}>ASK COACH</Text>
         </TouchableOpacity>
       </View>
@@ -348,7 +349,7 @@ export default function DayScreen() {
                 value={sheetText}
                 onChangeText={setSheetText}
                 placeholder="TASK NAME..."
-                placeholderTextColor="#C7C1B8"
+                placeholderTextColor={C.faint}
                 autoCapitalize="characters"
                 returnKeyType="done"
               />
@@ -393,7 +394,7 @@ export default function DayScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F0EC',
+    backgroundColor: C.surface,
   },
   header: {
     flexDirection: 'row',
@@ -408,13 +409,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   editBtnText: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 10,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.dim,
     letterSpacing: 1.5,
   },
   editBtnTextActive: {
-    color: '#FF4D00',
+    color: C.hot,
   },
   body: {
     flex: 1,
@@ -426,9 +427,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   backLabel: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 10,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.hot,
     letterSpacing: 1,
   },
   dateStage: {
@@ -437,16 +438,16 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   todayLabel: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 10,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.hot,
     letterSpacing: 2,
     marginBottom: 10,
   },
   dayName: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 11,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 12,
+    color: C.dim,
     letterSpacing: 2,
     marginBottom: 12,
   },
@@ -456,31 +457,31 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   dateNum: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.dot,
     fontSize: 56,
-    color: '#1A1714',
+    color: C.ink,
     lineHeight: 60,
   },
   dateMonth: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 14,
-    color: '#FF4D00',
+    color: C.hot,
     letterSpacing: 2,
   },
   tasksHeading: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 10,
-    color: '#8C857B',
+    fontFamily: F.dot,
+    fontSize: 11,
+    color: C.dim,
     letterSpacing: 1.5,
     marginBottom: 16,
   },
   tasksHeadingEdit: {
-    color: '#FF4D00',
+    color: C.hot,
   },
   editHint: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 10,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.dim,
     marginTop: -8,
     marginBottom: 12,
   },
@@ -495,37 +496,37 @@ const styles = StyleSheet.create({
   sheetCard: {
     width: '100%',
     maxHeight: '90%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.surface,
     borderRadius: 16,
     padding: 20,
   },
   sheetLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 9,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.hot,
     letterSpacing: 1,
     marginBottom: 12,
   },
   sheetInput: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 13,
-    color: '#1A1714',
+    color: C.ink,
     borderBottomWidth: 2,
-    borderBottomColor: '#E5E1DA',
+    borderBottomColor: C.line,
     paddingVertical: 10,
     marginBottom: 4,
   },
   sheetConfirm: {
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     borderRadius: 100,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
   },
   sheetConfirmText: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 10,
-    color: '#FCFBF9',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.onHot,
     letterSpacing: 1,
   },
   askCoachBtn: {
@@ -534,13 +535,13 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#FFF4F0',
+    backgroundColor: C.raised,
     borderRadius: 6,
   },
   askCoachText: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 9,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.hot,
     letterSpacing: 1,
   },
 });

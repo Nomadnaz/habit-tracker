@@ -22,14 +22,11 @@ import {
   type Activity,
 } from '@/lib/activity-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const BG     = '#F4F2EE';
-const LIT    = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const MUTED  = C.dim;
+const BOLD = F.mono;
+const REG = F.mono;
 
 const PROCESSING_MS = 1100;
 const PRINTING_MS   = 1750;
@@ -91,7 +88,7 @@ export default function ActivityReceiptScreen() {
       <SafeAreaView style={s.container} edges={['top']}>
         <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-            <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+            <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
           </TouchableOpacity>
           <Text style={s.title}>RECEIPT</Text>
           <View style={{ width: 26 }} />
@@ -111,7 +108,7 @@ export default function ActivityReceiptScreen() {
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
         </TouchableOpacity>
         <Text style={s.title}>{type} RECEIPT</Text>
         <View style={{ width: 26 }} />
@@ -234,39 +231,39 @@ export default function ActivityReceiptScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK, letterSpacing: 1 },
+  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 40, alignItems: 'center' },
-  empty: { fontFamily: REG, fontSize: 12, color: MUTED, paddingHorizontal: 16 },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim, paddingHorizontal: 16 },
 
   plate: { alignItems: 'flex-end', paddingTop: 3 },
-  plateText: { fontFamily: REG, fontSize: 8, color: MUTED, letterSpacing: 1 },
+  plateText: { fontFamily: REG, fontSize: 9, color: C.dim, letterSpacing: 1 },
 
   screenRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  screenLabel: { fontFamily: REG, fontSize: 9, color: MUTED, letterSpacing: 1 },
+  screenLabel: { fontFamily: REG, fontSize: 10, color: C.dim, letterSpacing: 1 },
   screenTotal: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 8 },
-  screenBig: { fontFamily: BOLD, fontSize: 22, color: LIT },
+  screenBig: { fontFamily: F.num, fontSize: 22, color: C.bg },
   meter: { height: 4, borderRadius: 2, backgroundColor: 'rgba(244,242,238,0.18)', marginTop: 10, overflow: 'hidden' },
-  meterFill: { height: 4, borderRadius: 2, backgroundColor: ORANGE },
+  meterFill: { height: 4, borderRadius: 2, backgroundColor: C.hot },
 
   paperHead: { alignItems: 'center', gap: 3 },
-  brand: { fontFamily: BOLD, fontSize: 13, color: INK, letterSpacing: 2 },
-  brandSub: { fontFamily: REG, fontSize: 9, color: '#5C554C', letterSpacing: 1 },
+  brand: { fontFamily: BOLD, fontSize: 13, color: C.ink, letterSpacing: 2 },
+  brandSub: { fontFamily: REG, fontSize: 10, color: C.ink, letterSpacing: 1 },
 
-  section: { fontFamily: BOLD, fontSize: 9, color: '#5C554C', letterSpacing: 1.5, marginBottom: 8 },
-  paperNote: { fontFamily: REG, fontSize: 10, color: '#5C554C' },
+  section: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1.5, marginBottom: 8 },
+  paperNote: { fontFamily: REG, fontSize: 11, color: C.ink },
 
   paperFoot: { alignItems: 'center', gap: 8 },
-  footText: { fontFamily: REG, fontSize: 8, color: '#5C554C', letterSpacing: 1 },
+  footText: { fontFamily: REG, fontSize: 9, color: C.ink, letterSpacing: 1 },
   barcode: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 26 },
-  bar: { height: '100%', backgroundColor: INK },
+  bar: { height: '100%', backgroundColor: C.hot },
 
   actions: { width: '100%', marginTop: 22, gap: 10 },
   primaryBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  primaryBtnText: { fontFamily: BOLD, fontSize: 13, color: '#FFFFFF' },
+  primaryBtnText: { fontFamily: BOLD, fontSize: 13, color: C.onHot },
   secondaryRow: { flexDirection: 'row', gap: 10 },
-  secondaryBtn: { flex: 1, borderRadius: 10, borderWidth: 1, borderColor: BORDER, paddingVertical: 12, alignItems: 'center' },
-  secondaryBtnText: { fontFamily: BOLD, fontSize: 11, color: INK },
+  secondaryBtn: { flex: 1, borderRadius: 10, borderWidth: 1, borderColor: C.line, paddingVertical: 12, alignItems: 'center' },
+  secondaryBtnText: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   secondaryBtnTextOff: { color: MUTED },
 });

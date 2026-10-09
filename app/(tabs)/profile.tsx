@@ -10,14 +10,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BADGES, getEarnedBadgeIds } from '@/lib/badges';
 import { supabase } from '@/lib/supabase';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const MUTED  = C.dim;
+const BOLD = F.mono;
+const REG = F.mono;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -38,7 +34,7 @@ export default function ProfileScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.title}>PROFILE</Text>
           <TouchableOpacity onPress={signOut} hitSlop={10}>
-            <MaterialCommunityIcons name="logout" size={20} color={ORANGE} />
+            <MaterialCommunityIcons name="logout" size={20} color={C.hot} />
           </TouchableOpacity>
         </View>
         <Text style={styles.subtitle}>Full profile, stats & rankings coming soon.</Text>
@@ -54,7 +50,7 @@ export default function ProfileScreen() {
               <MaterialCommunityIcons
                 name={unlocked ? 'medal' : 'lock-outline'}
                 size={22}
-                color={unlocked ? ORANGE : MUTED}
+                color={unlocked ? C.hot : C.dim}
               />
               <Text style={[styles.badgeName, !unlocked && styles.badgeNameLocked]}>
                 {showHidden ? '???' : b.name}
@@ -69,19 +65,19 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK },
-  subtitle: { fontFamily: REG, fontSize: 11, color: MUTED, marginTop: 4 },
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: MUTED, paddingHorizontal: 20, marginBottom: 8 },
+  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
+  subtitle: { fontFamily: REG, fontSize: 12, color: C.dim, marginTop: 4 },
+  sectionLabel: { fontFamily: BOLD, fontSize: 12, color: C.dim, paddingHorizontal: 20, marginBottom: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 10 },
   badge: {
-    width: '46%', backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    width: '46%', backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line,
     padding: 12, alignItems: 'center', gap: 4,
   },
   badgeLocked: { opacity: 0.6 },
-  badgeName: { fontFamily: BOLD, fontSize: 11, color: INK, textAlign: 'center' },
+  badgeName: { fontFamily: BOLD, fontSize: 12, color: C.ink, textAlign: 'center' },
   badgeNameLocked: { color: MUTED },
-  badgeDesc: { fontFamily: REG, fontSize: 9, color: MUTED, textAlign: 'center' },
+  badgeDesc: { fontFamily: REG, fontSize: 10, color: C.dim, textAlign: 'center' },
 });

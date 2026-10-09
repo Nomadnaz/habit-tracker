@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { bleBridge, isDeviceProvisioned, type BridgeState } from '@/lib/ble-bridge';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 
+import { C, F } from '@/lib/theme';
 /**
  * Pair the Companion HUD for standalone Wi-Fi mode, and manage up to two
  * saved networks (device firmware caps it at 3 total — see wifi.c) so it
@@ -155,7 +156,7 @@ export default function PairDeviceScreen() {
           disabled={!canSave('home')}
           onPress={() => handleSave('home')}
         >
-          {busySlot === 'home' ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>SAVE HOME WI-FI</Text>}
+          {busySlot === 'home' ? <ActivityIndicator color={C.onHot} /> : <Text style={styles.btnText}>SAVE HOME WI-FI</Text>}
         </TouchableOpacity>
 
         {/* Outdoor / hotspot */}
@@ -191,7 +192,7 @@ export default function PairDeviceScreen() {
           disabled={!canSave('hotspot')}
           onPress={() => handleSave('hotspot')}
         >
-          {busySlot === 'hotspot' ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnText}>SAVE HOTSPOT</Text>}
+          {busySlot === 'hotspot' ? <ActivityIndicator color={C.onHot} /> : <Text style={styles.btnText}>SAVE HOTSPOT</Text>}
         </TouchableOpacity>
 
         {needsPassword ? (
@@ -243,22 +244,22 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2A2A2A',
     gap: 16,
   },
-  backBtn: { color: '#FF4D00', fontFamily: 'SpaceMono_400Regular', fontSize: 12 },
-  title: { color: '#FF4D00', fontFamily: 'SpaceMono_700Bold', fontSize: 14, letterSpacing: 2 },
+  backBtn: { color: C.hot, fontFamily: F.mono, fontSize: 12 },
+  title: { color: C.hot, fontFamily: F.dot, fontSize: 14, letterSpacing: 2 },
   body: { padding: 20, gap: 14 },
-  step: { color: '#888', fontFamily: 'SpaceMono_700Bold', fontSize: 11, letterSpacing: 1, marginTop: 8 },
+  step: { color: '#888', fontFamily: F.dot, fontSize: 11, letterSpacing: 1, marginTop: 8 },
   input: {
-    backgroundColor: '#1A1A1A', borderRadius: 4, borderWidth: 1, borderColor: '#2A2A2A',
-    color: '#EEE', fontFamily: 'SpaceMono_400Regular', fontSize: 13,
+    backgroundColor: C.hot, borderRadius: 4, borderWidth: 1, borderColor: '#2A2A2A',
+    color: '#EEE', fontFamily: F.mono, fontSize: 13,
     paddingHorizontal: 12, paddingVertical: 10,
   },
   btn: {
-    backgroundColor: '#FF4D00', borderRadius: 4,
+    backgroundColor: C.hot, borderRadius: 4,
     paddingVertical: 14, alignItems: 'center', marginTop: 4,
   },
   btnDisabled: { opacity: 0.4 },
-  btnText: { color: '#FFF', fontFamily: 'SpaceMono_700Bold', fontSize: 12, letterSpacing: 1 },
-  errorText: { color: '#FF3B30', fontFamily: 'SpaceMono_400Regular', fontSize: 12 },
-  doneText: { color: '#00CC66', fontFamily: 'SpaceMono_400Regular', fontSize: 13, lineHeight: 20 },
-  hint: { color: '#444', fontFamily: 'SpaceMono_400Regular', fontSize: 11, lineHeight: 16 },
+  btnText: { color: C.surface, fontFamily: F.dot, fontSize: 12, letterSpacing: 1 },
+  errorText: { color: C.alert, fontFamily: F.mono, fontSize: 12 },
+  doneText: { color: C.live, fontFamily: F.mono, fontSize: 13, lineHeight: 20 },
+  hint: { color: '#444', fontFamily: F.mono, fontSize: 11, lineHeight: 16 },
 });

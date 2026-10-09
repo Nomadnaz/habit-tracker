@@ -18,14 +18,9 @@ import {
   type Activity,
 } from '@/lib/activity-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const BOLD = F.mono;
+const REG = F.mono;
 
 function formatActivityDate(iso: string): string {
   const d = new Date(iso);
@@ -54,7 +49,7 @@ export default function ActivitySummaryScreen() {
       <SafeAreaView style={s.container} edges={['top']}>
         <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-            <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+            <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
           </TouchableOpacity>
           <Text style={s.title}>ACTIVITY</Text>
           <View style={{ width: 26 }} />
@@ -72,7 +67,7 @@ export default function ActivitySummaryScreen() {
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
         </TouchableOpacity>
         <Text style={s.title}>{activity.type.toUpperCase()}</Text>
         <View style={{ width: 26 }} />
@@ -125,26 +120,26 @@ export default function ActivitySummaryScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK, letterSpacing: 1 },
+  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 40, alignItems: 'center' },
-  date: { fontFamily: REG, fontSize: 10, color: MUTED, letterSpacing: 0.5, marginBottom: 12, alignSelf: 'flex-start' },
+  date: { fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 0.5, marginBottom: 12, alignSelf: 'flex-start' },
 
-  statsCard: { width: '100%', backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 16, marginBottom: 14 },
+  statsCard: { width: '100%', backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 16, marginBottom: 14 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   statCol: { alignItems: 'center', flex: 1 },
-  statValue: { fontFamily: BOLD, fontSize: 16, color: INK },
-  statLabel: { fontFamily: REG, fontSize: 8, color: MUTED, marginTop: 4, letterSpacing: 0.5 },
+  statValue: { fontFamily: BOLD, fontSize: 16, color: C.ink },
+  statLabel: { fontFamily: REG, fontSize: 9, color: C.dim, marginTop: 4, letterSpacing: 0.5 },
 
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: MUTED, letterSpacing: 1, marginTop: 18, marginBottom: 10, alignSelf: 'flex-start' },
-  empty: { fontFamily: REG, fontSize: 12, color: MUTED, alignSelf: 'flex-start' },
+  sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.dim, letterSpacing: 1, marginTop: 18, marginBottom: 10, alignSelf: 'flex-start' },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim, alignSelf: 'flex-start' },
 
   splitRow: {
     flexDirection: 'row', justifyContent: 'space-between', width: '100%',
-    backgroundColor: CARD, borderRadius: 8, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: C.surface, borderRadius: 8, borderWidth: 1, borderColor: C.line,
     paddingVertical: 10, paddingHorizontal: 14, marginBottom: 6,
   },
-  splitKm: { fontFamily: BOLD, fontSize: 12, color: INK },
-  splitPace: { fontFamily: REG, fontSize: 12, color: MUTED },
+  splitKm: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  splitPace: { fontFamily: REG, fontSize: 12, color: C.dim },
 });

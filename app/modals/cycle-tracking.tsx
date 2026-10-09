@@ -15,14 +15,11 @@ import {
 } from '@/lib/cycle-data';
 import { toDateKey } from '@/lib/dateKey';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
 
 export default function CycleTrackingModal() {
   const router = useRouter();
@@ -56,13 +53,13 @@ export default function CycleTrackingModal() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <MaterialCommunityIcons name="close" size={22} color={INK} />
+            <MaterialCommunityIcons name="close" size={22} color={C.ink} />
           </TouchableOpacity>
           <Text style={styles.title}>CYCLE TRACKING</Text>
           <View style={{ width: 22 }} />
         </View>
         <View style={styles.optInWrap}>
-          <MaterialCommunityIcons name="calendar-heart" size={40} color={ORANGE} />
+          <MaterialCommunityIcons name="calendar-heart" size={40} color={C.hot} />
           <Text style={styles.optInText}>Cycle tracking is opt-in and hidden from everyone else, including the AI companions — nothing here is shared unless you turn it on.</Text>
           <TouchableOpacity style={styles.saveBtn} onPress={enable}>
             <Text style={styles.saveBtnText}>TURN ON CYCLE TRACKING</Text>
@@ -78,7 +75,7 @@ export default function CycleTrackingModal() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={INK} />
+          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
         </TouchableOpacity>
         <Text style={styles.title}>CYCLE TRACKING</Text>
         <View style={{ width: 22 }} />
@@ -136,22 +133,22 @@ export default function CycleTrackingModal() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 14, color: INK },
+  title: { fontFamily: BOLD, fontSize: 14, color: C.ink },
   optInWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
-  optInText: { fontFamily: REG, fontSize: 13, color: MUTED, textAlign: 'center', lineHeight: 19 },
+  optInText: { fontFamily: REG, fontSize: 13, color: C.dim, textAlign: 'center', lineHeight: 19 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
-  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14, gap: 10 },
-  predictText: { fontFamily: REG, fontSize: 12, color: INK },
-  label: { fontFamily: BOLD, fontSize: 11, color: INK },
-  input: { borderWidth: 1, borderColor: BORDER, borderRadius: 8, padding: 10, fontFamily: REG, fontSize: 12, color: INK },
+  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
+  predictText: { fontFamily: REG, fontSize: 12, color: C.ink },
+  label: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  input: { borderWidth: 1, borderColor: C.line, borderRadius: 8, padding: 10, fontFamily: REG, fontSize: 12, color: C.ink },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: MUTED },
-  empty: { fontFamily: REG, fontSize: 12, color: MUTED },
-  logRow: { backgroundColor: CARD, borderRadius: 8, borderWidth: 1, borderColor: BORDER, padding: 10 },
-  logText: { fontFamily: REG, fontSize: 11, color: INK, textTransform: 'capitalize' },
+  sectionLabel: { fontFamily: BOLD, fontSize: 12, color: C.dim },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim },
+  logRow: { backgroundColor: CARD, borderRadius: 8, borderWidth: 1, borderColor: C.line, padding: 10 },
+  logText: { fontFamily: REG, fontSize: 12, color: C.ink, textTransform: 'capitalize' },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: '#FFFFFF' },
-  turnOff: { fontFamily: REG, fontSize: 11, color: MUTED, textAlign: 'center', textDecorationLine: 'underline' },
+  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
+  turnOff: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', textDecorationLine: 'underline' },
 });

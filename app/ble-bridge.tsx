@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { bleBridge, type BridgeState } from '@/lib/ble-bridge';
 
+import { C, F } from '@/lib/theme';
 const COMPANION_TYPES = [
   { id: 'habitCoach', label: 'Habit Coach' },
   { id: 'life', label: 'Life & Schedule' },
@@ -29,13 +30,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  idle: '#555',
-  scanning: '#FF4D00',
-  connecting: '#FF4D00',
-  connected: '#00CC66',
-  listening: '#00CC66',
-  processing: '#FF4D00',
-  error: '#FF3B30',
+  idle: C.dim,
+  scanning: C.hot,
+  connecting: C.hot,
+  connected: C.live,
+  listening: C.live,
+  processing: C.hot,
+  error: C.alert,
 };
 
 export default function BleBridgeScreen() {
@@ -64,7 +65,7 @@ export default function BleBridgeScreen() {
 
   const isActive = state.status !== 'idle' && state.status !== 'error';
   const isProcessing = state.status === 'scanning' || state.status === 'connecting' || state.status === 'processing';
-  const dotColor = STATUS_COLORS[state.status] ?? '#555';
+  const dotColor = STATUS_COLORS[state.status] ?? C.dim;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -73,7 +74,7 @@ export default function BleBridgeScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Text style={styles.backBtn}>← BACK</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>COMPANION HUD</Text>
+        <Text style={styles.title}>PUCK</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
@@ -83,7 +84,7 @@ export default function BleBridgeScreen() {
           <Text style={[styles.statusText, { color: dotColor }]}>
             {STATUS_LABELS[state.status] ?? state.status}
           </Text>
-          {isProcessing && <ActivityIndicator color="#FF4D00" style={{ marginLeft: 8 }} />}
+          {isProcessing && <ActivityIndicator color={C.hot} style={{ marginLeft: 8 }} />}
         </View>
 
         {state.error ? <Text style={styles.errorText}>{state.error}</Text> : null}
@@ -170,7 +171,7 @@ export default function BleBridgeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -180,35 +181,35 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2A2A2A',
     gap: 16,
   },
-  backBtn: { color: '#FF4D00', fontFamily: 'SpaceMono_400Regular', fontSize: 12 },
-  title: { color: '#FF4D00', fontFamily: 'SpaceMono_700Bold', fontSize: 14, letterSpacing: 2 },
+  backBtn: { color: C.hot, fontFamily: F.mono, fontSize: 12 },
+  title: { color: C.hot, fontFamily: F.dot, fontSize: 14, letterSpacing: 2 },
   body: { padding: 20, gap: 20 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  statusText: { fontFamily: 'SpaceMono_400Regular', fontSize: 12 },
-  errorText: { color: '#FF3B30', fontFamily: 'SpaceMono_400Regular', fontSize: 12 },
+  statusText: { fontFamily: F.mono, fontSize: 12 },
+  errorText: { color: C.alert, fontFamily: F.mono, fontSize: 12 },
   section: { gap: 8 },
-  label: { color: '#555', fontFamily: 'SpaceMono_400Regular', fontSize: 10, letterSpacing: 1 },
+  label: { color: C.dim, fontFamily: F.mono, fontSize: 10, letterSpacing: 1 },
   companionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 4,
     paddingHorizontal: 12, paddingVertical: 6,
   },
-  chipActive: { borderColor: '#FF4D00', backgroundColor: '#1A0800' },
-  chipText: { color: '#555', fontFamily: 'SpaceMono_400Regular', fontSize: 11 },
-  chipTextActive: { color: '#FF4D00' },
+  chipActive: { borderColor: C.hot, backgroundColor: C.raised },
+  chipText: { color: C.dim, fontFamily: F.mono, fontSize: 11 },
+  chipTextActive: { color: C.hot },
   btn: {
-    backgroundColor: '#FF4D00', borderRadius: 4,
+    backgroundColor: C.hot, borderRadius: 4,
     paddingVertical: 14, alignItems: 'center',
   },
-  btnDisconnect: { backgroundColor: '#1A0800', borderWidth: 1, borderColor: '#FF4D00' },
-  btnText: { color: '#FFF', fontFamily: 'SpaceMono_700Bold', fontSize: 12, letterSpacing: 1 },
+  btnDisconnect: { backgroundColor: C.raised, borderWidth: 1, borderColor: C.hot },
+  btnText: { color: C.onHot, fontFamily: F.dot, fontSize: 12, letterSpacing: 1 },
   bubble: {
-    backgroundColor: '#1A1A1A', borderRadius: 4, borderWidth: 1,
+    backgroundColor: C.hot, borderRadius: 4, borderWidth: 1,
     borderColor: '#2A2A2A', padding: 12,
   },
-  bubbleAi: { borderColor: '#FF4D00', backgroundColor: '#0F0800' },
-  bubbleText: { color: '#EEE', fontFamily: 'SpaceMono_400Regular', fontSize: 12, lineHeight: 18 },
-  hint: { color: '#444', fontFamily: 'SpaceMono_400Regular', fontSize: 11, lineHeight: 16 },
-  linkText: { color: '#FF4D00', fontFamily: 'SpaceMono_400Regular', fontSize: 11, letterSpacing: 1 },
+  bubbleAi: { borderColor: C.hot, backgroundColor: C.surface },
+  bubbleText: { color: C.ink, fontFamily: F.mono, fontSize: 12, lineHeight: 18 },
+  hint: { color: C.faint, fontFamily: F.mono, fontSize: 11, lineHeight: 16 },
+  linkText: { color: C.hot, fontFamily: F.mono, fontSize: 11, letterSpacing: 1 },
 });

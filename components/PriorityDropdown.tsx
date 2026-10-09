@@ -9,6 +9,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Priority } from '@/lib/tasks-core';
 
+import { C, F } from '@/lib/theme';
 const PRIORITY_OPTIONS: { id: Priority; label: string }[] = [
   { id: 'LOW', label: 'LOW' },
   { id: 'MEDIUM', label: 'MEDIUM' },
@@ -35,7 +36,7 @@ export function PriorityDropdown({ value, onChange }: PriorityDropdownProps) {
         <MaterialCommunityIcons
           name={open ? 'chevron-up' : 'chevron-down'}
           size={18}
-          color="#8C857B"
+          color={C.dim}
         />
       </TouchableOpacity>
       {open && (
@@ -57,7 +58,7 @@ export function PriorityDropdown({ value, onChange }: PriorityDropdownProps) {
                     {opt.label}
                   </Text>
                   {selected && (
-                    <MaterialCommunityIcons name="check" size={14} color="#FCFBF9" />
+                    <MaterialCommunityIcons name="check" size={14} color={C.onHot} />
                   )}
                 </TouchableOpacity>
               );
@@ -72,9 +73,9 @@ export function PriorityDropdown({ value, onChange }: PriorityDropdownProps) {
 const styles = StyleSheet.create({
   wrap: { marginBottom: 8 },
   fieldLabel: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 9,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.dim,
     letterSpacing: 1,
     marginTop: 4,
     marginBottom: 4,
@@ -84,22 +85,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 2,
-    borderBottomColor: '#E5E1DA',
+    borderBottomColor: C.line,
     paddingVertical: 10,
   },
   dropdownText: {
     flex: 1,
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 12,
-    color: '#1A1714',
+    color: C.ink,
     marginRight: 8,
   },
   panel: {
     marginTop: 4,
     borderWidth: 2,
-    borderColor: '#E5E1DA',
+    borderColor: C.line,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.surface,
     overflow: 'hidden',
   },
   list: { maxHeight: 120 },
@@ -110,18 +111,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E1DA',
+    borderBottomColor: C.line,
   },
   optionOn: {
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
   },
   optionText: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 11,
-    color: '#1A1714',
+    fontFamily: F.mono,
+    fontSize: 12,
+    color: C.ink,
   },
   optionTextOn: {
-    fontFamily: 'PixeloidSans_700Bold',
-    color: '#FCFBF9',
+    fontFamily: F.mono,
+    color: C.onHot,
   },
 });

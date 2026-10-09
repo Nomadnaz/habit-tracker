@@ -16,6 +16,8 @@ import {
 // Our Supabase client — handles sign in and sign up requests.
 import { supabase } from '@/lib/supabase';
 
+import { C, F } from '@/lib/theme';
+import { PuckMark } from '@/components/PuckMark';
 export default function LoginScreen() {
   // These four pieces of state track everything that can change on this screen.
 
@@ -75,11 +77,10 @@ export default function LoginScreen() {
     >
       <View style={styles.inner}>
 
-        {/* App title: shows "[HABIT TREE]" with the brackets in orange. */}
+        {/* Company mark + wordmark. */}
         <View style={styles.headerRow}>
-          <Text style={styles.bracket}>[</Text>
-          <Text style={styles.title}>HABIT{'\n'}TREE</Text>
-          <Text style={styles.bracket}>]</Text>
+          <PuckMark size={44} />
+          <Text style={styles.title}>PUCK</Text>
         </View>
         <Text style={styles.tagline}>TRACK. GROW. THRIVE.</Text>
 
@@ -118,7 +119,7 @@ export default function LoginScreen() {
           >
             {/* Show a spinner while loading, otherwise show the button label. */}
             {loading
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color={C.onHot} />
               : <Text style={styles.buttonText}>{isSignUp ? 'CREATE ACCOUNT  ›' : 'SIGN IN  ›'}</Text>
             }
           </TouchableOpacity>
@@ -143,7 +144,7 @@ const styles = StyleSheet.create({
   // The outermost container — fills the whole screen with a light grey background.
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: C.bg,
   },
   // Centres the content vertically on the screen and adds horizontal padding.
   inner: {
@@ -151,67 +152,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     justifyContent: 'center',
   },
-  // Lays the "[" title "]" brackets side by side horizontally.
+  // Mark + wordmark side by side.
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: 14,
   },
-  // The orange [ and ] brackets around the title.
-  bracket: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 28,
-    color: '#FF4D00',
-    marginTop: 4,
-  },
-  // "HABIT TREE" in the pixel font, split across two lines with \n.
-  title: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 28,
-    color: '#000',
-    lineHeight: 42,
-    marginHorizontal: 12,
-  },
-  // The small orange tagline below the title.
+  title: { fontFamily: F.dot, fontSize: 44, color: C.ink, letterSpacing: 6, marginLeft: 18 },
+  // The small tagline below the title.
   tagline: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 8,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.dim,
     letterSpacing: 2,
     marginBottom: 40,
   },
   // The white rounded card that wraps the form fields.
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: C.surface,
     borderRadius: 4,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: C.line,
   },
   // "SIGN IN" / "CREATE ACCOUNT" label inside the card.
   cardLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 9,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.hot,
     marginBottom: 20,
     letterSpacing: 1,
   },
   // Styling for both text input fields (email and password).
   input: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: C.bg,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: C.line,
     borderRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 14,
     fontSize: 13,
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     color: '#000',
     marginBottom: 12,
   },
   // The orange submit button.
   button: {
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     borderRadius: 4,
     paddingVertical: 16,
     alignItems: 'center',
@@ -221,9 +208,9 @@ const styles = StyleSheet.create({
   },
   // White text inside the button.
   buttonText: {
-    fontFamily: 'PixeloidSans_400Regular',
-    color: '#fff',
-    fontSize: 10,
+    fontFamily: F.mono,
+    color: C.onHot,
+    fontSize: 11,
     letterSpacing: 1,
   },
   // The "NO ACCOUNT? SIGN UP" toggle link at the bottom.
@@ -232,9 +219,9 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   switchText: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 8,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 9,
+    color: C.hot,
     letterSpacing: 1,
   },
 });

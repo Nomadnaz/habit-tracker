@@ -11,13 +11,13 @@ import { View, StyleSheet } from 'react-native';
 import Svg, { Polyline } from 'react-native-svg';
 import { segmentPaces, type Waypoint } from '@/lib/activity-data';
 
-const ORANGE = '#FF4D00';
-const GREEN  = '#3B7A57';
-const RED    = '#C0432B';
-const BG     = '#F4F2EE';
+import { C } from '@/lib/theme';
+const ORANGE = C.hot;
+const GREEN  = C.live;
+const RED    = C.alert;
 
 export function RouteLine({ waypoints, width = 280, height = 160 }: { waypoints: Waypoint[]; width?: number; height?: number }) {
-  if (waypoints.length < 2) return <View style={[s.box, { width, height, backgroundColor: BG }]} />;
+  if (waypoints.length < 2) return <View style={[s.box, { width, height, backgroundColor: C.bg }]} />;
   const lats = waypoints.map(w => w.lat), lngs = waypoints.map(w => w.lng);
   const minLat = Math.min(...lats), maxLat = Math.max(...lats);
   const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
@@ -32,7 +32,7 @@ export function RouteLine({ waypoints, width = 280, height = 160 }: { waypoints:
   const avgPace = paces.reduce((a, b) => a + b, 0) / (paces.length || 1);
 
   return (
-    <Svg width={width} height={height} style={[s.box, { backgroundColor: BG }]}>
+    <Svg width={width} height={height} style={[s.box, { backgroundColor: C.bg }]}>
       {waypoints.slice(1).map((p, i) => {
         const a = toXY(waypoints[i]);
         const b = toXY(p);

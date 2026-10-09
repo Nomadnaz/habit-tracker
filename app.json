@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
@@ -16,19 +16,20 @@
         "NSHealthShareUsageDescription": "Read your steps, walking distance, activity, sleep, and weight to show progress on the Body and Today screens.",
         "NSHealthUpdateUsageDescription": "This app does not write health data; permission is only requested for compatibility with HealthKit.",
         "NSBluetoothAlwaysUsageDescription": "Connect to your Companion HUD device to relay voice commands to the AI.",
-        "NSSpeechRecognitionUsageDescription": "Transcribe voice questions from your Companion HUD device (unused — cloud transcription is used instead).",
+        "NSSpeechRecognitionUsageDescription": "Transcribe voice questions from your Companion HUD device (unused \u2014 cloud transcription is used instead).",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Keep tracking your hike, run, or walk in the background if you lock your phone or switch apps mid-activity.",
         "NSLocationWhenInUseUsageDescription": "Track your route, distance, and pace while recording a hike, run, or walk.",
         "UIBackgroundModes": [
           "location"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "Hold the dot to speak a log or ask a question \u2014 audio is transcribed, then discarded."
       },
       "bundleIdentifier": "com.nova.habittracker"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -70,7 +71,9 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": ["central"],
+          "modes": [
+            "central"
+          ],
           "bluetoothAlwaysPermission": "Connect to your Companion HUD device to relay voice commands to the AI."
         }
       ],
@@ -80,6 +83,12 @@
           "locationAlwaysAndWhenInUsePermission": "Keep tracking your hike, run, or walk in the background if you lock your phone or switch apps mid-activity.",
           "isAndroidBackgroundLocationEnabled": true
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Hold the dot to speak a log or ask a question \u2014 audio is transcribed, then discarded."
+        }
       ]
     ],
     "extra": {
@@ -88,6 +97,13 @@
         "projectId": "2e1a9c53-a91b-4cb2-9339-5f34f8563979"
       }
     },
-    "owner": "nomadnaz"
+    "owner": "nomadnaz",
+    "backgroundColor": "#000000",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000",
+      "imageWidth": 160
+    }
   }
 }

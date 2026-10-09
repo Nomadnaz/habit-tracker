@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { C, F } from '@/lib/theme';
 type LocationDropdownProps = {
   value: string;
   onChange: (text: string) => void;
@@ -27,7 +28,7 @@ export function LocationDropdown({ value, onChange }: LocationDropdownProps) {
         <MaterialCommunityIcons
           name={open ? 'chevron-up' : 'chevron-down'}
           size={14}
-          color="#8C857B"
+          color={C.dim}
         />
       </TouchableOpacity>
       {open && (
@@ -36,7 +37,7 @@ export function LocationDropdown({ value, onChange }: LocationDropdownProps) {
           value={value}
           onChangeText={onChange}
           placeholder="TYPE LOCATION..."
-          placeholderTextColor="#C7C1B8"
+          placeholderTextColor={C.faint}
           autoCapitalize="characters"
         />
       )}
@@ -53,17 +54,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   fieldLabel: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 9,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.dim,
     letterSpacing: 1,
   },
   input: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 12,
-    color: '#1A1714',
+    color: C.ink,
     borderBottomWidth: 2,
-    borderBottomColor: '#E5E1DA',
+    borderBottomColor: C.line,
     paddingVertical: 10,
     paddingHorizontal: 0,
     marginBottom: 4,

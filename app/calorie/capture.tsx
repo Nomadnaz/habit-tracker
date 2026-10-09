@@ -16,14 +16,10 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { estimateMealFromPhoto } from '@/lib/foodVision';
 import type { MealType } from '@/lib/meals-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BG     = '#F4F2EE';
-const CARD   = '#FCFBF9';
-const BORDER = '#E5E1DA';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const BOLD = F.mono;
+const REG = F.mono;
 
 // Rough time-of-day guess so a snapped meal lands in a sensible group.
 function guessMealType(): MealType {
@@ -93,14 +89,14 @@ export default function CaptureScreen() {
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
         </TouchableOpacity>
         <Text style={s.title}>SNAP A MEAL</Text>
         <View style={{ width: 26 }} />
       </View>
 
       <View style={s.body}>
-        <MaterialCommunityIcons name="camera-outline" size={72} color={ORANGE} />
+        <MaterialCommunityIcons name="camera-outline" size={72} color={C.hot} />
         <Text style={s.hint}>Take a photo of your plate, or choose one from your library.</Text>
 
         <TouchableOpacity
@@ -109,7 +105,7 @@ export default function CaptureScreen() {
           disabled={busy}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); pickImage('camera'); }}
         >
-          <MaterialCommunityIcons name="camera" size={20} color="#FFF" />
+          <MaterialCommunityIcons name="camera" size={20} color={C.onHot} />
           <Text style={s.btnPrimaryText}>TAKE PHOTO</Text>
         </TouchableOpacity>
 
@@ -119,14 +115,14 @@ export default function CaptureScreen() {
           disabled={busy}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); pickImage('library'); }}
         >
-          <MaterialCommunityIcons name="image-multiple-outline" size={20} color={ORANGE} />
+          <MaterialCommunityIcons name="image-multiple-outline" size={20} color={C.hot} />
           <Text style={s.btnGhostText}>CHOOSE FROM LIBRARY</Text>
         </TouchableOpacity>
       </View>
 
       {busy && (
         <View style={s.busyOverlay}>
-          <ActivityIndicator color={ORANGE} size="large" />
+          <ActivityIndicator color={C.hot} size="large" />
           <Text style={s.busyText}>ESTIMATING…</Text>
         </View>
       )}
@@ -135,16 +131,16 @@ export default function CaptureScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK, letterSpacing: 1 },
+  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
-  hint: { fontFamily: REG, fontSize: 13, color: MUTED, textAlign: 'center', marginBottom: 8, lineHeight: 19 },
+  hint: { fontFamily: REG, fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: 8, lineHeight: 19 },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 50, borderRadius: 12 },
   btnPrimary: { backgroundColor: ORANGE },
-  btnPrimaryText: { fontFamily: BOLD, fontSize: 13, color: '#FFF', letterSpacing: 1 },
-  btnGhost: { borderWidth: 1.5, borderColor: ORANGE, backgroundColor: CARD },
-  btnGhostText: { fontFamily: BOLD, fontSize: 13, color: ORANGE, letterSpacing: 1 },
+  btnPrimaryText: { fontFamily: BOLD, fontSize: 13, color: C.onHot, letterSpacing: 1 },
+  btnGhost: { borderWidth: 1.5, borderColor: C.hot, backgroundColor: C.surface },
+  btnGhostText: { fontFamily: BOLD, fontSize: 13, color: C.hot, letterSpacing: 1 },
   busyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(244,242,238,0.9)', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  busyText: { fontFamily: BOLD, fontSize: 12, color: INK, letterSpacing: 2 },
+  busyText: { fontFamily: BOLD, fontSize: 12, color: C.ink, letterSpacing: 2 },
 });

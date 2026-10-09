@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { toDateKey } from '@/lib/dateKey';
 
+import { C, F } from '@/lib/theme';
 type Task = { id: string; label: string; done: boolean; archived?: boolean };
 type TaskMap = Record<string, Task[]>;
 
@@ -159,14 +160,12 @@ export default function CalendarScreen() {
           style={styles.backBtn}
           activeOpacity={0.7}
         >
-          <MaterialCommunityIcons name="arrow-left" size={20} color="#FF4D00" />
+          <MaterialCommunityIcons name="arrow-left" size={20} color={C.hot} />
           <Text style={styles.backLabel}>TODAY</Text>
         </TouchableOpacity>
 
         <View style={styles.titleWrap}>
-          <View style={[styles.corner, styles.cornerTL]} />
           <Text style={styles.title}>CALENDAR</Text>
-          <View style={[styles.corner, styles.cornerBR]} />
         </View>
       </View>
 
@@ -266,7 +265,7 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F2ED',
+    backgroundColor: C.surface,
   },
   header: {
     paddingHorizontal: 20,
@@ -282,9 +281,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   backLabel: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 10,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.hot,
     letterSpacing: 1,
   },
   titleWrap: {
@@ -295,35 +294,22 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     position: 'relative',
   },
-  corner: {
-    width: 10,
-    height: 10,
-    borderColor: '#FF4D00',
-  },
-  cornerTL: {
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-  },
-  cornerBR: {
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-  },
   title: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.dot,
     fontSize: 18,
-    color: '#1A1714',
+    color: C.ink,
     letterSpacing: 2,
   },
   yearBar: {
     paddingHorizontal: 20,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E1DA',
+    borderBottomColor: C.line,
   },
   yearText: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.dot,
     fontSize: 36,
-    color: '#FF4D00',
+    color: C.hot,
     letterSpacing: 2,
   },
   dowRow: {
@@ -335,9 +321,9 @@ const styles = StyleSheet.create({
   },
   dowLabel: {
     textAlign: 'center',
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 9,
-    color: '#C7C1B8',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.faint,
     letterSpacing: 1,
   },
   scroll: {
@@ -348,9 +334,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   monthHeading: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.dot,
     fontSize: 24,
-    color: '#1A1714',
+    color: C.ink,
     letterSpacing: 2,
     marginTop: 28,
     marginBottom: 12,
@@ -371,12 +357,12 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   cellToday: {
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
   },
   dayNum: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.dot,
     fontSize: 22,
-    color: '#1A1714',
+    color: C.ink,
     letterSpacing: 1,
     lineHeight: 22,
     textAlign: 'center',
@@ -384,13 +370,13 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   dayNumToday: {
-    color: '#FCFBF9',
+    color: C.onHot,
   },
   taskBadge: {
     position: 'absolute',
     top: 3,
     right: 3,
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     borderRadius: 8,
     minWidth: 14,
     height: 14,
@@ -400,21 +386,21 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   taskBadgeDone: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: C.live,
   },
   taskBadgeToday: {
-    backgroundColor: '#FCFBF9',
+    backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: 'rgba(255, 77, 0, 0.35)',
   },
   taskBadgeText: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 7,
-    color: '#FCFBF9',
+    fontFamily: F.mono,
+    fontSize: 8,
+    color: C.onHot,
     lineHeight: 9,
     includeFontPadding: false,
   },
   taskBadgeTextToday: {
-    color: '#FF4D00',
+    color: C.hot,
   },
 });

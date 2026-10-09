@@ -21,15 +21,12 @@ import {
   type Goal, type Milestone, type GoalLog,
 } from '@/lib/goals-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const GREEN  = '#3B7A57';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const MUTED  = C.dim;
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
 
 type Row = { goal: Goal; milestones: Milestone[]; logs: GoalLog[] };
 
@@ -80,15 +77,15 @@ export default function GoalsModal() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={INK} />
+          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
         </TouchableOpacity>
         <Text style={styles.title}>GOALS</Text>
         <View style={{ flexDirection: 'row', gap: 16 }}>
           <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
-            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={INK} />
+            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={C.ink} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setAddVisible(true)} hitSlop={12}>
-            <MaterialCommunityIcons name="plus" size={22} color={INK} />
+            <MaterialCommunityIcons name="plus" size={22} color={C.ink} />
           </TouchableOpacity>
         </View>
       </View>
@@ -108,7 +105,7 @@ export default function GoalsModal() {
                   </View>
                   <Text style={styles.progressText}>{progress}%</Text>
                 </View>
-                <MaterialCommunityIcons name={isOpen ? 'chevron-up' : 'chevron-down'} size={20} color={MUTED} />
+                <MaterialCommunityIcons name={isOpen ? 'chevron-up' : 'chevron-down'} size={20} color={C.dim} />
               </TouchableOpacity>
 
               {isOpen && (
@@ -118,7 +115,7 @@ export default function GoalsModal() {
                       <MaterialCommunityIcons
                         name={m.completed ? 'check-circle' : 'circle-outline'}
                         size={18}
-                        color={m.completed ? GREEN : MUTED}
+                        color={m.completed ? C.live : C.dim}
                       />
                       <Text style={[styles.milestoneText, m.completed && styles.milestoneDone]}>{m.title}</Text>
                     </TouchableOpacity>
@@ -127,7 +124,7 @@ export default function GoalsModal() {
                     <TextInput
                       style={[styles.input, { flex: 1 }]}
                       placeholder="Add a milestone"
-                      placeholderTextColor={MUTED}
+                      placeholderTextColor={C.dim}
                       value={milestoneInput[row.goal.id] ?? ''}
                       onChangeText={t => setMilestoneInput(s => ({ ...s, [row.goal.id]: t }))}
                       onSubmitEditing={() => addMilestoneTo(row.goal.id)}
@@ -151,7 +148,7 @@ export default function GoalsModal() {
           <Pressable style={styles.backdrop} onPress={() => setAddVisible(false)} />
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>NEW GOAL</Text>
-            <TextInput style={styles.input} placeholder="e.g. Run a 10k" placeholderTextColor={MUTED} value={title} onChangeText={setTitle} autoFocus />
+            <TextInput style={styles.input} placeholder="e.g. Run a 10k" placeholderTextColor={C.dim} value={title} onChangeText={setTitle} autoFocus />
             <TouchableOpacity style={styles.saveBtn} onPress={saveGoal}>
               <Text style={styles.saveBtnText}>ADD GOAL</Text>
             </TouchableOpacity>
@@ -170,31 +167,31 @@ export default function GoalsModal() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK },
+  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
-  empty: { fontFamily: REG, fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 40 },
-  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14 },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 40 },
+  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  goalTitle: { fontFamily: BOLD, fontSize: 13, color: INK },
-  progressTrack: { height: 6, backgroundColor: BORDER, borderRadius: 3, marginTop: 8, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: ORANGE },
-  progressText: { fontFamily: REG, fontSize: 10, color: MUTED, marginTop: 4 },
+  goalTitle: { fontFamily: BOLD, fontSize: 13, color: C.ink },
+  progressTrack: { height: 6, backgroundColor: C.line, borderRadius: 3, marginTop: 8, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: C.hot },
+  progressText: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 4 },
   detail: { marginTop: 12, gap: 8 },
   milestoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  milestoneText: { fontFamily: REG, fontSize: 12, color: INK },
+  milestoneText: { fontFamily: REG, fontSize: 12, color: C.ink },
   milestoneDone: { color: MUTED, textDecorationLine: 'line-through' },
   row: { flexDirection: 'row', gap: 8 },
-  input: { borderWidth: 1, borderColor: BORDER, borderRadius: 8, padding: 10, fontFamily: REG, fontSize: 12, color: INK },
+  input: { borderWidth: 1, borderColor: C.line, borderRadius: 8, padding: 10, fontFamily: REG, fontSize: 12, color: C.ink },
   smallBtn: { backgroundColor: ORANGE, borderRadius: 8, paddingHorizontal: 14, justifyContent: 'center' },
-  smallBtnText: { fontFamily: BOLD, fontSize: 11, color: '#FFFFFF' },
-  doneBtn: { borderWidth: 1, borderColor: GREEN, borderRadius: 8, paddingVertical: 10, alignItems: 'center', marginTop: 4 },
-  doneBtnText: { fontFamily: BOLD, fontSize: 11, color: GREEN },
+  smallBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
+  doneBtn: { borderWidth: 1, borderColor: C.live, borderRadius: 8, paddingVertical: 10, alignItems: 'center', marginTop: 4 },
+  doneBtnText: { fontFamily: BOLD, fontSize: 12, color: C.live },
   modalWrap: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)' },
   sheet: { backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14 },
-  sheetTitle: { fontFamily: BOLD, fontSize: 14, color: INK },
+  sheetTitle: { fontFamily: BOLD, fontSize: 14, color: C.ink },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: '#FFFFFF' },
+  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

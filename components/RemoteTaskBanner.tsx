@@ -17,11 +17,7 @@ import {
   type RemoteTaskAdded,
 } from '@/lib/use-remote-task-sync';
 
-const ORANGE = '#FF4D00';
-const INK = '#1A1714';
-const MUTED = '#8C857B';
-const CARD = '#FCFBF9';
-const BORDER = '#E5E1DA';
+import { C, F } from '@/lib/theme';
 const VISIBLE_MS = 3800;
 
 export function RemoteTaskBanner() {
@@ -70,7 +66,7 @@ export function RemoteTaskBanner() {
       style={[styles.wrap, { top: insets.top + 8, transform: [{ translateY }] }]}
     >
       <TouchableOpacity activeOpacity={0.9} onPress={dismiss} style={styles.card}>
-        <MaterialCommunityIcons name="bell-ring-outline" size={20} color={ORANGE} />
+        <MaterialCommunityIcons name="bell-ring-outline" size={20} color={C.hot} />
         <Text style={styles.body} numberOfLines={2}>
           <Text style={styles.title}>New task from your device{'\n'}</Text>
           <Text style={styles.label}>{label}</Text>
@@ -92,12 +88,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: CARD,
+    backgroundColor: C.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: C.line,
     borderLeftWidth: 4,
-    borderLeftColor: ORANGE,
+    borderLeftColor: C.hot,
     paddingVertical: 12,
     paddingHorizontal: 14,
     ...Platform.select({
@@ -111,6 +107,6 @@ const styles = StyleSheet.create({
     }),
   },
   body: { flex: 1 },
-  title: { fontFamily: 'PixeloidSans_700Bold', fontSize: 11, color: MUTED },
-  label: { fontFamily: 'PixeloidSans_700Bold', fontSize: 14, color: INK },
+  title: { fontFamily: F.mono, fontSize: 12, color: C.dim },
+  label: { fontFamily: F.mono, fontSize: 14, color: C.ink },
 });

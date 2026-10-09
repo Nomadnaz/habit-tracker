@@ -20,12 +20,9 @@ import Svg, { Rect } from 'react-native-svg';
 import type { Waypoint } from '@/lib/activity-data';
 import { ATTRIBUTION, TILE_SIZE, fitRoute, tileUrl, toPanel } from '@/lib/mapTiles';
 
-const INK   = '#1A1714';
-const GRID  = '#DCD5C9';
-const PAPER = '#FCFBF9';
-const MUTED = '#8C857B';
-const BOLD  = 'PixeloidSans_700Bold';
-const REG   = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const BOLD = F.mono;
+const REG = F.mono;
 
 const FRAME_MS = 40;
 
@@ -177,26 +174,26 @@ export function PixelRouteMap({
           {/* Without tiles, a graticule so the route still reads as plotted. */}
           {!showBasemap && Array.from({ length: Math.floor(rows / 4) + 1 }, (_, r) =>
             Array.from({ length: Math.floor(cols / 4) + 1 }, (_, c) => (
-              <Rect key={`g${r}-${c}`} x={c * 4 * cell} y={r * 4 * cell} width={1} height={1} fill={GRID} />
+              <Rect key={`g${r}-${c}`} x={c * 4 * cell} y={r * 4 * cell} width={1} height={1} fill={C.raised} />
             )),
           )}
 
           {cells.slice(0, revealed).map((c, i) => (
-            <Rect key={i} x={c.x * cell} y={c.y * cell} width={cell} height={cell} fill={INK} />
+            <Rect key={i} x={c.x * cell} y={c.y * cell} width={cell} height={cell} fill={C.hot} />
           ))}
 
           {/* Start: a hollow square. Only drawn once the head has reached it. */}
           {revealed > 0 && (
             <Rect
               x={(start.x - 1) * cell} y={(start.y - 1) * cell}
-              width={cell * 3} height={cell * 3} fill="none" stroke={INK} strokeWidth={cell}
+              width={cell * 3} height={cell * 3} fill="none" stroke={C.ink} strokeWidth={cell}
             />
           )}
           {/* End: filled, and only once the line has actually got there. */}
           {finished && (
             <Rect
               x={(end.x - 1) * cell} y={(end.y - 1) * cell}
-              width={cell * 3} height={cell * 3} fill={INK}
+              width={cell * 3} height={cell * 3} fill={C.hot}
             />
           )}
         </Svg>
@@ -217,16 +214,16 @@ export function PixelRouteMap({
 }
 
 const s = StyleSheet.create({
-  panel: { overflow: 'hidden', backgroundColor: PAPER, borderWidth: 1, borderColor: GRID },
+  panel: { overflow: 'hidden', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
   wash: { position: 'absolute', left: 0, top: 0, backgroundColor: 'rgba(252,251,249,0.20)' },
 
-  empty: { borderWidth: 1, borderColor: GRID, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { fontFamily: REG, fontSize: 9, color: MUTED, letterSpacing: 1 },
+  empty: { borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { fontFamily: REG, fontSize: 10, color: C.dim, letterSpacing: 1 },
 
   legend: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
   scale: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  scaleBar: { height: 3, borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, borderColor: INK },
-  scaleText: { fontFamily: BOLD, fontSize: 8, color: INK, letterSpacing: 0.5 },
-  legendText: { fontFamily: REG, fontSize: 8, color: MUTED, letterSpacing: 0.5 },
-  attribution: { fontFamily: REG, fontSize: 7, color: MUTED, letterSpacing: 0.5, marginTop: 3 },
+  scaleBar: { height: 3, borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, borderColor: C.lineHi },
+  scaleText: { fontFamily: BOLD, fontSize: 9, color: C.ink, letterSpacing: 0.5 },
+  legendText: { fontFamily: REG, fontSize: 9, color: C.dim, letterSpacing: 0.5 },
+  attribution: { fontFamily: REG, fontSize: 8, color: C.dim, letterSpacing: 0.5, marginTop: 3 },
 });

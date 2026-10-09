@@ -27,13 +27,10 @@ import {
   type UnitSystem,
 } from '@/lib/unit-preference';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const FAINT  = '#C7C1B8';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const GREEN  = '#4CAF50';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const INK    = C.ink;
+const GREEN  = C.live;
 
 const MUSCLE_GROUPS = [
   'chest','lats','upper back','traps','shoulders',
@@ -80,7 +77,7 @@ function WeightRepsInputs({
           onChangeText={t => onWeightChange(sanitizeWeight(t))}
           keyboardType="decimal-pad"
           placeholder="0"
-          placeholderTextColor={FAINT}
+          placeholderTextColor={C.faint}
         />
         <Text style={s.weightUnit}>{unitLabel}</Text>
       </View>
@@ -92,7 +89,7 @@ function WeightRepsInputs({
           onChangeText={t => onRepsChange(sanitizeReps(t))}
           keyboardType="number-pad"
           placeholder="0"
-          placeholderTextColor={FAINT}
+          placeholderTextColor={C.faint}
           maxLength={3}
         />
         <Text style={s.repsUnit}>REPS</Text>
@@ -196,7 +193,7 @@ function MusclePicker({
         <MaterialCommunityIcons
           name={open ? 'chevron-up' : 'chevron-down'}
           size={18}
-          color={MUTED}
+          color={C.dim}
         />
       </TouchableOpacity>
 
@@ -207,7 +204,7 @@ function MusclePicker({
             value={query}
             onChangeText={setQuery}
             placeholder="SEARCH MUSCLES..."
-            placeholderTextColor={FAINT}
+            placeholderTextColor={C.faint}
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -225,7 +222,7 @@ function MusclePicker({
                     {m.toUpperCase()}
                   </Text>
                   {on && (
-                    <MaterialCommunityIcons name="check" size={14} color="#FFFFFF" />
+                    <MaterialCommunityIcons name="check" size={14} color={C.onHot} />
                   )}
                 </TouchableOpacity>
               );
@@ -272,7 +269,7 @@ function PBChart({ entries }: { entries: PBEntry[] }) {
             key={i}
             points={`${p.x},${p.y} ${next.x},${p.y} ${next.x},${next.y}`}
             fill="none"
-            stroke={ORANGE}
+            stroke={C.hot}
             strokeWidth={2}
             strokeDasharray="3 2"
           />
@@ -283,8 +280,8 @@ function PBChart({ entries }: { entries: PBEntry[] }) {
         <Circle
           key={i}
           cx={p.x} cy={p.y} r={3}
-          fill={i === pts.length - 1 ? ORANGE : '#FCFBF9'}
-          stroke={ORANGE}
+          fill={i === pts.length - 1 ? C.hot : C.surface}
+          stroke={C.hot}
           strokeWidth={2}
         />
       ))}
@@ -473,13 +470,13 @@ export default function WorkoutDetailScreen() {
     <SafeAreaView style={s.container} edges={['top']}>
 
       {/* Header */}
-      <View style={[s.header, { borderBottomColor: template?.colour ?? BORDER }]}>
+      <View style={[s.header, { borderBottomColor: template?.colour ?? C.line }]}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="arrow-left" size={20} color={ORANGE} />
+          <MaterialCommunityIcons name="arrow-left" size={20} color={C.hot} />
         </TouchableOpacity>
         <View style={s.titleWrap}>
-          <View style={[s.colourDot, { backgroundColor: template?.colour ?? ORANGE }]} />
+          <View style={[s.colourDot, { backgroundColor: template?.colour ?? C.hot }]} />
           <Text style={s.title}>{template?.name ?? '...'}</Text>
         </View>
         <TouchableOpacity
@@ -487,7 +484,7 @@ export default function WorkoutDetailScreen() {
           onPress={toggleDone}
           activeOpacity={0.85}
         >
-          <MaterialCommunityIcons name={done ? 'check-circle' : 'circle-outline'} size={16} color={done ? '#FFFFFF' : ORANGE} />
+          <MaterialCommunityIcons name={done ? 'check-circle' : 'circle-outline'} size={16} color={done ? C.onHot : C.hot} />
           <Text style={[s.doneBtnText, done && s.doneBtnTextActive]}>
             {done ? 'DONE!' : 'MARK DONE'}
           </Text>
@@ -505,7 +502,7 @@ export default function WorkoutDetailScreen() {
           const jct = junctions[i];
           return (
             <View key={ex.id} style={s.exRow}>
-              <View style={[s.indexBubble, { backgroundColor: template?.colour ?? ORANGE }]}>
+              <View style={[s.indexBubble, { backgroundColor: template?.colour ?? C.hot }]}>
                 <Text style={s.indexText}>{i + 1}</Text>
               </View>
               {/* Tap name → edit + PB modal */}
@@ -519,14 +516,14 @@ export default function WorkoutDetailScreen() {
                 onPress={() => handleRemove(jct.id)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <MaterialCommunityIcons name="minus-circle-outline" size={20} color={FAINT} />
+                <MaterialCommunityIcons name="minus-circle-outline" size={20} color={C.faint} />
               </TouchableOpacity>
             </View>
           );
         })}
 
         <TouchableOpacity style={s.addRow} onPress={() => setAddOpen(true)} activeOpacity={0.8}>
-          <MaterialCommunityIcons name="plus-circle-outline" size={18} color={ORANGE} />
+          <MaterialCommunityIcons name="plus-circle-outline" size={18} color={C.hot} />
           <Text style={s.addText}>ADD EXERCISE</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -547,7 +544,7 @@ export default function WorkoutDetailScreen() {
                   onChangeText={setEditName}
                   autoCapitalize="characters"
                   placeholder="EXERCISE NAME"
-                  placeholderTextColor={FAINT}
+                  placeholderTextColor={C.faint}
                 />
 
                 <WeightRepsInputs
@@ -574,7 +571,7 @@ export default function WorkoutDetailScreen() {
                   <Text style={s.pbDropdownLabel}>
                     PERSONAL BEST{currentPB !== null ? `  ·  ${formatWeightWithUnit(currentPB, unitSystem)}` : ''}
                   </Text>
-                  <MaterialCommunityIcons name={pbOpen ? 'chevron-up' : 'chevron-down'} size={18} color={MUTED} />
+                  <MaterialCommunityIcons name={pbOpen ? 'chevron-up' : 'chevron-down'} size={18} color={C.dim} />
                 </TouchableOpacity>
 
                 {pbOpen && (
@@ -591,7 +588,7 @@ export default function WorkoutDetailScreen() {
                         value={pbInput}
                         onChangeText={setPbInput}
                         placeholder={weightUnitLabel(unitSystem)}
-                        placeholderTextColor={FAINT}
+                        placeholderTextColor={C.faint}
                         keyboardType="decimal-pad"
                       />
                       <TouchableOpacity style={s.pbLogBtn} onPress={handleLogPB}>
@@ -608,7 +605,7 @@ export default function WorkoutDetailScreen() {
                               {formatWeightWithUnit(entry.weightKg, unitSystem)}{entry.weightKg === currentPB ? ' 🏆' : ''}
                             </Text>
                             <TouchableOpacity onPress={() => handleDeletePB(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                              <MaterialCommunityIcons name="close" size={14} color={FAINT} />
+                              <MaterialCommunityIcons name="close" size={14} color={C.faint} />
                             </TouchableOpacity>
                           </View>
                         ))}
@@ -652,7 +649,7 @@ export default function WorkoutDetailScreen() {
                       value={search}
                       onChangeText={setSearch}
                       placeholder="SEARCH..."
-                      placeholderTextColor={FAINT}
+                      placeholderTextColor={C.faint}
                       autoCapitalize="characters"
                     />
                     <View style={{ maxHeight: 260 }}>
@@ -664,7 +661,7 @@ export default function WorkoutDetailScreen() {
                               <Text style={s.libName}>{e.name}</Text>
                               <Text style={s.libMeta}>{(e.muscleGroups ?? []).join(', ').toUpperCase()}  ·  {e.sets} × {e.reps}</Text>
                             </View>
-                            <MaterialCommunityIcons name="plus" size={20} color={ORANGE} />
+                            <MaterialCommunityIcons name="plus" size={20} color={C.hot} />
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
@@ -677,7 +674,7 @@ export default function WorkoutDetailScreen() {
                       value={newName}
                       onChangeText={setNewName}
                       placeholder="EXERCISE NAME"
-                      placeholderTextColor={FAINT}
+                      placeholderTextColor={C.faint}
                       autoCapitalize="characters"
                       autoFocus
                     />
@@ -713,38 +710,38 @@ export default function WorkoutDetailScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F2ED' },
+  container: { flex: 1, backgroundColor: C.surface },
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 2 },
   backBtn: { padding: 4 },
   titleWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginLeft: 8 },
   colourDot: { width: 12, height: 12, borderRadius: 6 },
-  title: { fontFamily: 'PixeloidSans_700Bold', fontSize: 16, color: INK, letterSpacing: 1 },
-  doneBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderColor: ORANGE, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
-  doneBtnActive: { backgroundColor: GREEN, borderColor: GREEN },
-  doneBtnText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 9, color: ORANGE, letterSpacing: 1 },
-  doneBtnTextActive: { color: '#FFFFFF' },
+  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
+  doneBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderColor: C.hot, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
+  doneBtnActive: { backgroundColor: GREEN, borderColor: C.live },
+  doneBtnText: { fontFamily: F.mono, fontSize: 10, color: C.hot, letterSpacing: 1 },
+  doneBtnTextActive: { color: C.surface },
 
   scroll: { padding: 16, paddingBottom: 40 },
-  countLabel: { fontFamily: 'PixeloidSans_400Regular', fontSize: 8, color: FAINT, letterSpacing: 1, marginBottom: 14 },
-  empty: { fontFamily: 'PixeloidSans_400Regular', fontSize: 10, color: MUTED, textAlign: 'center', marginVertical: 16 },
+  countLabel: { fontFamily: F.mono, fontSize: 9, color: C.faint, letterSpacing: 1, marginBottom: 14 },
+  empty: { fontFamily: F.mono, fontSize: 11, color: C.dim, textAlign: 'center', marginVertical: 16 },
 
-  exRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 14, marginBottom: 10 },
+  exRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 10 },
   indexBubble: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  indexText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 11, color: '#FFFFFF' },
+  indexText: { fontFamily: F.mono, fontSize: 12, color: C.onHot },
   exBody: { flex: 1 },
-  exName: { fontFamily: 'PixeloidSans_700Bold', fontSize: 12, color: INK, letterSpacing: 1 },
-  exMeta: { fontFamily: 'PixeloidSans_400Regular', fontSize: 8, color: MUTED, marginTop: 4, letterSpacing: 1 },
+  exName: { fontFamily: F.mono, fontSize: 12, color: C.ink, letterSpacing: 1 },
+  exMeta: { fontFamily: F.mono, fontSize: 9, color: C.dim, marginTop: 4, letterSpacing: 1 },
 
-  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: ORANGE, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 14, marginTop: 6 },
-  addText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 10, color: ORANGE, letterSpacing: 1 },
+  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 14, marginTop: 6 },
+  addText: { fontFamily: F.mono, fontSize: 11, color: C.hot, letterSpacing: 1 },
 
   // ── Shared modal shell ─────────────────────────────────────────────────
   kvFill: { flex: 1 },
   centreBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   centreCard: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.surface,
     borderRadius: 16,
     padding: 20,
     maxHeight: '88%',
@@ -760,32 +757,32 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 999,
     borderWidth: 2,
-    borderColor: ORANGE,
+    borderColor: C.hot,
     overflow: 'hidden',
-    backgroundColor: CARD,
+    backgroundColor: C.surface,
   },
-  unitPill: { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: CARD },
+  unitPill: { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: C.surface },
   unitPillLeft: { borderTopLeftRadius: 999, borderBottomLeftRadius: 999 },
   unitPillRight: { borderTopRightRadius: 999, borderBottomRightRadius: 999 },
   unitPillActive: { backgroundColor: ORANGE },
-  unitPillText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 8, color: MUTED, letterSpacing: 1 },
-  unitPillTextActive: { color: '#FFFFFF' },
+  unitPillText: { fontFamily: F.mono, fontSize: 9, color: C.dim, letterSpacing: 1 },
+  unitPillTextActive: { color: C.surface },
 
   // ── Edit form fields ───────────────────────────────────────────────────
   editNameInput: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 15,
-    color: INK,
+    color: C.ink,
     borderBottomWidth: 2,
-    borderBottomColor: BORDER,
+    borderBottomColor: C.line,
     paddingVertical: 8,
     marginBottom: 18,
     paddingRight: 76,
   },
   createNameInput: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 22,
-    color: INK,
+    color: C.ink,
     paddingVertical: 10,
     marginBottom: 18,
     paddingHorizontal: 76,
@@ -793,39 +790,39 @@ const s = StyleSheet.create({
     alignSelf: 'stretch',
     width: '100%',
   },
-  fieldLabel: { fontFamily: 'PixeloidSans_400Regular', fontSize: 8, color: MUTED, letterSpacing: 1, marginBottom: 8 },
+  fieldLabel: { fontFamily: F.mono, fontSize: 9, color: C.dim, letterSpacing: 1, marginBottom: 8 },
   fieldLabelCenter: { textAlign: 'center', alignSelf: 'stretch' },
   weightRepsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 18 },
   weightBox: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end', minWidth: 100 },
   weightInput: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.num,
     fontSize: 36,
-    color: INK,
+    color: C.ink,
     paddingVertical: 0,
     paddingHorizontal: 0,
     minWidth: 56,
     textAlign: 'right',
   },
-  weightUnit: { fontFamily: 'PixeloidSans_700Bold', fontSize: 14, color: MUTED, marginLeft: 4, paddingBottom: 4 },
-  weightRepsX: { fontFamily: 'PixeloidSans_700Bold', fontSize: 28, color: MUTED, paddingTop: 6 },
+  weightUnit: { fontFamily: F.mono, fontSize: 14, color: C.dim, marginLeft: 4, paddingBottom: 4 },
+  weightRepsX: { fontFamily: F.mono, fontSize: 28, color: C.dim, paddingTop: 6 },
   repsField: { flexDirection: 'row', alignItems: 'baseline', minWidth: 72 },
   repsInput: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.dot,
     fontSize: 28,
-    color: INK,
+    color: C.ink,
     paddingVertical: 0,
     paddingHorizontal: 0,
     minWidth: 40,
     textAlign: 'left',
     marginTop: 6,
   },
-  repsUnit: { fontFamily: 'PixeloidSans_700Bold', fontSize: 11, color: MUTED, marginLeft: 4, paddingBottom: 2 },
+  repsUnit: { fontFamily: F.mono, fontSize: 12, color: C.dim, marginLeft: 4, paddingBottom: 2 },
   repsInputStandalone: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.dot,
     fontSize: 22,
-    color: INK,
+    color: C.ink,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: C.line,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -838,27 +835,27 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: C.line,
     borderRadius: 8,
-    backgroundColor: CARD,
+    backgroundColor: C.surface,
     paddingHorizontal: 12,
     paddingVertical: 11,
   },
-  muscleDropdownText: { flex: 1, fontFamily: 'PixeloidSans_400Regular', fontSize: 11, color: INK, marginRight: 8 },
+  muscleDropdownText: { flex: 1, fontFamily: F.mono, fontSize: 12, color: C.ink, marginRight: 8 },
   musclePanel: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: C.line,
     borderRadius: 8,
-    backgroundColor: CARD,
+    backgroundColor: C.surface,
     overflow: 'hidden',
   },
   muscleSearch: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 12,
-    color: INK,
+    color: C.ink,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomColor: C.line,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -870,11 +867,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER,
+    borderBottomColor: C.line,
   },
   muscleOptionOn: { backgroundColor: ORANGE },
-  muscleOptionText: { fontFamily: 'PixeloidSans_400Regular', fontSize: 11, color: INK },
-  muscleOptionTextOn: { color: '#FFFFFF', fontFamily: 'PixeloidSans_700Bold' },
+  muscleOptionText: { fontFamily: F.mono, fontSize: 12, color: C.ink },
+  muscleOptionTextOn: { color: C.surface, fontFamily: F.mono },
   setRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -892,42 +889,42 @@ const s = StyleSheet.create({
   },
   setCircleActive: { backgroundColor: ORANGE },
   setChipText: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 10,
-    color: INK,
+    color: C.ink,
     textAlign: 'center',
     minWidth: 28,
     lineHeight: Platform.OS === 'android' ? 28 : 12,
     ...(Platform.OS === 'android' ? { includeFontPadding: false, textAlignVertical: 'center' as const } : {}),
   },
-  setChipTextActive: { color: '#FCFBF9' },
+  setChipTextActive: { color: C.surface },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 13, alignItems: 'center', marginBottom: 2 },
-  saveBtnText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 11, color: '#FFFFFF', letterSpacing: 1 },
+  saveBtnText: { fontFamily: F.mono, fontSize: 12, color: C.onHot, letterSpacing: 1 },
 
   // ── PB section ─────────────────────────────────────────────────────────
-  pbDivider: { height: 1, backgroundColor: BORDER, marginVertical: 14 },
+  pbDivider: { height: 1, backgroundColor: C.line, marginVertical: 14 },
   pbDropdownBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
-  pbDropdownLabel: { fontFamily: 'PixeloidSans_700Bold', fontSize: 10, color: INK, letterSpacing: 1 },
+  pbDropdownLabel: { fontFamily: F.mono, fontSize: 11, color: C.ink, letterSpacing: 1 },
   chartWrap: { alignItems: 'center', marginBottom: 12 },
   pbInputRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'center' },
-  pbWeightInput: { flex: 1, fontFamily: 'PixeloidSans_700Bold', fontSize: 18, color: INK, borderBottomWidth: 2, borderBottomColor: BORDER, paddingVertical: 8, textAlign: 'center' },
+  pbWeightInput: { flex: 1, fontFamily: F.num, fontSize: 18, color: C.ink, borderBottomWidth: 2, borderBottomColor: C.line, paddingVertical: 8, textAlign: 'center' },
   pbLogBtn: { backgroundColor: ORANGE, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10 },
-  pbLogBtnText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 10, color: '#FFFFFF', letterSpacing: 1 },
-  pbList: { borderTopWidth: 1, borderTopColor: BORDER, paddingTop: 10 },
-  pbRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: BORDER },
-  pbDate: { fontFamily: 'PixeloidSans_400Regular', fontSize: 9, color: MUTED, flex: 1 },
-  pbWeight: { fontFamily: 'PixeloidSans_700Bold', fontSize: 12, color: INK, marginRight: 12 },
+  pbLogBtnText: { fontFamily: F.mono, fontSize: 11, color: C.onHot, letterSpacing: 1 },
+  pbList: { borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 },
+  pbRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line },
+  pbDate: { fontFamily: F.mono, fontSize: 10, color: C.dim, flex: 1 },
+  pbWeight: { fontFamily: F.mono, fontSize: 12, color: C.ink, marginRight: 12 },
   pbWeightBest: { color: ORANGE },
 
   // ── Add exercise modal ─────────────────────────────────────────────────
-  tabRow: { flexDirection: 'row', marginBottom: 16, borderRadius: 8, backgroundColor: '#F5F2ED', padding: 4 },
+  tabRow: { flexDirection: 'row', marginBottom: 16, borderRadius: 8, backgroundColor: C.surface, padding: 4 },
   tabRowBelowToggle: { marginTop: 34 },
   tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
-  tabActive: { backgroundColor: '#FFFFFF' },
-  tabText: { fontFamily: 'PixeloidSans_700Bold', fontSize: 9, color: MUTED, letterSpacing: 1 },
+  tabActive: { backgroundColor: C.surface },
+  tabText: { fontFamily: F.mono, fontSize: 10, color: C.dim, letterSpacing: 1 },
   tabTextActive: { color: INK },
-  search: { fontFamily: 'PixeloidSans_400Regular', fontSize: 12, color: INK, borderBottomWidth: 2, borderBottomColor: BORDER, paddingVertical: 8, marginBottom: 10 },
-  libRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: BORDER },
-  libName: { fontFamily: 'PixeloidSans_700Bold', fontSize: 11, color: INK },
-  libMeta: { fontFamily: 'PixeloidSans_400Regular', fontSize: 8, color: MUTED, marginTop: 3, letterSpacing: 1 },
+  search: { fontFamily: F.mono, fontSize: 12, color: C.ink, borderBottomWidth: 2, borderBottomColor: C.line, paddingVertical: 8, marginBottom: 10 },
+  libRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line },
+  libName: { fontFamily: F.mono, fontSize: 12, color: C.ink },
+  libMeta: { fontFamily: F.mono, fontSize: 9, color: C.dim, marginTop: 3, letterSpacing: 1 },
 });

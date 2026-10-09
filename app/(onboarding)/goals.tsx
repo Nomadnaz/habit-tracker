@@ -10,13 +10,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import OnboardingShell from '@/components/OnboardingShell';
 import { updateAnswers } from '@/lib/onboarding-data';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const ORANGE = '#FF4D00';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const REG    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const REG = F.mono;
+const BOLD = F.mono;
 
 const GOALS: { key: string; label: string; icon: string }[] = [
   { key: 'fitness', label: 'Get fitter', icon: 'dumbbell' },
@@ -46,7 +43,7 @@ export default function Goals() {
         const active = selected.includes(g.key);
         return (
           <TouchableOpacity key={g.key} style={[styles.row, active && styles.rowActive]} onPress={() => toggle(g.key)}>
-            <MaterialCommunityIcons name={g.icon as any} size={20} color={active ? '#FFFFFF' : ORANGE} />
+            <MaterialCommunityIcons name={g.icon as any} size={20} color={active ? C.onHot : C.hot} />
             <Text style={[styles.label, active && styles.labelActive]}>{g.label}</Text>
           </TouchableOpacity>
         );
@@ -58,9 +55,9 @@ export default function Goals() {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14,
-    borderRadius: 10, borderWidth: 1, borderColor: BORDER, backgroundColor: CARD,
+    borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
   },
-  rowActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  label: { fontFamily: REG, fontSize: 13, color: INK },
-  labelActive: { color: '#FFFFFF', fontFamily: BOLD },
+  rowActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  label: { fontFamily: REG, fontSize: 13, color: C.ink },
+  labelActive: { color: C.surface, fontFamily: BOLD },
 });

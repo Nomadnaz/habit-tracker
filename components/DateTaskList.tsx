@@ -36,6 +36,7 @@ import { TaskRow } from '@/components/TaskRow';
 import { DragTaskFloatingChip } from '@/components/DragTaskFloatingChip';
 import { useTaskDragFloat } from '@/lib/task-drag-float';
 
+import { C, F } from '@/lib/theme';
 type DateTaskListProps = {
   dateKey: string;
   taskMap: TaskMap;
@@ -460,17 +461,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyTitle: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.dot,
     fontSize: 13,
-    color: '#8C857B',
+    color: C.dim,
     letterSpacing: 1,
     marginBottom: 8,
   },
   emptyHint: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 13,
     lineHeight: 19,
-    color: '#C7C1B8',
+    color: C.faint,
   },
   insertionEnd: {},
   insertionGhost: {
@@ -478,20 +479,20 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: '#FF4D00',
+    borderColor: C.hot,
     borderRadius: 4,
     backgroundColor: 'rgba(255, 77, 0, 0.06)',
   },
   addRow: {
     borderTopWidth: 1,
-    borderTopColor: '#E5E1DA',
+    borderTopColor: C.line,
     paddingTop: 16,
     marginTop: 4,
   },
   addText: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 13,
-    color: '#FF4D00',
+    color: C.hot,
     letterSpacing: 0.5,
   },
 });

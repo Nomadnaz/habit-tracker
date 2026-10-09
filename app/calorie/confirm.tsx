@@ -18,15 +18,10 @@ import * as Haptics from 'expo-haptics';
 
 import { addMeal, updateMeal, todayKey, MEAL_TYPES, type MealType } from '@/lib/meals-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const FAINT  = '#C7C1B8';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const BOLD = F.mono;
+const REG = F.mono;
 
 function str(v: string | string[] | undefined): string {
   return Array.isArray(v) ? (v[0] ?? '') : (v ?? '');
@@ -43,7 +38,7 @@ function NumField({ label, value, onChange }: { label: string; value: string; on
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         style={styles.input} value={value} onChangeText={onChange}
-        keyboardType="number-pad" placeholder="0" placeholderTextColor={FAINT}
+        keyboardType="number-pad" placeholder="0" placeholderTextColor={C.faint}
       />
     </View>
   );
@@ -90,7 +85,7 @@ export default function ConfirmScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+            <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
           </TouchableOpacity>
           <Text style={styles.title}>{editingId ? 'EDIT MEAL' : 'LOG MEAL'}</Text>
           <View style={{ width: 26 }} />
@@ -99,7 +94,7 @@ export default function ConfirmScreen() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {isAiEstimate && (
             <View style={styles.estimateBanner}>
-              <MaterialCommunityIcons name="auto-fix" size={14} color={ORANGE} />
+              <MaterialCommunityIcons name="auto-fix" size={14} color={C.hot} />
               <Text style={styles.estimateText}>AI ESTIMATE — TAP ANY NUMBER TO ADJUST</Text>
             </View>
           )}
@@ -109,7 +104,7 @@ export default function ConfirmScreen() {
           <Text style={styles.fieldLabel}>NAME</Text>
           <TextInput
             style={styles.input} value={name} onChangeText={setName}
-            placeholder="e.g. Chicken & rice" placeholderTextColor={FAINT}
+            placeholder="e.g. Chicken & rice" placeholderTextColor={C.faint}
           />
 
           <Text style={styles.fieldLabel}>MEAL</Text>
@@ -149,31 +144,31 @@ export default function ConfirmScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK, letterSpacing: 1 },
+  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 18, paddingBottom: 20 },
 
-  estimateBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFF1EC', borderRadius: 8, padding: 8, marginBottom: 12 },
-  estimateText: { flex: 1, fontFamily: REG, fontSize: 10, color: '#A33C22', letterSpacing: 0.5 },
+  estimateBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.raised, borderRadius: 8, padding: 8, marginBottom: 12 },
+  estimateText: { flex: 1, fontFamily: REG, fontSize: 11, color: '#A33C22', letterSpacing: 0.5 },
   photo: { width: '100%', height: 180, borderRadius: 12, marginBottom: 14 },
 
-  fieldLabel: { fontFamily: REG, fontSize: 10, color: MUTED, letterSpacing: 1, marginBottom: 4 },
+  fieldLabel: { fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 1, marginBottom: 4 },
   input: {
-    borderWidth: 1, borderColor: BORDER, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-    fontFamily: REG, fontSize: 15, color: INK, backgroundColor: CARD, marginBottom: 12,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    fontFamily: REG, fontSize: 15, color: C.ink, backgroundColor: C.surface, marginBottom: 12,
   },
   typeRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
-  typePill: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: BORDER, backgroundColor: CARD },
-  typePillActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  typePillText: { fontFamily: REG, fontSize: 10, color: MUTED, letterSpacing: 0.5 },
-  typePillTextActive: { color: '#FFF', fontFamily: BOLD },
+  typePill: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  typePillActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  typePillText: { fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 0.5 },
+  typePillTextActive: { color: C.surface, fontFamily: BOLD },
   numGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   numCell: { width: '47%' },
 
   actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingBottom: 18, paddingTop: 6 },
-  cancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: BORDER },
-  cancelText: { fontFamily: BOLD, fontSize: 12, color: MUTED, letterSpacing: 1 },
-  saveBtn: { flex: 2, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, backgroundColor: ORANGE },
-  saveText: { fontFamily: BOLD, fontSize: 13, color: '#FFF', letterSpacing: 1 },
+  cancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: C.line },
+  cancelText: { fontFamily: BOLD, fontSize: 12, color: C.dim, letterSpacing: 1 },
+  saveBtn: { flex: 2, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, backgroundColor: C.hot },
+  saveText: { fontFamily: BOLD, fontSize: 13, color: C.onHot, letterSpacing: 1 },
 });

@@ -15,6 +15,7 @@ import {
 import { getTaskMetaParts } from '@/lib/task-schedule';
 import { PixelLocationPin } from '@/components/PixelLocationPin';
 
+import { C, F } from '@/lib/theme';
 export function InsertionGhost() {
   return <View style={styles.insertionGhost} />;
 }
@@ -158,7 +159,7 @@ export function TaskRow({
                 <Text style={[styles.taskMeta, styles.taskMetaSep, task.done && styles.taskMetaDone]}>
                   {' · '}
                 </Text>
-                <PixelLocationPin color={task.done ? '#B8B5B0' : '#FF4D00'} />
+                <PixelLocationPin color={task.done ? C.dim : C.hot} />
                 <Text
                   style={[styles.taskMeta, styles.taskMetaLocation, task.done && styles.taskMetaDone]}
                   numberOfLines={1}
@@ -180,7 +181,7 @@ export function TaskRow({
           <MaterialCommunityIcons
             name="pencil-outline"
             size={12}
-            color="#FF4D00"
+            color={C.hot}
             style={styles.editModePencil}
           />
           <TouchableOpacity
@@ -189,7 +190,7 @@ export function TaskRow({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             activeOpacity={0.7}
           >
-            <MaterialCommunityIcons name="minus-circle" size={26} color="#E03030" />
+            <MaterialCommunityIcons name="minus-circle" size={26} color={C.alert} />
           </TouchableOpacity>
         </>
       ) : (
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: '#FF4D00',
+    borderColor: C.hot,
     borderRadius: 4,
     backgroundColor: 'rgba(255, 77, 0, 0.06)',
   },
@@ -263,7 +264,7 @@ const styles = StyleSheet.create({
     height: 24,
     marginTop: 2,
     borderWidth: 2,
-    borderColor: '#1A1714',
+    borderColor: C.lineHi,
     marginRight: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -271,25 +272,25 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   checkboxDone: {
-    backgroundColor: '#FF4D00',
-    borderColor: '#FF4D00',
+    backgroundColor: C.hot,
+    borderColor: C.hot,
   },
   checkmark: {
-    color: '#FCFBF9',
+    color: C.onHot,
     fontSize: 14,
     fontWeight: 'bold',
   },
   taskLabelWrap: { flex: 1 },
   taskLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 12,
     color: '#000000',
     lineHeight: 16,
   },
   taskMeta: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 9,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.dim,
     marginTop: 3,
     letterSpacing: 0.5,
   },
@@ -322,14 +323,14 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   priorityTag: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 8,
+    fontFamily: F.mono,
+    fontSize: 9,
     marginTop: 4,
     letterSpacing: 1,
   },
-  priority_HIGH: { color: '#E03030' },
-  priority_MEDIUM: { color: '#8C857B' },
-  priority_LOW: { color: '#4A9B6F' },
+  priority_HIGH: { color: C.alert },
+  priority_MEDIUM: { color: C.dim },
+  priority_LOW: { color: C.live },
   priorityIndexWrap: {
     marginLeft: 8,
     minWidth: 22,
@@ -337,7 +338,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   priorityIndexText: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 13,
     lineHeight: 16,
   },

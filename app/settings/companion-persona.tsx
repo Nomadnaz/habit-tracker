@@ -15,14 +15,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { companions, type CompanionType } from '@/lib/companions';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const BOLD = F.mono;
+const REG = F.mono;
 
 export default function CompanionPersona() {
   const router = useRouter();
@@ -91,7 +86,7 @@ export default function CompanionPersona() {
   if (!loaded) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ActivityIndicator style={{ marginTop: 40 }} color={ORANGE} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={C.hot} />
       </SafeAreaView>
     );
   }
@@ -100,7 +95,7 @@ export default function CompanionPersona() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="chevron-left" size={24} color={INK} />
+          <MaterialCommunityIcons name="chevron-left" size={24} color={C.ink} />
         </TouchableOpacity>
         <Text style={styles.title}>{cfg?.defaultName ?? 'COMPANION'}</Text>
         <View style={{ width: 24 }} />
@@ -111,7 +106,7 @@ export default function CompanionPersona() {
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.photo} />
           ) : (
-            <MaterialCommunityIcons name="account-circle-outline" size={64} color={MUTED} />
+            <MaterialCommunityIcons name="account-circle-outline" size={64} color={C.dim} />
           )}
           <Text style={styles.photoLabel}>TAP TO CHANGE PHOTO</Text>
         </TouchableOpacity>
@@ -119,7 +114,7 @@ export default function CompanionPersona() {
         <TextInput
           style={styles.input}
           placeholder={`Name (default: ${cfg?.defaultName ?? ''})`}
-          placeholderTextColor={MUTED}
+          placeholderTextColor={C.dim}
           value={name}
           onChangeText={setName}
         />
@@ -133,20 +128,20 @@ export default function CompanionPersona() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
   },
-  title: { fontFamily: BOLD, fontSize: 14, color: INK },
+  title: { fontFamily: BOLD, fontSize: 14, color: C.ink },
   content: { paddingHorizontal: 24, paddingTop: 16, gap: 16, alignItems: 'center' },
   photoWrap: { alignItems: 'center', gap: 8 },
   photo: { width: 72, height: 72, borderRadius: 36 },
-  photoLabel: { fontFamily: REG, fontSize: 9, color: MUTED },
+  photoLabel: { fontFamily: REG, fontSize: 10, color: C.dim },
   input: {
-    width: '100%', borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 14,
-    fontFamily: REG, fontSize: 13, color: INK, backgroundColor: CARD,
+    width: '100%', borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 14,
+    fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
-  saveBtn: { width: '100%', backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: '#FFFFFF' },
+  saveBtn: { width: '100%', backgroundColor: C.hot, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

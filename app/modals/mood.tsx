@@ -16,14 +16,11 @@ import * as Haptics from 'expo-haptics';
 import { getRecentMoodLogs, getTodayMood, logMood, pullRemoteMood, TRIGGERS, type MoodLog } from '@/lib/mood-data';
 import ChatScreen from '@/components/ChatScreen';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
 
 export default function MoodModal() {
   const router = useRouter();
@@ -57,11 +54,11 @@ export default function MoodModal() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={INK} />
+          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
         </TouchableOpacity>
         <Text style={styles.title}>MOOD</Text>
         <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
-          <MaterialCommunityIcons name="chat-processing-outline" size={20} color={ORANGE} />
+          <MaterialCommunityIcons name="chat-processing-outline" size={20} color={C.hot} />
         </TouchableOpacity>
       </View>
 
@@ -90,7 +87,7 @@ export default function MoodModal() {
             ))}
           </View>
 
-          <TextInput style={styles.input} placeholder="Note (optional)" placeholderTextColor={MUTED} value={note} onChangeText={setNote} multiline />
+          <TextInput style={styles.input} placeholder="Note (optional)" placeholderTextColor={C.dim} value={note} onChangeText={setNote} multiline />
 
           <TouchableOpacity style={styles.saveBtn} onPress={save}>
             <Text style={styles.saveBtnText}>SAVE TODAY'S MOOD</Text>
@@ -116,25 +113,25 @@ export default function MoodModal() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK },
+  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
-  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14, gap: 10 },
-  label: { fontFamily: BOLD, fontSize: 11, color: INK },
+  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
+  label: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   scaleRow: { flexDirection: 'row', gap: 4 },
-  scaleDot: { width: 20, height: 20, borderRadius: 4, backgroundColor: BORDER },
+  scaleDot: { width: 20, height: 20, borderRadius: 4, backgroundColor: C.line },
   scaleDotActive: { backgroundColor: ORANGE },
-  scaleDotStress: { backgroundColor: '#C0432B' },
+  scaleDotStress: { backgroundColor: C.alert },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: BORDER },
-  chipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  chipText: { fontFamily: REG, fontSize: 11, color: MUTED, textTransform: 'capitalize' },
-  chipTextActive: { color: '#FFFFFF', fontFamily: BOLD },
-  input: { borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: INK, minHeight: 60, textAlignVertical: 'top' },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line },
+  chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  chipText: { fontFamily: REG, fontSize: 12, color: C.dim, textTransform: 'capitalize' },
+  chipTextActive: { color: C.surface, fontFamily: BOLD },
+  input: { borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: C.ink, minHeight: 60, textAlignVertical: 'top' },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: '#FFFFFF' },
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: MUTED },
+  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
+  sectionLabel: { fontFamily: BOLD, fontSize: 12, color: C.dim },
   sparkRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 40 },
-  sparkBar: { flex: 1, backgroundColor: ORANGE, borderRadius: 2 },
+  sparkBar: { flex: 1, backgroundColor: C.hot, borderRadius: 2 },
 });

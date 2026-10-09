@@ -6,12 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { skipOnboarding } from '@/lib/onboarding-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+import { PuckMark } from '@/components/PuckMark';
+const ORANGE = C.hot;
+const BOLD = F.mono;
+const REG = F.mono;
 
 export default function Welcome() {
   const router = useRouter();
@@ -20,9 +19,8 @@ export default function Welcome() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.center}>
         <View style={styles.headerRow}>
-          <Text style={styles.bracket}>[</Text>
-          <Text style={styles.title}>HABIT{'\n'}TREE</Text>
-          <Text style={styles.bracket}>]</Text>
+          <PuckMark size={44} />
+          <Text style={styles.title}>PUCK</Text>
         </View>
         <Text style={styles.tagline}>TRACK. GROW. THRIVE.</Text>
       </View>
@@ -46,15 +44,14 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG, justifyContent: 'space-between' },
+  safe: { flex: 1, backgroundColor: C.bg, justifyContent: 'space-between' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerRow: { flexDirection: 'row', alignItems: 'center' },
-  bracket: { fontFamily: BOLD, fontSize: 32, color: ORANGE },
-  title: { fontFamily: BOLD, fontSize: 28, color: INK, textAlign: 'center', lineHeight: 32 },
-  tagline: { fontFamily: REG, fontSize: 12, color: MUTED, marginTop: 12, letterSpacing: 1 },
+  title: { fontFamily: F.dot, fontSize: 44, color: C.ink, letterSpacing: 6, marginLeft: 18 },
+  tagline: { fontFamily: REG, fontSize: 12, color: C.dim, marginTop: 12, letterSpacing: 1 },
   footer: { paddingHorizontal: 24, paddingBottom: 24, gap: 10 },
   primaryBtn: { backgroundColor: ORANGE, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
-  primaryBtnText: { fontFamily: BOLD, fontSize: 13, color: '#FFFFFF' },
+  primaryBtnText: { fontFamily: BOLD, fontSize: 13, color: C.onHot },
   secondaryBtn: { paddingVertical: 10, alignItems: 'center' },
-  secondaryBtnText: { fontFamily: REG, fontSize: 11, color: MUTED },
+  secondaryBtnText: { fontFamily: REG, fontSize: 12, color: C.dim },
 });

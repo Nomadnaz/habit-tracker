@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Modal, View, Text, StyleSheet, Animated } from 'react-native';
 
+import { C, F } from '@/lib/theme';
 type DragTaskFloatingChipProps = {
   visible: boolean;
   label: string;
@@ -58,7 +59,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#FCFBF9',
+    backgroundColor: C.surface,
     borderRadius: 8,
     zIndex: 1000,
     shadowColor: '#000',
@@ -68,12 +69,12 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   chipDanger: {
-    backgroundColor: '#FFF1F1',
+    backgroundColor: C.raised,
   },
   chipText: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 12,
-    color: '#1A1714',
+    color: C.ink,
     lineHeight: 18,
   },
 });

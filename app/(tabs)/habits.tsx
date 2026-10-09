@@ -13,7 +13,7 @@ import {
   Modal, Pressable, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -31,15 +31,12 @@ import {
 import { toDateKey } from '@/lib/dateKey';
 import HeatmapCalendar from '@/components/HeatmapCalendar';
 
+import { C, F } from '@/lib/theme';
 // ── Design tokens (identical to BODY / CALORIE pages) ───────────────────────
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+const ORANGE = C.hot;
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
 
 type Section = 'habits' | 'meds';
 type HabitRow = { habit: Habit; logs: HabitLog[] };
@@ -125,13 +122,17 @@ export default function HabitsScreen() {
   }
 
   const today = toDateKey(new Date());
+  const router = useRouter();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>{section === 'habits' ? 'HABITS' : 'MEDS'}</Text>
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <MaterialCommunityIcons name="chevron-left" size={26} color={C.ink} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { flex: 1 }]}>{section === 'habits' ? 'HABITS' : 'MEDS'}</Text>
         <TouchableOpacity onPress={() => (section === 'habits' ? setAddVisible(true) : setAddMedVisible(true))} hitSlop={12}>
-          <MaterialCommunityIcons name="plus" size={22} color={INK} />
+          <MaterialCommunityIcons name="plus" size={22} color={C.ink} />
         </TouchableOpacity>
       </View>
 
@@ -175,7 +176,7 @@ export default function HabitsScreen() {
                     <MaterialCommunityIcons
                       name={done ? 'check-circle' : 'circle-outline'}
                       size={28}
-                      color={done ? '#FFFFFF' : ORANGE}
+                      color={done ? C.onHot : C.hot}
                     />
                   </TouchableOpacity>
                 </View>
@@ -187,7 +188,7 @@ export default function HabitsScreen() {
                   <MaterialCommunityIcons
                     name={row.habit.autoFreezeEnabled ? 'snowflake' : 'snowflake-off'}
                     size={14}
-                    color={row.habit.autoFreezeEnabled ? '#3B82F6' : MUTED}
+                    color={row.habit.autoFreezeEnabled ? '#3B82F6' : C.dim}
                   />
                   <Text style={styles.freezeText}>
                     {row.habit.autoFreezeEnabled ? 'Auto-freeze on (2/month)' : 'Auto-freeze off'}
@@ -226,7 +227,7 @@ export default function HabitsScreen() {
                     <MaterialCommunityIcons
                       name={taken ? 'check-circle' : 'circle-outline'}
                       size={28}
-                      color={taken ? '#FFFFFF' : ORANGE}
+                      color={taken ? C.onHot : C.hot}
                     />
                   </TouchableOpacity>
                 </View>
@@ -245,7 +246,7 @@ export default function HabitsScreen() {
             <TextInput
               style={styles.input}
               placeholder="e.g. Read 10 pages"
-              placeholderTextColor={MUTED}
+              placeholderTextColor={C.dim}
               value={name}
               onChangeText={setName}
               autoFocus
@@ -278,7 +279,7 @@ export default function HabitsScreen() {
             <TextInput
               style={styles.input}
               placeholder="e.g. Vitamin D, Antibiotic course"
-              placeholderTextColor={MUTED}
+              placeholderTextColor={C.dim}
               value={medName}
               onChangeText={setMedName}
               autoFocus
@@ -299,7 +300,7 @@ export default function HabitsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Course length in days (optional, e.g. 7)"
-              placeholderTextColor={MUTED}
+              placeholderTextColor={C.dim}
               value={medCourseLength}
               onChangeText={setMedCourseLength}
               keyboardType="number-pad"
@@ -315,54 +316,54 @@ export default function HabitsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
   },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK },
+  title: { fontFamily: F.dot, fontSize: 30, color: C.ink, letterSpacing: 1 },
   segmentRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
   segment: {
-    flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: BORDER,
+    flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line,
     alignItems: 'center',
   },
-  segmentActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  segmentText: { fontFamily: REG, fontSize: 9, color: MUTED },
-  segmentTextActive: { color: '#FFFFFF' },
+  segmentActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  segmentText: { fontFamily: REG, fontSize: 10, color: C.dim },
+  segmentTextActive: { color: C.surface },
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
-  empty: { fontFamily: REG, fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 40 },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 40 },
   card: {
-    backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line,
     padding: 14, gap: 10,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   nameWrap: { flex: 1 },
-  habitName: { fontFamily: BOLD, fontSize: 13, color: INK },
-  streakText: { fontFamily: REG, fontSize: 10, color: MUTED, marginTop: 2 },
+  habitName: { fontFamily: BOLD, fontSize: 13, color: C.ink },
+  streakText: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 2 },
   freezeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
-  freezeText: { fontFamily: REG, fontSize: 9, color: MUTED },
+  freezeText: { fontFamily: REG, fontSize: 10, color: C.dim },
   completeBtn: {
-    width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: ORANGE,
+    width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: C.hot,
     alignItems: 'center', justifyContent: 'center', marginLeft: 12,
   },
-  completeBtnDone: { backgroundColor: ORANGE, borderColor: ORANGE },
+  completeBtnDone: { backgroundColor: ORANGE, borderColor: C.hot },
   modalWrap: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)' },
   sheet: { backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14 },
-  sheetTitle: { fontFamily: BOLD, fontSize: 14, color: INK },
+  sheetTitle: { fontFamily: BOLD, fontSize: 14, color: C.ink },
   input: {
-    borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 12,
-    fontFamily: REG, fontSize: 13, color: INK,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12,
+    fontFamily: REG, fontSize: 13, color: C.ink,
   },
   freqRow: { flexDirection: 'row', gap: 8 },
   freqChip: {
-    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: BORDER,
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: C.line,
   },
-  freqChipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  freqChipText: { fontFamily: REG, fontSize: 11, color: MUTED },
-  freqChipTextActive: { color: '#FFFFFF' },
+  freqChipActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  freqChipText: { fontFamily: REG, fontSize: 12, color: C.dim },
+  freqChipTextActive: { color: C.surface },
   saveBtn: {
-    backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center',
+    backgroundColor: C.hot, borderRadius: 10, paddingVertical: 14, alignItems: 'center',
   },
-  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: '#FFFFFF' },
+  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

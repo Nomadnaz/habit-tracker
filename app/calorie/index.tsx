@@ -22,19 +22,15 @@ import {
 } from '@/lib/meals-data';
 import ChatScreen from '@/components/ChatScreen';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const FAINT  = '#C7C1B8';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
 
 const MACROS = [
-  { key: 'proteinG' as const, label: 'PROTEIN', tKey: 'proteinG' as const, color: '#C0432B' },
-  { key: 'carbsG'   as const, label: 'CARBS',   tKey: 'carbsG'   as const, color: '#3B7A57' },
+  { key: 'proteinG' as const, label: 'PROTEIN', tKey: 'proteinG' as const, color: C.alert },
+  { key: 'carbsG'   as const, label: 'CARBS',   tKey: 'carbsG'   as const, color: C.live },
   { key: 'fatG'     as const, label: 'FAT',     tKey: 'fatG'     as const, color: '#C98A1B' },
 ];
 
@@ -109,15 +105,15 @@ export default function CalorieScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
         </TouchableOpacity>
         <Text style={styles.title}>FUEL</Text>
         <View style={styles.headerRight}>
           <TouchableOpacity onPress={() => router.push('/calorie/history')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="history" size={20} color={ORANGE} />
+            <MaterialCommunityIcons name="history" size={20} color={C.hot} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={ORANGE} />
+            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={C.hot} />
           </TouchableOpacity>
         </View>
       </View>
@@ -128,7 +124,7 @@ export default function CalorieScreen() {
             <Text style={styles.calBig}>{totals.calories.toLocaleString()}</Text>
             <Text style={styles.calGoal}>/ {calGoal.toLocaleString()} KCAL</Text>
           </View>
-          <ProgressBar value={totals.calories} goal={calGoal} color={ORANGE} />
+          <ProgressBar value={totals.calories} goal={calGoal} color={C.hot} />
 
           <View style={styles.macroGrid}>
             {MACROS.map(macro => {
@@ -151,7 +147,7 @@ export default function CalorieScreen() {
             onPress={() => router.push('/calorie/capture')}
             activeOpacity={0.85}
           >
-            <MaterialCommunityIcons name="camera" size={18} color="#FFF" />
+            <MaterialCommunityIcons name="camera" size={18} color={C.onHot} />
             <Text style={styles.actionPrimaryText}>SNAP A MEAL</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -159,7 +155,7 @@ export default function CalorieScreen() {
             onPress={() => router.push('/calorie/confirm')}
             activeOpacity={0.85}
           >
-            <MaterialCommunityIcons name="plus" size={18} color={ORANGE} />
+            <MaterialCommunityIcons name="plus" size={18} color={C.hot} />
             <Text style={styles.actionGhostText}>ADD MANUALLY</Text>
           </TouchableOpacity>
         </View>
@@ -194,14 +190,14 @@ export default function CalorieScreen() {
                 <Pressable key={m.id} style={styles.mealRow} onPress={() => openEdit(m)}>
                   {m.photoUrl
                     ? <Image source={{ uri: m.photoUrl }} style={styles.mealThumb} />
-                    : <View style={[styles.mealThumb, styles.mealThumbEmpty]}><MaterialCommunityIcons name="silverware-fork-knife" size={16} color={FAINT} /></View>}
+                    : <View style={[styles.mealThumb, styles.mealThumbEmpty]}><MaterialCommunityIcons name="silverware-fork-knife" size={16} color={C.faint} /></View>}
                   <View style={{ flex: 1 }}>
                     <Text style={styles.mealName} numberOfLines={1}>{m.name}</Text>
                     <Text style={styles.mealMacros}>P {Math.round(m.proteinG)}  ·  C {Math.round(m.carbsG)}  ·  F {Math.round(m.fatG)}</Text>
                   </View>
                   <Text style={styles.mealKcal}>{m.calories}</Text>
                   <TouchableOpacity onPress={() => confirmDelete(m)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <MaterialCommunityIcons name="close" size={16} color={MUTED} />
+                    <MaterialCommunityIcons name="close" size={16} color={C.dim} />
                   </TouchableOpacity>
                 </Pressable>
               ))}
@@ -217,53 +213,53 @@ export default function CalorieScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
   headerRight: { flexDirection: 'row', gap: 16 },
-  title: { fontFamily: BOLD, fontSize: 18, color: INK, letterSpacing: 2 },
+  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 2 },
   scroll: { paddingHorizontal: 16, paddingBottom: 20 },
 
-  card: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 14, padding: 16, marginBottom: 14 },
+  card: { backgroundColor: CARD, borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 16, marginBottom: 14 },
   calRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 8 },
-  calBig: { fontFamily: BOLD, fontSize: 34, color: INK },
-  calGoal: { fontFamily: REG, fontSize: 12, color: MUTED, letterSpacing: 1 },
+  calBig: { fontFamily: F.dot, fontSize: 34, color: C.ink },
+  calGoal: { fontFamily: REG, fontSize: 12, color: C.dim, letterSpacing: 1 },
 
-  track: { height: 8, backgroundColor: '#ECE8E1', borderRadius: 4, overflow: 'hidden' },
+  track: { height: 8, backgroundColor: C.surface, borderRadius: 4, overflow: 'hidden' },
   fill: { height: 8, borderRadius: 4 },
 
   macroGrid: { flexDirection: 'row', gap: 10, marginTop: 16 },
   macroCell: { flex: 1 },
-  macroLabel: { fontFamily: REG, fontSize: 10, color: MUTED, letterSpacing: 1, marginBottom: 3 },
-  macroVal: { fontFamily: BOLD, fontSize: 14, color: INK, marginBottom: 5 },
-  macroGoal: { fontFamily: REG, fontSize: 10, color: FAINT },
+  macroLabel: { fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 1, marginBottom: 3 },
+  macroVal: { fontFamily: BOLD, fontSize: 14, color: C.ink, marginBottom: 5 },
+  macroGoal: { fontFamily: REG, fontSize: 11, color: C.faint },
 
   actionRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 46, borderRadius: 12 },
   actionPrimary: { backgroundColor: ORANGE },
-  actionPrimaryText: { fontFamily: BOLD, fontSize: 12, color: '#FFF', letterSpacing: 1 },
-  actionGhost: { borderWidth: 1.5, borderColor: ORANGE, backgroundColor: CARD },
-  actionGhostText: { fontFamily: BOLD, fontSize: 12, color: ORANGE, letterSpacing: 1 },
+  actionPrimaryText: { fontFamily: BOLD, fontSize: 12, color: C.onHot, letterSpacing: 1 },
+  actionGhost: { borderWidth: 1.5, borderColor: C.hot, backgroundColor: C.surface },
+  actionGhostText: { fontFamily: BOLD, fontSize: 12, color: C.hot, letterSpacing: 1 },
 
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: MUTED, letterSpacing: 2, marginBottom: 8, marginTop: 4 },
+  sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.dim, letterSpacing: 2, marginBottom: 8, marginTop: 4 },
 
   chipRow: { gap: 8, paddingBottom: 14 },
-  chip: { backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, maxWidth: 140 },
-  chipName: { fontFamily: REG, fontSize: 12, color: INK },
-  chipKcal: { fontFamily: REG, fontSize: 10, color: MUTED, marginTop: 2 },
+  chip: { backgroundColor: CARD, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, maxWidth: 140 },
+  chipName: { fontFamily: REG, fontSize: 12, color: C.ink },
+  chipKcal: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 2 },
 
-  empty: { fontFamily: REG, fontSize: 13, color: MUTED, paddingVertical: 12 },
+  empty: { fontFamily: REG, fontSize: 13, color: C.dim, paddingVertical: 12 },
 
   group: { marginBottom: 14 },
   groupHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  groupTitle: { fontFamily: BOLD, fontSize: 12, color: INK, letterSpacing: 1 },
-  groupKcal: { fontFamily: REG, fontSize: 11, color: MUTED },
+  groupTitle: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
+  groupKcal: { fontFamily: REG, fontSize: 12, color: C.dim },
   mealRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: CARD,
-    borderWidth: 1, borderColor: BORDER, borderRadius: 12, padding: 10, marginBottom: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10, marginBottom: 6,
   },
-  mealThumb: { width: 38, height: 38, borderRadius: 8, backgroundColor: '#ECE8E1' },
+  mealThumb: { width: 38, height: 38, borderRadius: 8, backgroundColor: C.surface },
   mealThumbEmpty: { alignItems: 'center', justifyContent: 'center' },
-  mealName: { fontFamily: REG, fontSize: 14, color: INK },
-  mealMacros: { fontFamily: REG, fontSize: 11, color: MUTED, marginTop: 2 },
-  mealKcal: { fontFamily: BOLD, fontSize: 15, color: INK },
+  mealName: { fontFamily: REG, fontSize: 14, color: C.ink },
+  mealMacros: { fontFamily: REG, fontSize: 12, color: C.dim, marginTop: 2 },
+  mealKcal: { fontFamily: BOLD, fontSize: 15, color: C.ink },
 });

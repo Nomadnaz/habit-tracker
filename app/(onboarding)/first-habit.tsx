@@ -7,13 +7,10 @@ import OnboardingShell from '@/components/OnboardingShell';
 import { updateAnswers } from '@/lib/onboarding-data';
 import type { Frequency } from '@/lib/habits-data';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const ORANGE = '#FF4D00';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const REG    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const REG = F.mono;
+const BOLD = F.mono;
 
 const SUGGESTIONS = ['Drink more water', 'Read 10 pages', 'Stretch', 'Walk 10 minutes', 'Meditate'];
 
@@ -35,7 +32,7 @@ export default function FirstHabit() {
       onNext={next}
       nextLabel={name.trim() ? 'CONTINUE' : 'SKIP FOR NOW'}
     >
-      <TextInput style={styles.input} placeholder="e.g. Read 10 pages" placeholderTextColor={MUTED} value={name} onChangeText={setName} autoFocus />
+      <TextInput style={styles.input} placeholder="e.g. Read 10 pages" placeholderTextColor={C.dim} value={name} onChangeText={setName} autoFocus />
       <View style={styles.chipRow}>
         {SUGGESTIONS.map(s => (
           <TouchableOpacity key={s} style={styles.chip} onPress={() => setName(s)}>
@@ -56,15 +53,15 @@ export default function FirstHabit() {
 
 const styles = StyleSheet.create({
   input: {
-    borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 14,
-    fontFamily: REG, fontSize: 13, color: INK, backgroundColor: CARD,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 14,
+    fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: BORDER },
-  chipText: { fontFamily: REG, fontSize: 11, color: MUTED },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line },
+  chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   freqRow: { flexDirection: 'row', gap: 8 },
-  freqChip: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: BORDER, alignItems: 'center' },
-  freqChipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  freqChipText: { fontFamily: BOLD, fontSize: 11, color: INK },
-  freqChipTextActive: { color: '#FFFFFF' },
+  freqChip: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: C.line, alignItems: 'center' },
+  freqChipActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  freqChipText: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  freqChipTextActive: { color: C.surface },
 });

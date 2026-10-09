@@ -31,15 +31,11 @@ import {
   type ActivityType, type Waypoint,
 } from '@/lib/activity-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const RED    = '#C0432B';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const RED    = C.alert;
+const BOLD = F.mono;
+const REG = F.mono;
 
 const TYPES: { key: ActivityType; label: string; icon: string }[] = [
   { key: 'hike', label: 'HIKE', icon: 'hiking' },
@@ -123,10 +119,10 @@ export default function ActivityScreen() {
         <Text style={styles.title}>ACTIVITY</Text>
         <View style={styles.headerIcons}>
           <TouchableOpacity onPress={() => router.push('/activity-history')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="history" size={20} color={ORANGE} />
+            <MaterialCommunityIcons name="history" size={20} color={C.hot} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={ORANGE} />
+            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={C.hot} />
           </TouchableOpacity>
         </View>
       </View>
@@ -140,7 +136,7 @@ export default function ActivityScreen() {
               onPress={() => !recording && setType(t.key)}
               disabled={recording}
             >
-              <MaterialCommunityIcons name={t.icon as any} size={18} color={type === t.key ? '#FFFFFF' : ORANGE} />
+              <MaterialCommunityIcons name={t.icon as any} size={18} color={type === t.key ? C.onHot : C.hot} />
               <Text style={[styles.typeChipText, type === t.key && styles.typeChipTextActive]}>{t.label}</Text>
             </TouchableOpacity>
           ))}
@@ -184,30 +180,30 @@ export default function ActivityScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK },
+  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   headerIcons: { flexDirection: 'row', gap: 16 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 14 },
   typeRow: { flexDirection: 'row', gap: 8 },
   typeChip: {
     flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: BORDER,
+    paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: C.line,
   },
-  typeChipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  typeChipText: { fontFamily: BOLD, fontSize: 11, color: INK },
-  typeChipTextActive: { color: '#FFFFFF' },
+  typeChipActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  typeChipText: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  typeChipTextActive: { color: C.surface },
   card: {
-    backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line,
     padding: 16, gap: 14, alignItems: 'center',
   },
   statsRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-around' },
   statCol: { alignItems: 'center' },
-  statValue: { fontFamily: BOLD, fontSize: 18, color: INK },
-  statLabel: { fontFamily: REG, fontSize: 9, color: MUTED, marginTop: 2 },
+  statValue: { fontFamily: F.num, fontSize: 18, color: C.ink },
+  statLabel: { fontFamily: REG, fontSize: 10, color: C.dim, marginTop: 2 },
   recordBtn: {
-    width: '100%', backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center',
+    width: '100%', backgroundColor: C.hot, borderRadius: 10, paddingVertical: 14, alignItems: 'center',
   },
   recordBtnActive: { backgroundColor: RED },
-  recordBtnText: { fontFamily: BOLD, fontSize: 13, color: '#FFFFFF' },
+  recordBtnText: { fontFamily: BOLD, fontSize: 13, color: C.onHot },
 });

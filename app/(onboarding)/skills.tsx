@@ -11,13 +11,10 @@ import { useRouter } from 'expo-router';
 import OnboardingShell from '@/components/OnboardingShell';
 import { updateAnswers } from '@/lib/onboarding-data';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const ORANGE = '#FF4D00';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const REG    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const REG = F.mono;
+const BOLD = F.mono;
 
 const SKILLS = ['Strength', 'Endurance', 'Discipline', 'Mindfulness', 'Creativity', 'Knowledge'];
 
@@ -52,8 +49,8 @@ export default function Skills() {
 
 const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: BORDER, backgroundColor: CARD },
-  chipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  chipText: { fontFamily: REG, fontSize: 12, color: MUTED },
-  chipTextActive: { color: '#FFFFFF', fontFamily: BOLD },
+  chip: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
+  chipTextActive: { color: C.surface, fontFamily: BOLD },
 });

@@ -27,16 +27,13 @@ import {
 } from '@/lib/steps-data';
 import { formatDistance } from '@/lib/activity-data';
 
+import { C, F } from '@/lib/theme';
 // ── Design tokens (identical to BODY page) ─────────────────────────────────
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const FAINT  = '#C7C1B8';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const NUM    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+const ORANGE = C.hot;
+const INK    = C.ink;
+const NUM    = F.mono;
+const BOLD = F.mono;
+const REG = F.mono;
 
 // ── Mountain geometry (viewBox 320 × 230) ──────────────────────────────────
 const MTN_VB_W = 320;
@@ -148,21 +145,19 @@ export default function StepsScreen() {
         <View style={s.header}>
           <View style={s.headerLeft}>
             <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+              <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
             </TouchableOpacity>
             <View>
               <View style={s.titleWrap}>
-                <View style={[s.corner, s.cornerTL]} />
                 <Text style={s.title}>STEPS</Text>
-                <View style={[s.corner, s.cornerBR]} />
               </View>
               <Text style={s.subtitle}>TRACK YOUR JOURNEY</Text>
             </View>
           </View>
           <View style={s.headerIcons}>
-            <MaterialCommunityIcons name="information-outline" size={18} color={MUTED} />
-            <MaterialCommunityIcons name="chart-bar" size={18} color={MUTED} />
-            <MaterialCommunityIcons name="dots-horizontal" size={18} color={MUTED} />
+            <MaterialCommunityIcons name="information-outline" size={18} color={C.dim} />
+            <MaterialCommunityIcons name="chart-bar" size={18} color={C.dim} />
+            <MaterialCommunityIcons name="dots-horizontal" size={18} color={C.dim} />
           </View>
         </View>
 
@@ -194,7 +189,7 @@ export default function StepsScreen() {
             <Text style={s.colUnit}>WEEKLY DISTANCE GOAL</Text>
             <View style={s.goalLine}>
               <Text style={s.goalText}>
-                <Text style={{ color: ORANGE }}>{stats.weeklyDistanceKm}</Text> / {stats.weeklyDistanceGoalKm} KM
+                <Text style={{ color: C.hot }}>{stats.weeklyDistanceKm}</Text> / {stats.weeklyDistanceGoalKm} KM
               </Text>
               <Text style={s.goalPct}>{Math.round(distPct * 100)}%</Text>
             </View>
@@ -216,7 +211,7 @@ export default function StepsScreen() {
                   cy={186 - k * 13}
                   rx={132 - k * 13.5}
                   ry={40 - k * 3.4}
-                  stroke="#D8D2C8"
+                  stroke={C.faint}
                   strokeWidth={1}
                   fill="none"
                 />
@@ -225,18 +220,18 @@ export default function StepsScreen() {
               <Polyline
                 points={ROUTE.map(p => `${p.x},${p.y}`).join(' ')}
                 fill="none"
-                stroke={ORANGE}
+                stroke={C.hot}
                 strokeWidth={2.5}
               />
               {ROUTE.map((p, i) => (
-                <Circle key={i} cx={p.x} cy={p.y} r={1.6} fill={ORANGE} />
+                <Circle key={i} cx={p.x} cy={p.y} r={1.6} fill={C.hot} />
               ))}
             </Svg>
 
             {/* START pin (▶) */}
             <View style={[s.pinBase, { left: ROUTE[0].x * scale - 11, top: ROUTE[0].y * scale - 11 }]}>
               <View style={s.pinStart}>
-                <MaterialCommunityIcons name="play" size={11} color="#FFFFFF" />
+                <MaterialCommunityIcons name="play" size={11} color={C.onHot} />
               </View>
             </View>
 
@@ -248,7 +243,7 @@ export default function StepsScreen() {
               ]}
             >
               <View style={s.pinSummit}>
-                <MaterialCommunityIcons name="flag-checkered" size={12} color="#FFFFFF" />
+                <MaterialCommunityIcons name="flag-checkered" size={12} color={C.onHot} />
               </View>
               <View style={s.pinStalk} />
             </View>
@@ -266,9 +261,9 @@ export default function StepsScreen() {
                   onPress={() => { Haptics.selectionAsync(); setSelectedPin(selectedPin === i ? null : i); }}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
-                  <Text style={[s.milestoneLabel, { color: hit ? ORANGE : MUTED }]}>{pin.label}</Text>
-                  <View style={[s.milestoneStalk, { backgroundColor: hit ? ORANGE : '#C7C1B8' }]} />
-                  <View style={[s.milestoneDot, { backgroundColor: hit ? ORANGE : '#C7C1B8' }]} />
+                  <Text style={[s.milestoneLabel, { color: hit ? C.hot : C.dim }]}>{pin.label}</Text>
+                  <View style={[s.milestoneStalk, { backgroundColor: hit ? C.hot : C.raised }]} />
+                  <View style={[s.milestoneDot, { backgroundColor: hit ? C.hot : C.raised }]} />
                 </Pressable>
               );
             })}
@@ -316,7 +311,7 @@ export default function StepsScreen() {
 
         {/* ── START A RUN ─────────────────────────────────── */}
         <TouchableOpacity style={s.runBtn} activeOpacity={0.85} onPress={goToActivityTab}>
-          <MaterialCommunityIcons name="play" size={18} color="#FFFFFF" />
+          <MaterialCommunityIcons name="play" size={18} color={C.onHot} />
           <Text style={s.runBtnText}>START A RUN</Text>
         </TouchableOpacity>
         <Text style={s.runCaption}>OPENS THE ACTIVITY TAB TO TRACK A REAL GPS RUN</Text>
@@ -332,9 +327,9 @@ export default function StepsScreen() {
               {/* Map thumbnail (placeholder route on grey) */}
               <View style={s.mapThumb}>
                 <Svg width={88} height={88} viewBox="0 0 88 88">
-                  <Polyline points="14,70 28,52 40,58 52,34 66,40 76,18" fill="none" stroke={ORANGE} strokeWidth={2.5} />
-                  <Circle cx={14} cy={70} r={3} fill="#4CAF50" />
-                  <Circle cx={76} cy={18} r={3} fill={ORANGE} />
+                  <Polyline points="14,70 28,52 40,58 52,34 66,40 76,18" fill="none" stroke={C.hot} strokeWidth={2.5} />
+                  <Circle cx={14} cy={70} r={3} fill={C.live} />
+                  <Circle cx={76} cy={18} r={3} fill={C.hot} />
                 </Svg>
               </View>
               <View style={s.recentStats}>
@@ -437,7 +432,7 @@ export default function StepsScreen() {
 function RecentStat({ icon, value, label }: { icon: string; value: string; label: string }) {
   return (
     <View style={s.recentStatItem}>
-      <MaterialCommunityIcons name={icon as any} size={14} color={MUTED} />
+      <MaterialCommunityIcons name={icon as any} size={14} color={C.dim} />
       <Text style={s.recentStatVal}>{value}</Text>
       <Text style={s.recentStatLbl}>{label}</Text>
     </View>
@@ -450,7 +445,7 @@ function GoalRow({
   return (
     <View style={s.goalRow}>
       <View style={s.goalIcon}>
-        <MaterialCommunityIcons name={icon as any} size={18} color={MUTED} />
+        <MaterialCommunityIcons name={icon as any} size={18} color={C.dim} />
       </View>
       <View style={s.goalBody}>
         <View style={s.goalTopLine}>
@@ -471,98 +466,95 @@ function GoalRow({
 const hs = StyleSheet.create({
   sq: { width: SQ, height: SQ, marginRight: 3, marginBottom: 3 },
   solid: { backgroundColor: ORANGE },
-  dotted: { borderWidth: 1.5, borderColor: ORANGE, borderStyle: 'dotted' },
-  missed: { borderWidth: 1.5, borderColor: '#D8D2C8' },
+  dotted: { borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dotted' },
+  missed: { borderWidth: 1.5, borderColor: C.line },
 });
 
 const hm = StyleSheet.create({
   headerRow: { flexDirection: 'row', marginBottom: 4 },
-  headerLetter: { width: SQ + 3, textAlign: 'center', fontFamily: REG, fontSize: 7, color: FAINT },
+  headerLetter: { width: SQ + 3, textAlign: 'center', fontFamily: REG, fontSize: 8, color: C.faint },
   row: { flexDirection: 'row' },
 });
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F2ED' },
+  container: { flex: 1, backgroundColor: C.surface },
 
   // Header
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
   headerLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   titleWrap: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, position: 'relative' },
-  corner: { width: 12, height: 12, borderColor: ORANGE, position: 'absolute' },
-  cornerTL: { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 },
-  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 },
-  title: { fontFamily: BOLD, fontSize: 30, color: INK, letterSpacing: 2 },
-  subtitle: { fontFamily: REG, fontSize: 8, color: MUTED, letterSpacing: 2, marginTop: 6, marginLeft: 8 },
+  title: { fontFamily: F.dot, fontSize: 30, color: C.ink, letterSpacing: 2 },
+  subtitle: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2, marginTop: 6, marginLeft: 8 },
   headerIcons: { flexDirection: 'row', gap: 14, paddingTop: 8 },
 
   // Today stats row
   statsRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 18 },
   statsCol: { flex: 1 },
-  colDivider: { width: 1, backgroundColor: BORDER, marginHorizontal: 16 },
-  colLabel: { fontFamily: REG, fontSize: 9, color: MUTED, letterSpacing: 1 },
-  bigNum: { fontFamily: NUM, fontSize: 38, color: ORANGE, marginTop: 6 },
-  bigNumUnit: { fontFamily: NUM, fontSize: 14, color: ORANGE },
-  colUnit: { fontFamily: REG, fontSize: 8, color: MUTED, letterSpacing: 1, marginTop: 2 },
+  colDivider: { width: 1, backgroundColor: C.line, marginHorizontal: 16 },
+  colLabel: { fontFamily: REG, fontSize: 10, color: C.dim, letterSpacing: 1 },
+  bigNum: { fontFamily: NUM, fontSize: 38, color: C.hot, marginTop: 6 },
+  bigNumUnit: { fontFamily: NUM, fontSize: 14, color: C.hot },
+  colUnit: { fontFamily: REG, fontSize: 9, color: C.dim, letterSpacing: 1, marginTop: 2 },
   goalLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  goalText: { fontFamily: REG, fontSize: 8, color: MUTED },
-  goalPct: { fontFamily: NUM, fontSize: 10, color: INK },
+  goalText: { fontFamily: REG, fontSize: 9, color: C.dim },
+  goalPct: { fontFamily: NUM, fontSize: 10, color: C.ink },
   blockBar: { flexDirection: 'row', marginTop: 8, gap: 2 },
-  block: { flex: 1, height: 12, borderWidth: 1, borderColor: '#D8D2C8' },
-  blockFilled: { backgroundColor: ORANGE, borderColor: ORANGE },
-  lineTrack: { height: 8, backgroundColor: '#E8E4DD', borderRadius: 4, marginTop: 9, overflow: 'hidden' },
-  lineFill: { height: 8, backgroundColor: ORANGE, borderRadius: 4 },
+  block: { flex: 1, height: 12, borderWidth: 1, borderColor: C.line },
+  blockFilled: { backgroundColor: ORANGE, borderColor: C.hot },
+  lineTrack: { height: 8, backgroundColor: C.surface, borderRadius: 4, marginTop: 9, overflow: 'hidden' },
+  lineFill: { height: 8, backgroundColor: C.hot, borderRadius: 4 },
 
   // Mountain
-  mountainCard: { marginHorizontal: 16, marginBottom: 18, backgroundColor: CARD, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 14 },
+  mountainCard: { marginHorizontal: 16, marginBottom: 18, backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 14 },
   pinBase: { position: 'absolute' },
-  pinStart: { width: 22, height: 22, borderRadius: 11, backgroundColor: ORANGE, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
+  pinStart: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.line },
   summitWrap: { position: 'absolute', alignItems: 'center' },
-  pinSummit: { width: 22, height: 22, borderRadius: 11, backgroundColor: INK, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
-  pinStalk: { width: 1.5, height: 12, backgroundColor: INK },
+  pinSummit: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.line },
+  pinStalk: { width: 1.5, height: 12, backgroundColor: C.hot },
   milestoneWrap: { position: 'absolute', width: 48, alignItems: 'center' },
-  milestoneLabel: { fontFamily: BOLD, fontSize: 7, letterSpacing: 0.5, marginBottom: 2 },
+  milestoneLabel: { fontFamily: BOLD, fontSize: 8, letterSpacing: 0.5, marginBottom: 2 },
   milestoneStalk: { width: 1.5, height: 14 },
-  milestoneDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: '#FFFFFF' },
-  tooltip: { position: 'absolute', width: 124, backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 1, borderColor: BORDER, padding: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 6 },
-  tooltipDate: { fontFamily: BOLD, fontSize: 9, color: INK, marginBottom: 4 },
-  tooltipRow: { fontFamily: REG, fontSize: 8, color: MUTED, marginBottom: 2 },
-  tooltipBadge: { alignSelf: 'flex-start', backgroundColor: ORANGE, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 4 },
-  tooltipBadgeMuted: { backgroundColor: '#C7C1B8' },
-  tooltipBadgeText: { fontFamily: BOLD, fontSize: 7, color: '#FFFFFF', letterSpacing: 0.5 },
+  milestoneDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: C.line },
+  tooltip: { position: 'absolute', width: 124, backgroundColor: C.surface, borderRadius: 8, borderWidth: 1, borderColor: C.line, padding: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 6 },
+  tooltipDate: { fontFamily: BOLD, fontSize: 10, color: C.ink, marginBottom: 4 },
+  tooltipRow: { fontFamily: REG, fontSize: 9, color: C.dim, marginBottom: 2 },
+  tooltipBadge: { alignSelf: 'flex-start', backgroundColor: C.hot, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 4 },
+  tooltipBadgeMuted: { backgroundColor: C.faint },
+  tooltipBadgeText: { fontFamily: BOLD, fontSize: 8, color: C.onHot, letterSpacing: 0.5 },
 
-  pillsRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: BORDER, marginTop: 12, paddingTop: 12 },
+  pillsRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: C.line, marginTop: 12, paddingTop: 12 },
   pill: { flex: 1, alignItems: 'center' },
-  pillDivider: { width: 1, height: 32, backgroundColor: BORDER },
-  pillLabel: { fontFamily: REG, fontSize: 7, color: MUTED, letterSpacing: 0.5, marginBottom: 4 },
-  pillValue: { fontFamily: NUM, fontSize: 20, color: ORANGE },
-  pillUnit: { fontFamily: REG, fontSize: 7, color: MUTED, marginTop: 2, letterSpacing: 1 },
+  pillDivider: { width: 1, height: 32, backgroundColor: C.line },
+  pillLabel: { fontFamily: REG, fontSize: 8, color: C.dim, letterSpacing: 0.5, marginBottom: 4 },
+  pillValue: { fontFamily: NUM, fontSize: 20, color: C.hot },
+  pillUnit: { fontFamily: REG, fontSize: 8, color: C.dim, marginTop: 2, letterSpacing: 1 },
 
   // Run button
-  runBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: ORANGE, marginHorizontal: 16, borderRadius: 12, paddingVertical: 16 },
+  runBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: C.hot, marginHorizontal: 16, borderRadius: 12, paddingVertical: 16 },
   runBtnActive: { backgroundColor: INK },
-  runBtnText: { fontFamily: BOLD, fontSize: 14, color: '#FFFFFF', letterSpacing: 2 },
-  runCaption: { fontFamily: REG, fontSize: 8, color: MUTED, textAlign: 'center', letterSpacing: 1, marginTop: 10, marginBottom: 20 },
+  runBtnText: { fontFamily: BOLD, fontSize: 14, color: C.onHot, letterSpacing: 2 },
+  runCaption: { fontFamily: REG, fontSize: 9, color: C.dim, textAlign: 'center', letterSpacing: 1, marginTop: 10, marginBottom: 20 },
 
   // Recent run
-  recentCard: { marginHorizontal: 16, marginBottom: 20, backgroundColor: CARD, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 14 },
+  recentCard: { marginHorizontal: 16, marginBottom: 20, backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 14 },
   recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: INK, letterSpacing: 1 },
-  viewLink: { fontFamily: BOLD, fontSize: 8, color: ORANGE, letterSpacing: 1 },
+  sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
+  viewLink: { fontFamily: BOLD, fontSize: 9, color: C.hot, letterSpacing: 1 },
   recentBody: { flexDirection: 'row', gap: 12 },
-  mapThumb: { width: 88, height: 88, borderRadius: 8, backgroundColor: '#ECE8E1', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  mapThumb: { width: 88, height: 88, borderRadius: 8, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   recentStats: { flex: 1 },
-  recentDate: { fontFamily: REG, fontSize: 8, color: MUTED, letterSpacing: 0.5, marginBottom: 6 },
+  recentDate: { fontFamily: REG, fontSize: 9, color: C.dim, letterSpacing: 0.5, marginBottom: 6 },
   recentTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  recentBig: { fontFamily: NUM, fontSize: 28, color: ORANGE },
-  recentBigUnit: { fontFamily: NUM, fontSize: 12, color: ORANGE },
+  recentBig: { fontFamily: NUM, fontSize: 28, color: C.hot },
+  recentBigUnit: { fontFamily: NUM, fontSize: 12, color: C.hot },
   recentTopRight: { flexDirection: 'row', gap: 12 },
   recentMini: { alignItems: 'flex-end' },
-  recentMiniVal: { fontFamily: NUM, fontSize: 16, color: INK },
-  recentMiniLbl: { fontFamily: REG, fontSize: 7, color: MUTED, marginTop: 2 },
-  recentFooter: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: BORDER, marginTop: 12, paddingTop: 12 },
+  recentMiniVal: { fontFamily: NUM, fontSize: 16, color: C.ink },
+  recentMiniLbl: { fontFamily: REG, fontSize: 8, color: C.dim, marginTop: 2 },
+  recentFooter: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.line, marginTop: 12, paddingTop: 12 },
   recentStatItem: { flex: 1, alignItems: 'center', gap: 3 },
-  recentStatVal: { fontFamily: NUM, fontSize: 11, color: INK },
-  recentStatLbl: { fontFamily: REG, fontSize: 7, color: MUTED, letterSpacing: 0.5 },
+  recentStatVal: { fontFamily: NUM, fontSize: 11, color: C.ink },
+  recentStatLbl: { fontFamily: REG, fontSize: 8, color: C.dim, letterSpacing: 0.5 },
 
   // Week + heatmap
   weekRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 20, gap: 16 },
@@ -570,24 +562,24 @@ const s = StyleSheet.create({
   weekRight: {},
   barChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 96, marginTop: 12 },
   barCol: { alignItems: 'center', flex: 1, justifyContent: 'flex-end' },
-  bar: { width: 6, backgroundColor: ORANGE, borderRadius: 1 },
-  barLabel: { fontFamily: REG, fontSize: 7, color: MUTED, marginTop: 6 },
+  bar: { width: 6, backgroundColor: C.hot, borderRadius: 1 },
+  barLabel: { fontFamily: REG, fontSize: 8, color: C.dim, marginTop: 6 },
   barTip: { backgroundColor: INK, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2, marginBottom: 4 },
-  barTipText: { fontFamily: BOLD, fontSize: 7, color: '#FFFFFF' },
+  barTipText: { fontFamily: BOLD, fontSize: 8, color: C.onHot },
   legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  legendText: { fontFamily: REG, fontSize: 7, color: MUTED },
+  legendText: { fontFamily: REG, fontSize: 8, color: C.dim },
 
   // Goals
   goalsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 14 },
   goalRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 16, gap: 12 },
-  goalIcon: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  goalIcon: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   goalBody: { flex: 1 },
   goalTopLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  goalName: { fontFamily: REG, fontSize: 8, color: MUTED, letterSpacing: 1 },
-  goalRowPct: { fontFamily: NUM, fontSize: 10, color: INK },
-  goalValue: { fontFamily: NUM, fontSize: 13, color: ORANGE, marginTop: 3 },
-  goalTrack: { height: 6, backgroundColor: '#E8E4DD', borderRadius: 3, marginTop: 6, overflow: 'hidden' },
-  goalFill: { height: 6, backgroundColor: ORANGE, borderRadius: 3 },
-  goalEnds: { fontFamily: REG, fontSize: 7, color: MUTED, textAlign: 'right', marginTop: 4, letterSpacing: 0.5 },
+  goalName: { fontFamily: REG, fontSize: 9, color: C.dim, letterSpacing: 1 },
+  goalRowPct: { fontFamily: NUM, fontSize: 10, color: C.ink },
+  goalValue: { fontFamily: NUM, fontSize: 13, color: C.hot, marginTop: 3 },
+  goalTrack: { height: 6, backgroundColor: C.surface, borderRadius: 3, marginTop: 6, overflow: 'hidden' },
+  goalFill: { height: 6, backgroundColor: C.hot, borderRadius: 3 },
+  goalEnds: { fontFamily: REG, fontSize: 8, color: C.dim, textAlign: 'right', marginTop: 4, letterSpacing: 0.5 },
 });

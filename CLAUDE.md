@@ -110,9 +110,11 @@ See `system-model.md` for the full picture (data layer / intelligence layer / su
 
 **Date keys** — ⚠️ currently `"YYYY-M-D"` (0-indexed month) in the existing code. This is **superseded** — canonical is zero-padded ISO `YYYY-MM-DD`, 1-indexed, local timezone (see `system-model.md`). Migration tracked in `tasks/003`–`004`; don't introduce new code in the old format.
 
-**Design tokens** — ⚠️ currently light theme (`#FF4D00` accent, `#F5F5F5` bg, `#E0E0E0` border) in the existing code. Canonical is the dark system (`#0A0A0A` bg, `#FF4D00` accent, `#2A2A2A` border, PressStart2P/SpaceMono). Migration tracked in `tasks/077`, deliberately last — don't half-apply it earlier. Brand v2 (Michroma/Chakra Petch, cyan/amber) is **not** an active decision; ignore it.
+**Design tokens** — `lib/theme.ts` is the single source of truth (`C` colours, `F` fonts, `numFace()`), matching the puck firmware: pure black, white is the only "hot" colour, greys for hierarchy, green `C.live` = today/done, red `C.alert` = destructive, amber `C.signal` only for body-map categories. Never hardcode a hex in a screen. This replaced both the old light theme and the orange `#FF4D00` dark plan (tasks/077) on 2026-10-09 at the user's request; Brand v2 is still not a decision.
 
-**Fonts** — `PressStart2P_400Regular` (pixel/display) and `SpaceMono_400Regular`/`SpaceMono_700Bold` loaded via `expo-font` in the root layout, both before the splash screen hides.
+**Fonts** — loaded in `app/_layout.tsx`. `F.dot` = London Underground Heavy (SIL OFL, `assets/fonts/LondonUnderground-OFL.txt`) for titles, labels, board rows — it has NO `. / % ? !`, so never set prose or decimals in it; `F.num` = Doto (OFL) for values that need those glyphs (use `numFace(value, size)`); `F.mono` = Share Tech Mono for sentences. Do NOT ship Nothing's Ndot (the puck's font): its embedded licence restricts it to Nothing brand materials. Pixeloid is kept only for `components/ReceiptPrinter.tsx`.
+
+**Navigation** — custom tab bar (`components/PuckTabBar.tsx`): TODAY · BODY · [PUCK dot] · TRAIN · LIFE. Tap the dot = chat (`components/assistant/`), hold = voice log/ask (expo-audio → `transcribe` → `ai-chat`, auto actions executed locally). HABITS and HEALTH stay registered as hidden tabs, reached from LIFE and BODY.
 
 **Path alias** — `@/` resolves to the repo root (configured in `tsconfig.json`).
 

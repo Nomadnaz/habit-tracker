@@ -10,13 +10,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const FAINT  = '#E5E1DA';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const BOLD = F.mono;
+const REG = F.mono;
 
 export const TOTAL_ONBOARDING_STEPS = 10;
 
@@ -41,7 +38,7 @@ export default function OnboardingShell({
       <View style={styles.header}>
         {showBack && step > 1 ? (
           <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <MaterialCommunityIcons name="chevron-left" size={24} color={INK} />
+            <MaterialCommunityIcons name="chevron-left" size={24} color={C.ink} />
           </TouchableOpacity>
         ) : <View style={{ width: 24 }} />}
         <View style={styles.dots}>
@@ -73,20 +70,20 @@ export default function OnboardingShell({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingTop: 8,
   },
   dots: { flexDirection: 'row', gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: FAINT },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.raised },
   dotActive: { backgroundColor: ORANGE },
   content: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
-  title: { fontFamily: BOLD, fontSize: 20, color: INK },
-  subtitle: { fontFamily: REG, fontSize: 13, color: MUTED, marginTop: 8, lineHeight: 19 },
+  title: { fontFamily: F.dot, fontSize: 20, color: C.ink },
+  subtitle: { fontFamily: REG, fontSize: 13, color: C.dim, marginTop: 8, lineHeight: 19 },
   body: { marginTop: 24, gap: 12 },
   footer: { paddingHorizontal: 24, paddingBottom: 16, gap: 10 },
   nextBtn: { backgroundColor: ORANGE, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   nextBtnDisabled: { opacity: 0.4 },
-  nextBtnText: { fontFamily: BOLD, fontSize: 13, color: '#FFFFFF' },
+  nextBtnText: { fontFamily: BOLD, fontSize: 13, color: C.onHot },
 });

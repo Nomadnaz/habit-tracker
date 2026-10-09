@@ -10,12 +10,9 @@ import OnboardingShell from '@/components/OnboardingShell';
 import { getAnswers, updateAnswers } from '@/lib/onboarding-data';
 import { computeTargets } from '@/lib/meals-data';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const REG    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
+import { C, F } from '@/lib/theme';
+const REG = F.mono;
+const BOLD = F.mono;
 
 export default function Targets() {
   const router = useRouter();
@@ -81,8 +78,8 @@ function Field({ label, value, onChangeText }: { label: string; value: string; o
 const styles = StyleSheet.create({
   field: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 12, backgroundColor: CARD,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, backgroundColor: C.surface,
   },
-  label: { fontFamily: REG, fontSize: 13, color: INK },
-  input: { fontFamily: BOLD, fontSize: 14, color: INK, minWidth: 70, textAlign: 'right' },
+  label: { fontFamily: REG, fontSize: 13, color: C.ink },
+  input: { fontFamily: BOLD, fontSize: 14, color: C.ink, minWidth: 70, textAlign: 'right' },
 });

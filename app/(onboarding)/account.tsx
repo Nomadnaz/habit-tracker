@@ -11,11 +11,8 @@ import { useRouter } from 'expo-router';
 import OnboardingShell from '@/components/OnboardingShell';
 import { supabase } from '@/lib/supabase';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const REG = F.mono;
 
 export default function Account() {
   const router = useRouter();
@@ -62,21 +59,21 @@ export default function Account() {
       nextDisabled={loading}
     >
       <TextInput
-        style={styles.input} placeholder="EMAIL" placeholderTextColor={MUTED}
+        style={styles.input} placeholder="EMAIL" placeholderTextColor={C.dim}
         value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address"
       />
       <TextInput
-        style={styles.input} placeholder="PASSWORD" placeholderTextColor={MUTED}
+        style={styles.input} placeholder="PASSWORD" placeholderTextColor={C.dim}
         value={password} onChangeText={setPassword} secureTextEntry
       />
-      {loading && <ActivityIndicator color={INK} />}
+      {loading && <ActivityIndicator color={C.ink} />}
     </OnboardingShell>
   );
 }
 
 const styles = StyleSheet.create({
   input: {
-    borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 14,
-    fontFamily: REG, fontSize: 13, color: INK, backgroundColor: CARD,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 14,
+    fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
 });

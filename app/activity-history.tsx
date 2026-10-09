@@ -11,14 +11,9 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getRecentActivities, formatDuration, formatPace, formatDistance, type Activity, type ActivityType } from '@/lib/activity-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const BOLD = F.mono;
+const REG = F.mono;
 
 const ICONS: Record<ActivityType, string> = { hike: 'hiking', run: 'run', walk: 'walk' };
 
@@ -40,7 +35,7 @@ export default function ActivityHistoryScreen() {
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
         </TouchableOpacity>
         <Text style={s.title}>ACTIVITY HISTORY</Text>
         <View style={{ width: 26 }} />
@@ -55,12 +50,12 @@ export default function ActivityHistoryScreen() {
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/activity-summary', params: { id: a.id } })}
           >
-            <MaterialCommunityIcons name={ICONS[a.type] as any} size={22} color={ORANGE} />
+            <MaterialCommunityIcons name={ICONS[a.type] as any} size={22} color={C.hot} />
             <View style={{ flex: 1 }}>
               <Text style={s.rowTitle}>{a.type.toUpperCase()} · {formatDistance(a.distanceM)}</Text>
               <Text style={s.rowSub}>{formatActivityDate(a.startTime)} · {formatDuration(a.durationSecs)} · {formatPace(a.avgPacePerKm)}</Text>
             </View>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={MUTED} />
+            <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -69,15 +64,15 @@ export default function ActivityHistoryScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK, letterSpacing: 1 },
+  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 8 },
-  empty: { fontFamily: REG, fontSize: 13, color: MUTED, paddingVertical: 12 },
+  empty: { fontFamily: REG, fontSize: 13, color: C.dim, paddingVertical: 12 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 12,
+    backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 12,
   },
-  rowTitle: { fontFamily: BOLD, fontSize: 12, color: INK },
-  rowSub: { fontFamily: REG, fontSize: 10, color: MUTED, marginTop: 2 },
+  rowTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  rowSub: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 2 },
 });

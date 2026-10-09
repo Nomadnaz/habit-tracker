@@ -18,14 +18,12 @@ import { GymHeatmap, GymHeatmapLegend } from '@/components/GymHeatmap';
 import { BADGES, getEarnedBadgeIds } from '@/lib/badges';
 import { getCumulativeStats, type CumulativeStats } from '@/lib/postWrite';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
-const NUM    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const MUTED  = C.dim;
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
+const NUM    = F.mono;
 
 function km(meters: number): string {
   return `${(meters / 1000).toFixed(1)} KM`;
@@ -110,22 +108,22 @@ function StatRow({ label, value, last }: { label: string; value: string; last?: 
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F2ED' },
+  container: { flex: 1, backgroundColor: C.surface },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 },
-  title: { fontFamily: BOLD, fontSize: 24, color: INK, letterSpacing: 1, marginBottom: 20 },
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: INK, letterSpacing: 1, marginBottom: 10 },
+  title: { fontFamily: F.dot, fontSize: 24, color: C.ink, letterSpacing: 1, marginBottom: 20 },
+  sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1, marginBottom: 10 },
   sectionLabelSpaced: { marginTop: 24 },
-  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14 },
+  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14 },
 
   badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  badge: { width: '31%', backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 10, alignItems: 'center' },
+  badge: { width: '31%', backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 10, alignItems: 'center' },
   badgeLocked: { opacity: 0.6 },
-  badgeName: { fontFamily: BOLD, fontSize: 10, color: INK, textAlign: 'center' },
+  badgeName: { fontFamily: BOLD, fontSize: 11, color: C.ink, textAlign: 'center' },
   badgeNameLocked: { color: MUTED },
-  badgeDesc: { fontFamily: REG, fontSize: 8, color: MUTED, textAlign: 'center', marginTop: 4 },
+  badgeDesc: { fontFamily: REG, fontSize: 9, color: C.dim, textAlign: 'center', marginTop: 4 },
 
   statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10 },
-  statRowBorder: { borderBottomWidth: 1, borderBottomColor: BORDER },
-  statLabel: { fontFamily: REG, fontSize: 11, color: MUTED },
-  statValue: { fontFamily: NUM, fontSize: 13, color: ORANGE },
+  statRowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+  statLabel: { fontFamily: REG, fontSize: 12, color: C.dim },
+  statValue: { fontFamily: NUM, fontSize: 13, color: C.hot },
 });

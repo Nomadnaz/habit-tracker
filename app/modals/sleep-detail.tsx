@@ -20,17 +20,13 @@ import {
 import { toDateKey } from '@/lib/dateKey';
 import ChatScreen from '@/components/ChatScreen';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const GREEN  = '#3B7A57';
-const RED    = '#C0432B';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const GREEN  = C.live;
+const RED    = C.alert;
 const AMBER  = '#C98A1B';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+const BOLD = F.mono;
+const REG = F.mono;
 
 const RESULT_COLOR = { pass: GREEN, close: AMBER, fail: RED } as const;
 
@@ -104,11 +100,11 @@ export default function SleepDetailModal() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={INK} />
+          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
         </TouchableOpacity>
         <Text style={styles.title}>SLEEP</Text>
         <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
-          <MaterialCommunityIcons name="chat-processing-outline" size={20} color={ORANGE} />
+          <MaterialCommunityIcons name="chat-processing-outline" size={20} color={C.hot} />
         </TouchableOpacity>
       </View>
 
@@ -128,7 +124,7 @@ export default function SleepDetailModal() {
             <TextInput
               style={[styles.input, { flex: 1 }]}
               placeholder="Phone down time (HH:MM)"
-              placeholderTextColor={MUTED}
+              placeholderTextColor={C.dim}
               value={phoneDownTime}
               onChangeText={setPhoneDownTime}
               keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
@@ -142,7 +138,7 @@ export default function SleepDetailModal() {
             <TextInput
               style={[styles.input, { flex: 1 }]}
               placeholder="Target time (HH:MM)"
-              placeholderTextColor={MUTED}
+              placeholderTextColor={C.dim}
               value={target}
               onChangeText={setTarget}
             />
@@ -159,14 +155,14 @@ export default function SleepDetailModal() {
             <TextInput
               style={[styles.input, { flex: 1 }]}
               placeholder="Bedtime (HH:MM)"
-              placeholderTextColor={MUTED}
+              placeholderTextColor={C.dim}
               value={bedtime}
               onChangeText={setBedtime}
             />
             <TextInput
               style={[styles.input, { flex: 1 }]}
               placeholder="Wake time (HH:MM)"
-              placeholderTextColor={MUTED}
+              placeholderTextColor={C.dim}
               value={wakeTime}
               onChangeText={setWakeTime}
             />
@@ -178,7 +174,7 @@ export default function SleepDetailModal() {
                 <MaterialCommunityIcons
                   name={n <= quality ? 'star' : 'star-outline'}
                   size={26}
-                  color={ORANGE}
+                  color={C.hot}
                 />
               </TouchableOpacity>
             ))}
@@ -213,37 +209,37 @@ export default function SleepDetailModal() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
   },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK },
+  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   card: {
-    backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line,
     padding: 14, gap: 10,
   },
-  cardTitle: { fontFamily: BOLD, fontSize: 12, color: INK },
-  sub: { fontFamily: REG, fontSize: 11, color: MUTED },
+  cardTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  sub: { fontFamily: REG, fontSize: 12, color: C.dim },
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   input: {
-    borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 10,
-    fontFamily: REG, fontSize: 12, color: INK,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 10,
+    fontFamily: REG, fontSize: 12, color: C.ink,
   },
   smallBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
-  smallBtnText: { fontFamily: BOLD, fontSize: 11, color: '#FFFFFF' },
-  smallBtnOutline: { borderWidth: 1, borderColor: BORDER, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
-  smallBtnOutlineText: { fontFamily: BOLD, fontSize: 11, color: INK },
+  smallBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
+  smallBtnOutline: { borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  smallBtnOutlineText: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   resultPill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  resultPillText: { fontFamily: BOLD, fontSize: 10, color: '#FFFFFF' },
+  resultPillText: { fontFamily: BOLD, fontSize: 11, color: C.onHot },
   qualityRow: { flexDirection: 'row', gap: 6 },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: '#FFFFFF' },
-  empty: { fontFamily: REG, fontSize: 11, color: MUTED },
+  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim },
   barsRow: { flexDirection: 'row', gap: 8, height: 90, alignItems: 'flex-end' },
   barCol: { flex: 1, alignItems: 'center', gap: 4, height: '100%', justifyContent: 'flex-end' },
-  barTrack: { width: 14, height: 70, backgroundColor: BORDER, borderRadius: 4, justifyContent: 'flex-end', overflow: 'hidden' },
-  barFill: { width: '100%', backgroundColor: ORANGE, borderRadius: 4 },
-  barLabel: { fontFamily: REG, fontSize: 8, color: MUTED },
+  barTrack: { width: 14, height: 70, backgroundColor: C.line, borderRadius: 4, justifyContent: 'flex-end', overflow: 'hidden' },
+  barFill: { width: '100%', backgroundColor: C.hot, borderRadius: 4 },
+  barLabel: { fontFamily: REG, fontSize: 9, color: C.dim },
 });

@@ -100,6 +100,7 @@ import { buildDateOptions, findTaskDateKey, moveTaskInMap } from '@/lib/task-sch
 import { TASKS_CHANGED_EVENT } from '@/lib/use-remote-task-sync';
 import { TASK_SELECT_COLUMNS, taskFromDbRow, taskToDbRow } from '@/lib/task-supabase';
 import BriefingCard from '@/components/BriefingCard';
+import { YearDots } from '@/components/YearDots';
 
 // Enable LayoutAnimation on Android (iOS enables it automatically).
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -113,6 +114,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 // A library of icons. We use it for the step, clock, fire, and mountain icons in the tracker bar.
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { C, F } from '@/lib/theme';
 // Full names of the days of the week, used to display the day name on each date card.
 const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 
@@ -1159,44 +1161,30 @@ export default function TodayScreen() {
     // edges={['top']} means we only apply this padding at the top (not the bottom — the tab bar handles that).
     <SafeAreaView style={styles.container} edges={['top']}>
 
-      {/* ── Header ─────────────────────────────────────── */}
+      {/* ── Header: date eyebrow + TODAY, the 4 things TODAY owns ── */}
       <View style={styles.header}>
-        {/* The "TODAY" title with decorative orange corner lines + logout button. */}
-        <View style={styles.titleWrap}>
-          <View style={[styles.corner, styles.cornerTL]} />{/* Top-left orange corner line. */}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.eyebrow}>
+            {(() => {
+              const n = new Date();
+              return `${DAY_NAMES[n.getDay()].slice(0, 3)} ${String(n.getDate()).padStart(2, '0')} ${MONTH_NAMES[n.getMonth()].slice(0, 3)}`;
+            })()}
+          </Text>
           <Text style={styles.title}>TODAY</Text>
-          <TouchableOpacity
-            onPress={() => router.push('/modals/search')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="magnify" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/calendar')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="calendar-month-outline" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          {/* Calorie/bluetooth/goals/finance/mood/library icons moved to the
-              HEALTH and LIFE hubs (Code Audit v2 fix plan P1) — header cut
-              down to the 4 things TODAY itself owns: search, calendar,
-              profile, settings. Sign-out moved to the PROFILE screen. */}
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/profile')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="account-circle-outline" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/settings')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialCommunityIcons name="cog-outline" size={18} color="#FF4D00" />
-          </TouchableOpacity>
-          <View style={[styles.corner, styles.cornerBR]} />{/* Bottom-right orange corner line. */}
         </View>
-        <Text style={styles.tagline}>PLAN. TRACK. EXECUTE.</Text>
+        {([
+          ['magnify', '/modals/search'],
+          ['calendar-month-outline', '/calendar'],
+          ['account-circle-outline', '/(tabs)/profile'],
+          ['cog-outline', '/settings'],
+        ] as const).map(([icon, route]) => (
+          <TouchableOpacity key={route} onPress={() => router.push(route as any)} hitSlop={8} style={styles.headIcon}>
+            <MaterialCommunityIcons name={icon} size={19} color={C.dim} />
+          </TouchableOpacity>
+        ))}
       </View>
+
+      <YearDots />
 
       <BriefingCard />
 
@@ -1237,7 +1225,7 @@ export default function TodayScreen() {
                 <MaterialCommunityIcons
                   name={overDelete ? 'trash-can' : 'trash-can-outline'}
                   size={28}
-                  color={overDelete ? '#FCFBF9' : '#FF4D00'}
+                  color={overDelete ? C.onHot : C.hot}
                 />
                 <Text style={[styles.binHalfLabel, overDelete && styles.binHalfLabelActive]}>
                   {overDelete ? 'RELEASE' : 'DELETE'}
@@ -1248,7 +1236,7 @@ export default function TodayScreen() {
                 <MaterialCommunityIcons
                   name={overEdit ? 'pencil' : 'pencil-outline'}
                   size={28}
-                  color={overEdit ? '#FCFBF9' : '#FF4D00'}
+                  color={overEdit ? C.onHot : C.hot}
                 />
                 <Text style={[styles.binHalfLabel, overEdit && styles.binHalfLabelActive]}>
                   {overEdit ? 'RELEASE' : 'EDIT'}
@@ -1283,7 +1271,7 @@ export default function TodayScreen() {
             {DATES.map((d, i) => {
               // All dates are black (solid text on both past and upcoming).
               // (The white version lives in the overlay layer below, clipped to the orange square.)
-              const color = '#1A1714';
+              const color = C.ink;
               const pending = (taskMap[d.key] ?? []).filter(t => !t.done && !t.archived).length;
 
               return (
@@ -1299,8 +1287,8 @@ export default function TodayScreen() {
                   <Text style={[styles.wheelDay, { color }]}>{d.day}</Text>
                   <Text style={[styles.wheelNum, { color }]}>{d.date}</Text>
                   {pending > 0 && (
-                    <View style={[styles.badge, { backgroundColor: '#FF4D00' }]}>
-                      <Text style={[styles.badgeText, { color: '#FCFBF9' }]}>{pending}</Text>
+                    <View style={[styles.badge, { backgroundColor: C.hot }]}>
+                      <Text style={[styles.badgeText, { color: C.onHot }]}>{pending}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -1321,13 +1309,13 @@ export default function TodayScreen() {
                     {showTodayLabel && d.key === todayDateKey && (
                       <Text style={styles.wheelTodayLabel}>TODAY</Text>
                     )}
-                    <Text style={[styles.wheelDay, { color: '#FCFBF9' }]}>{d.day}</Text>
-                    <Text style={[styles.wheelNum, { color: '#FCFBF9' }]}>{d.date}</Text>
+                    <Text style={[styles.wheelDay, { color: C.onHot }]}>{d.day}</Text>
+                    <Text style={[styles.wheelNum, { color: C.onHot }]}>{d.date}</Text>
                     {/* Month only in overlay — absolute so day/number stay aligned with layer below. */}
                     <Text style={styles.wheelMonth}>{d.month}</Text>
                     {pending > 0 && (
-                      <View style={[styles.badge, { backgroundColor: '#FCFBF9' }]}>
-                        <Text style={[styles.badgeText, { color: '#FF4D00' }]}>{pending}</Text>
+                      <View style={[styles.badge, { backgroundColor: C.surface }]}>
+                        <Text style={[styles.badgeText, { color: C.hot }]}>{pending}</Text>
                       </View>
                     )}
                   </View>
@@ -1386,7 +1374,7 @@ export default function TodayScreen() {
               }}
               activeOpacity={0.7}
             >
-              <MaterialCommunityIcons name="clock-outline" size={13} color="#8C857B" />
+              <MaterialCommunityIcons name="clock-outline" size={13} color={C.dim} />
               <Text style={styles.focusBlockLabel}>
                 {focusBlockDisplayLabel(focusWorkMins, focusBreakMins, focusBlockIdx)}
               </Text>
@@ -1528,7 +1516,7 @@ export default function TodayScreen() {
                     value={sheetText}
                     onChangeText={setSheetText}
                     placeholder="E.G. DEEP WORK"
-                    placeholderTextColor="#C7C1B8"
+                    placeholderTextColor={C.faint}
                     autoFocus
                     autoCapitalize="characters"
                     returnKeyType="done"
@@ -1566,7 +1554,7 @@ export default function TodayScreen() {
                 value={sheetText}
                 onChangeText={setSheetText}
                 placeholder="TASK NAME..."
-                placeholderTextColor="#C7C1B8"
+                placeholderTextColor={C.faint}
                 autoCapitalize="characters"
                 returnKeyType="done"
                 onSubmitEditing={confirmSheet}
@@ -1614,49 +1602,19 @@ const styles = StyleSheet.create({
   // Fills the entire screen with a light grey background.
   container: {
     flex: 1,
-    backgroundColor: '#F2F0EC',
+    backgroundColor: C.surface,
   },
-  // Horizontal padding and vertical spacing for the header section.
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 14,
-  },
-  // Wraps the "TODAY" text, logout button, and corner decorations in a horizontal row.
-  titleWrap: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 14,
+    gap: 4,
   },
-  // "TODAY" in the large pixel font.
-  title: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 28,
-    color: '#1A1714',
-  },
-  // Base style for the decorative corner lines (shared by both corners).
-  // position: 'absolute' means they're placed relative to the titleWrap container,
-  // not in the normal flow of the layout.
-  corner: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderColor: '#FF4D00',
-  },
-  // Top-left corner: only the top and left borders are shown.
-  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 },
-  // Bottom-right corner: only the bottom and right borders are shown.
-  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
-  // "TRACK. GROW. THRIVE." tagline below the title.
-  tagline: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 11,
-    color: '#FF4D00',
-    letterSpacing: 1,
-    marginTop: 12,
-  },
+  eyebrow: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3 },
+  title: { fontFamily: F.dot, fontSize: 40, color: C.ink, letterSpacing: 2, marginTop: 2 },
+  headIcon: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   // The horizontal row that holds the date column and task list side by side.
   // flex: 1 makes it fill all space between the header and the tracker bar.
   row: {
@@ -1677,7 +1635,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     borderRadius: 14,
     overflow: 'hidden',
   },
@@ -1693,46 +1651,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   // "TODAY" above the weekday when the selected date is the current day.
-  wheelTodayLabel: {
-    position: 'absolute',
-    top: 4,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 8,
-    letterSpacing: 1,
-    color: '#FCFBF9',
-  },
+  wheelTodayLabel: { position: 'absolute', top: 6, left: 0, right: 0, textAlign: 'center', fontFamily: F.dot, fontSize: 9, letterSpacing: 2, color: C.onHot },
   // Day name (e.g. "MONDAY") above the number.
-  wheelDay: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 12,
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
+  wheelDay: { fontFamily: F.dot, fontSize: 12, marginBottom: 8, letterSpacing: 2 },
   // The big bold date number.
   wheelNum: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.dot,
     fontSize: 52,
     lineHeight: 58,
   },
   // Month label at the bottom of the orange square (overlay only — does not affect row layout).
-  wheelMonth: {
-    position: 'absolute',
-    bottom: 10,
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 11,
-    letterSpacing: 1,
-    color: '#FCFBF9',
-  },
+  wheelMonth: { position: 'absolute', bottom: 10, left: 0, right: 0, textAlign: 'center', fontFamily: F.dot, fontSize: 12, letterSpacing: 2, color: C.onHot },
   // The thin vertical line between the date column and task list.
   vDivider: {
     width: 1,
-    backgroundColor: '#E5E1DA',
+    backgroundColor: C.line,
     marginHorizontal: 14,
   },
   // The right column — takes all remaining horizontal space (flex: 1).
@@ -1752,22 +1685,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 4,
   },
-  cardLabelDate: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 10,
-    color: '#8C857B',
-    letterSpacing: 0.5,
-  },
-  cardLabel: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 13,
-    color: '#FF4D00',
-    letterSpacing: 1,
-  },
+  cardLabelDate: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 2 },
+  cardLabel: { fontFamily: F.dot, fontSize: 15, color: C.ink, letterSpacing: 2 },
   editHint: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 9,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.dim,
     marginBottom: 10,
     letterSpacing: 0.5,
   },
@@ -1776,14 +1699,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     marginTop: 14,
   },
-  editHeaderBtnText: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 10,
-    color: '#8C857B',
-    letterSpacing: 1.5,
-  },
+  editHeaderBtnText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2 },
   editHeaderBtnTextActive: {
-    color: '#FF4D00',
+    color: C.hot,
   },
   editModeActive: {
     backgroundColor: 'rgba(255,77,0,0.10)',
@@ -1797,41 +1715,35 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E1DA',
+    borderBottomColor: C.line,
   },
   editModeRowDone: { opacity: 0.45 },
   editModeLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 11,
-    color: '#1A1714',
+    fontFamily: F.mono,
+    fontSize: 12,
+    color: C.ink,
   },
   editModeMeta: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 9,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.dim,
     marginTop: 2,
   },
   editModeLabelDone: {
     textDecorationLine: 'line-through',
-    color: '#8C857B',
+    color: C.dim,
   },
   // "NO TASKS YET." shown when the task list is empty.
   emptyWrap: {
     paddingVertical: 8,
     marginBottom: 16,
   },
-  emptyTitle: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 13,
-    color: '#8C857B',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
+  emptyTitle: { fontFamily: F.dot, fontSize: 13, color: C.dim, letterSpacing: 2, marginBottom: 8 },
   emptyHint: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 13,
     lineHeight: 19,
-    color: '#C7C1B8',
+    color: C.faint,
   },
   // A single task row — the tappable main area plus the archive button, laid out horizontally.
   taskRow: {
@@ -1853,7 +1765,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderWidth: 2,
-    borderColor: '#1A1714',
+    borderColor: C.lineHi,
     marginRight: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1862,12 +1774,12 @@ const styles = StyleSheet.create({
   },
   // Filled orange checkbox when the task is done.
   checkboxDone: {
-    backgroundColor: '#FF4D00',
-    borderColor: '#FF4D00',
+    backgroundColor: C.hot,
+    borderColor: C.hot,
   },
   // The "✓" tick inside a done checkbox.
   checkmark: {
-    color: '#FCFBF9',
+    color: C.onHot,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -1876,15 +1788,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   taskLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 10,
+    fontFamily: F.mono,
+    fontSize: 11,
     color: '#000000',
     lineHeight: 16,
   },
   // Strikethrough and grey text when the task is done.
   taskLabelDone: {
     textDecorationLine: 'line-through',
-    color: '#8C857B',
+    color: C.dim,
   },
   // The original row turns into a faint dashed placeholder while its task is lifted out.
   taskRowDragging: {},
@@ -1894,7 +1806,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: '#FF4D00',
+    borderColor: C.hot,
     borderRadius: 4,
     backgroundColor: 'rgba(255, 77, 0, 0.06)',
   },
@@ -1911,19 +1823,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   priorityIndexText: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 13,
     lineHeight: 16,
   },
   // Full-height left column shown instead of the date wheel while dragging.
   deleteBinCol: {
-    backgroundColor: '#FFF1F0',
+    backgroundColor: C.raised,
     borderRadius: 12,
     alignItems: 'stretch',
     justifyContent: 'center',
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#FF4D00',
+    borderColor: C.hot,
     borderStyle: 'dashed',
   },
   // Each half of the split bin (delete top, edit bottom).
@@ -1941,55 +1853,50 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
   },
-  binHalfDeleteActive: { backgroundColor: '#FF4D40' },
-  binHalfEditActive:   { backgroundColor: '#FF4D00' },
+  binHalfDeleteActive: { backgroundColor: C.hot },
+  binHalfEditActive:   { backgroundColor: C.hot },
   binHalfLabel: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 9,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.hot,
     textAlign: 'center',
     letterSpacing: 1,
   },
-  binHalfLabelActive: { color: '#FCFBF9' },
+  binHalfLabelActive: { color: C.surface },
   binDivider: {
     height: 1,
     backgroundColor: 'rgba(255,77,0,0.25)',
     marginHorizontal: 8,
   },
   deleteBinLabel: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 10,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.hot,
     textAlign: 'center',
     letterSpacing: 1,
     lineHeight: 16,
   },
   deleteBinLabelActive: {
-    color: '#E03030',
+    color: C.alert,
   },
   // The "+ ADD A NEW TASK..." / "× CANCEL" row at the bottom of the task list.
   addRow: {
     borderTopWidth: 1,
-    borderTopColor: '#E5E1DA',
+    borderTopColor: C.line,
     paddingTop: 16,
     marginTop: 4,
     marginBottom: 30,
   },
-  addText: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 13,
-    color: '#FF4D00',
-    letterSpacing: 0.5,
-  },
+  addText: { fontFamily: F.dot, fontSize: 13, color: C.ink, letterSpacing: 1.5 },
   // The white card at the very bottom showing steps, active time, calories, elevation.
   trackerBar: {
     flexDirection: 'row',
-    backgroundColor: '#FCFBF9',
+    backgroundColor: C.surface,
     marginHorizontal: 16,
     marginBottom: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E5E1DA',
+    borderColor: C.line,
     paddingVertical: 16,
   },
   // Each individual stat block inside the tracker bar.
@@ -1998,32 +1905,32 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     borderLeftWidth: 1,
-    borderLeftColor: '#E5E1DA',
+    borderLeftColor: C.line,
     paddingHorizontal: 4,
   },
   // Removes the left border from the first tracker item (otherwise it would double up with the card border).
   trackerItemFirst: { borderLeftWidth: 0 },
   // The small label above each tracker icon (e.g. "TODAY'S STEPS").
   trackerTop: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 6,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 7,
+    color: C.dim,
     letterSpacing: 0.5,
     marginBottom: 8,
   },
   trackerIcon: { marginBottom: 8 },
   // The large value number (e.g. "16,842").
   trackerValue: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 15,
-    color: '#FF4D00',
+    color: C.hot,
     marginBottom: 4,
   },
   // The unit label below the value (e.g. "STEPS").
   trackerUnit: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 7,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 8,
+    color: C.dim,
     letterSpacing: 1,
   },
   // The small circular badge in the bottom-right corner of each date card,
@@ -2042,27 +1949,21 @@ const styles = StyleSheet.create({
   },
   // The number inside the badge.
   badgeText: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 10,
+    fontFamily: F.mono,
+    fontSize: 11,
   },
 
   // ── Today's Focus card ───────────────────────────────────────────
-  focusSection: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 11,
-    color: '#FF4D00',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
+  focusSection: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3, marginBottom: 10 },
   focusName: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.dot,
     fontSize: 30,
-    color: '#1A1714',
+    color: C.ink,
     lineHeight: 36,
     marginBottom: 8,
   },
   focusNamePlaceholder: {
-    color: '#C7C1B8',
+    color: C.faint,
     fontSize: 22,
     lineHeight: 28,
   },
@@ -2073,49 +1974,35 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   focusBlockLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 12,
-    color: '#8C857B',
+    color: C.dim,
   },
   focusSessionRemaining: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     fontSize: 12,
-    color: '#FF4D00',
+    color: C.hot,
     letterSpacing: 0.5,
     marginBottom: 14,
   },
-  startFocusBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#1A1714',
-    borderRadius: 100,       // Full pill shape.
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 4,
-  },
-  startFocusBtnText: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 9,
-    color: '#1A1714',
-    letterSpacing: 1,
-  },
+  startFocusBtn: { alignItems: 'center', justifyContent: 'center', backgroundColor: C.hot, borderRadius: 100, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 4 },
+  startFocusBtnText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
   focusDivider: {
     height: 1,
-    backgroundColor: '#E5E1DA',
+    backgroundColor: C.line,
     marginVertical: 20,
   },
 
   // ── Priority tags on task rows ───────────────────────────────────
   priorityTag: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 7,
+    fontFamily: F.mono,
+    fontSize: 8,
     marginTop: 4,
     letterSpacing: 1,
   },
-  priority_HIGH:   { color: '#E03030' },
-  priority_MEDIUM: { color: '#8C857B' },
-  priority_LOW:    { color: '#4A9B6F' },
+  priority_HIGH:   { color: C.alert },
+  priority_MEDIUM: { color: C.dim },
+  priority_LOW:    { color: C.live },
 
   // ── Input modal ───────────────────────────────────────────────────
   // KAV fills the screen so the card can move upward above the keyboard.
@@ -2147,7 +2034,7 @@ const styles = StyleSheet.create({
   // The white card itself.
   sheetCard: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.surface,
     borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
@@ -2177,7 +2064,7 @@ const styles = StyleSheet.create({
   },
   taskModalCard: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: C.surface,
     borderRadius: 16,
     padding: 20,
     maxHeight: '88%',
@@ -2195,22 +2082,22 @@ const styles = StyleSheet.create({
   },
   sheetCardDivider: {
     height: 1,
-    backgroundColor: '#E5E1DA',
+    backgroundColor: C.line,
     marginBottom: 14,
   },
   sheetLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 9,
-    color: '#FF4D00',
+    fontFamily: F.mono,
+    fontSize: 10,
+    color: C.hot,
     letterSpacing: 1,
     marginBottom: 16,
   },
   sheetInput: {
-    fontFamily: 'PixeloidSans_400Regular',
+    fontFamily: F.mono,
     fontSize: 13,
-    color: '#1A1714',
+    color: C.ink,
     borderBottomWidth: 2,
-    borderBottomColor: '#E5E1DA',
+    borderBottomColor: C.line,
     paddingVertical: 10,
     marginBottom: 20,
   },
@@ -2230,34 +2117,34 @@ const styles = StyleSheet.create({
     borderRadius: 100,
   },
   priorityBtn_LOW: {
-    backgroundColor: '#4A9B6F',
-    borderColor: '#4A9B6F',
+    backgroundColor: C.live,
+    borderColor: C.live,
   },
   priorityBtn_MEDIUM: {
-    backgroundColor: '#FF4D00',
-    borderColor: '#FF4D00',
+    backgroundColor: C.hot,
+    borderColor: C.hot,
   },
   priorityBtn_HIGH: {
-    backgroundColor: '#E03030',
-    borderColor: '#E03030',
+    backgroundColor: C.alert,
+    borderColor: C.alert,
   },
   priorityBtnSelected: {
-    borderColor: '#1A1714',
+    borderColor: C.lineHi,
     transform: [{ scale: 1.04 }],
   },
   priorityBtnText: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 7,
+    fontFamily: F.mono,
+    fontSize: 8,
     letterSpacing: 1,
   },
   priorityBtnTextOnColor: {
-    color: '#FCFBF9',
+    color: C.onHot,
   },
   priorityBtnTextSelected: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
   },
   sheetConfirm: {
-    backgroundColor: '#FF4D00',
+    backgroundColor: C.hot,
     borderRadius: 100,
     paddingVertical: 14,
     alignItems: 'center',
@@ -2266,9 +2153,9 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   sheetConfirmText: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 10,
-    color: '#FCFBF9',
+    fontFamily: F.mono,
+    fontSize: 11,
+    color: C.onHot,
     letterSpacing: 1,
   },
   sheetClearFocus: {
@@ -2277,9 +2164,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sheetClearFocusText: {
-    fontFamily: 'PixeloidSans_700Bold',
-    fontSize: 11,
-    color: '#8C857B',
+    fontFamily: F.mono,
+    fontSize: 12,
+    color: C.dim,
     letterSpacing: 1,
   },
 });

@@ -13,6 +13,7 @@ import {
 import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
+import { C, F } from '@/lib/theme';
 export const WHEEL_ITEM_H = 40;
 const WHEEL_VISIBLE = 5;
 const WHEEL_PAD_SLOTS = Math.floor(WHEEL_VISIBLE / 2);
@@ -76,10 +77,10 @@ export type WheelPalette = {
 
 /** Matches the task creation sheet (light pixel card). */
 export const SHEET_WHEEL_PALETTE: WheelPalette = {
-  bg: '#FFFFFF',
-  timer: '#1A1714',
-  label: '#8C857B',
-  trackBorder: '#E5E1DA',
+  bg: C.surface,
+  timer: C.ink,
+  label: C.dim,
+  trackBorder: C.line,
 };
 
 function clampIndex(n: number, min: number, max: number) {
@@ -516,9 +517,9 @@ const styles = StyleSheet.create({
   timeWheelsWrap: { width: '100%', marginBottom: 10, alignItems: 'center' },
   timeWheelsWrapFramed: { alignItems: 'stretch' },
   timeWheelsHeading: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 8,
-    color: '#8C857B',
+    fontFamily: F.dot,
+    fontSize: 9,
+    color: C.dim,
     letterSpacing: 1.5,
     marginBottom: 4,
     textAlign: 'center',
@@ -539,7 +540,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   timeColon: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.dot,
     fontSize: 18,
     marginTop: 2,
     paddingHorizontal: 2,
@@ -547,8 +548,8 @@ const styles = StyleSheet.create({
   wheelPickerCol: { flex: 1, alignItems: 'center' },
   wheelPickerColCompact: { flex: 0, minWidth: 72 },
   wheelPickerLabel: {
-    fontFamily: 'PixeloidSans_400Regular',
-    fontSize: 8,
+    fontFamily: F.mono,
+    fontSize: 9,
     letterSpacing: 1.5,
     marginBottom: 8,
   },
@@ -575,7 +576,7 @@ const styles = StyleSheet.create({
   wheelEdgeFadeBottom: { bottom: 0, flexDirection: 'column-reverse' },
   wheelPickerItem: { justifyContent: 'center', alignItems: 'center' },
   wheelPickerItemText: {
-    fontFamily: 'PixeloidSans_700Bold',
+    fontFamily: F.mono,
     letterSpacing: 0.5,
   },
 });

@@ -23,15 +23,11 @@ import {
 } from '@/lib/finance-data';
 import { toDateKey } from '@/lib/dateKey';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BG     = '#F4F2EE';
-const RED    = '#C0432B';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
 
 type Section = 'spending' | 'bills' | 'budgets';
 
@@ -85,11 +81,11 @@ export default function FinanceModal() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={INK} />
+          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
         </TouchableOpacity>
         <Text style={styles.title}>FINANCE</Text>
         <TouchableOpacity onPress={() => (section === 'bills' ? setAddBillVisible(true) : setAddExpenseVisible(true))} hitSlop={12}>
-          <MaterialCommunityIcons name="plus" size={22} color={INK} />
+          <MaterialCommunityIcons name="plus" size={22} color={C.ink} />
         </TouchableOpacity>
       </View>
 
@@ -143,7 +139,7 @@ export default function FinanceModal() {
                   <TextInput
                     style={styles.budgetInput}
                     placeholder="target"
-                    placeholderTextColor={MUTED}
+                    placeholderTextColor={C.dim}
                     keyboardType="decimal-pad"
                     defaultValue={budgets[c] ? String(budgets[c]) : ''}
                     onEndEditing={e => {
@@ -152,7 +148,7 @@ export default function FinanceModal() {
                     }}
                   />
                   {s && (
-                    <Text style={[styles.rowAmount, s.over && { color: RED }]}>
+                    <Text style={[styles.rowAmount, s.over && { color: C.alert }]}>
                       ${s.spent.toFixed(0)}{s.target ? ` / $${s.target}` : ''}
                     </Text>
                   )}
@@ -168,7 +164,7 @@ export default function FinanceModal() {
           <Pressable style={styles.backdrop} onPress={() => setAddExpenseVisible(false)} />
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>NEW EXPENSE</Text>
-            <TextInput style={styles.input} placeholder="Amount" placeholderTextColor={MUTED} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoFocus />
+            <TextInput style={styles.input} placeholder="Amount" placeholderTextColor={C.dim} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoFocus />
             <View style={styles.chipRow}>
               {CATEGORIES.map(c => (
                 <TouchableOpacity key={c} style={[styles.chip, category === c && styles.chipActive]} onPress={() => setCategory(c)}>
@@ -176,7 +172,7 @@ export default function FinanceModal() {
                 </TouchableOpacity>
               ))}
             </View>
-            <TextInput style={styles.input} placeholder="Note (optional)" placeholderTextColor={MUTED} value={note} onChangeText={setNote} />
+            <TextInput style={styles.input} placeholder="Note (optional)" placeholderTextColor={C.dim} value={note} onChangeText={setNote} />
             <TouchableOpacity style={styles.saveBtn} onPress={saveExpense}>
               <Text style={styles.saveBtnText}>ADD EXPENSE</Text>
             </TouchableOpacity>
@@ -189,8 +185,8 @@ export default function FinanceModal() {
           <Pressable style={styles.backdrop} onPress={() => setAddBillVisible(false)} />
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>NEW BILL</Text>
-            <TextInput style={styles.input} placeholder="Name" placeholderTextColor={MUTED} value={billName} onChangeText={setBillName} autoFocus />
-            <TextInput style={styles.input} placeholder="Amount" placeholderTextColor={MUTED} value={billAmount} onChangeText={setBillAmount} keyboardType="decimal-pad" />
+            <TextInput style={styles.input} placeholder="Name" placeholderTextColor={C.dim} value={billName} onChangeText={setBillName} autoFocus />
+            <TextInput style={styles.input} placeholder="Amount" placeholderTextColor={C.dim} value={billAmount} onChangeText={setBillAmount} keyboardType="decimal-pad" />
             <TouchableOpacity style={styles.saveBtn} onPress={saveBill}>
               <Text style={styles.saveBtnText}>ADD BILL</Text>
             </TouchableOpacity>
@@ -202,41 +198,41 @@ export default function FinanceModal() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK },
+  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   segmentRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
-  segment: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: BORDER, alignItems: 'center' },
-  segmentActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  segmentText: { fontFamily: REG, fontSize: 9, color: MUTED },
-  segmentTextActive: { color: '#FFFFFF' },
+  segment: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line, alignItems: 'center' },
+  segmentActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  segmentText: { fontFamily: REG, fontSize: 10, color: C.dim },
+  segmentTextActive: { color: C.surface },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 8 },
-  totalText: { fontFamily: BOLD, fontSize: 14, color: INK, marginBottom: 6 },
-  empty: { fontFamily: REG, fontSize: 12, color: MUTED, textAlign: 'center', marginTop: 20 },
+  totalText: { fontFamily: BOLD, fontSize: 14, color: C.ink, marginBottom: 6 },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 20 },
   row: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: CARD,
-    borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface,
+    borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 12,
   },
-  rowLabel: { fontFamily: REG, fontSize: 12, color: INK, textTransform: 'capitalize', flex: 1 },
-  rowSub: { fontFamily: REG, fontSize: 10, color: MUTED, marginTop: 2 },
-  rowAmount: { fontFamily: BOLD, fontSize: 12, color: INK },
+  rowLabel: { fontFamily: REG, fontSize: 12, color: C.ink, textTransform: 'capitalize', flex: 1 },
+  rowSub: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 2 },
+  rowAmount: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   paidBtn: { backgroundColor: ORANGE, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginLeft: 8 },
-  paidBtnText: { fontFamily: BOLD, fontSize: 9, color: '#FFFFFF' },
+  paidBtnText: { fontFamily: BOLD, fontSize: 10, color: C.onHot },
   budgetRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: CARD,
-    borderRadius: 10, borderWidth: 1, borderColor: BORDER, padding: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface,
+    borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 12,
   },
-  budgetInput: { borderWidth: 1, borderColor: BORDER, borderRadius: 8, padding: 8, width: 70, fontFamily: REG, fontSize: 11, color: INK },
+  budgetInput: { borderWidth: 1, borderColor: C.line, borderRadius: 8, padding: 8, width: 70, fontFamily: REG, fontSize: 12, color: C.ink },
   modalWrap: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)' },
   sheet: { backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14 },
-  sheetTitle: { fontFamily: BOLD, fontSize: 14, color: INK },
-  input: { borderWidth: 1, borderColor: BORDER, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 13, color: INK },
+  sheetTitle: { fontFamily: BOLD, fontSize: 14, color: C.ink },
+  input: { borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 13, color: C.ink },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: BORDER },
-  chipActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  chipText: { fontFamily: REG, fontSize: 11, color: MUTED, textTransform: 'capitalize' },
-  chipTextActive: { color: '#FFFFFF', fontFamily: BOLD },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line },
+  chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
+  chipText: { fontFamily: REG, fontSize: 12, color: C.dim, textTransform: 'capitalize' },
+  chipTextActive: { color: C.surface, fontFamily: BOLD },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: '#FFFFFF' },
+  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

@@ -13,15 +13,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Spark } from '@/components/Spark';
 import { loadBodyData, getMuscleGroupBreakdown, type BodyData, type MuscleGroupTally } from '@/lib/body-data';
 
-const ORANGE = '#FF4D00';
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const FAINT  = '#C7C1B8';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const BOLD   = 'PixeloidSans_700Bold';
-const REG    = 'PixeloidSans_400Regular';
-const NUM    = 'PixeloidSans_400Regular';
+import { C, F } from '@/lib/theme';
+const CARD   = C.surface;
+const BOLD = F.mono;
+const REG = F.mono;
+const NUM    = F.mono;
 
 export default function StrengthScreen() {
   const router = useRouter();
@@ -41,7 +37,7 @@ export default function StrengthScreen() {
     <SafeAreaView style={s.container} edges={['top']}>
       <View style={s.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={ORANGE} />
+          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
         </TouchableOpacity>
         <Text style={s.title}>STRENGTH</Text>
         <View style={{ width: 26 }} />
@@ -75,7 +71,7 @@ export default function StrengthScreen() {
         <Text style={[s.sectionLabel, s.sectionLabelSpaced]}>STRENGTH TREND</Text>
         {data.strengthTrend ? (
           <View style={s.trendCard}>
-            <Text style={[s.trendPct, { color: ORANGE }]}>
+            <Text style={[s.trendPct, { color: C.hot }]}>
               {data.strengthTrend.pct >= 0 ? '+' : ''}{data.strengthTrend.pct}%
             </Text>
             <Text style={s.trendSub}>average change across qualifying lifts, vs 90 days ago</Text>
@@ -104,30 +100,30 @@ export default function StrengthScreen() {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F2ED' },
+  container: { flex: 1, backgroundColor: C.surface },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: INK, letterSpacing: 1 },
+  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
-  sectionLabel: { fontFamily: BOLD, fontSize: 11, color: INK, letterSpacing: 1, marginBottom: 10 },
+  sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1, marginBottom: 10 },
   sectionLabelSpaced: { marginTop: 24 },
-  empty: { fontFamily: REG, fontSize: 11, color: MUTED, marginBottom: 12, lineHeight: 16 },
-  emptySmall: { fontFamily: REG, fontSize: 9, color: MUTED, marginVertical: 8 },
+  empty: { fontFamily: REG, fontSize: 12, color: C.dim, marginBottom: 12, lineHeight: 16 },
+  emptySmall: { fontFamily: REG, fontSize: 10, color: C.dim, marginVertical: 8 },
 
-  liftCard: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14, marginBottom: 10 },
+  liftCard: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 10 },
   liftHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  liftName: { fontFamily: BOLD, fontSize: 13, color: INK, letterSpacing: 1 },
-  liftValue: { fontFamily: NUM, fontSize: 20, color: ORANGE },
-  liftUnit: { fontFamily: BOLD, fontSize: 11 },
-  liftSub: { fontFamily: REG, fontSize: 8, color: MUTED, marginTop: 2, marginBottom: 8 },
-  liftDelta: { fontFamily: REG, fontSize: 9, color: MUTED, marginTop: 6 },
+  liftName: { fontFamily: BOLD, fontSize: 13, color: C.ink, letterSpacing: 1 },
+  liftValue: { fontFamily: NUM, fontSize: 20, color: C.hot },
+  liftUnit: { fontFamily: BOLD, fontSize: 12 },
+  liftSub: { fontFamily: REG, fontSize: 9, color: C.dim, marginTop: 2, marginBottom: 8 },
+  liftDelta: { fontFamily: REG, fontSize: 10, color: C.dim, marginTop: 6 },
 
-  trendCard: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: BORDER, padding: 14, marginBottom: 12, alignItems: 'center' },
+  trendCard: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 12, alignItems: 'center' },
   trendPct: { fontFamily: NUM, fontSize: 32 },
-  trendSub: { fontFamily: REG, fontSize: 9, color: MUTED, marginTop: 4, marginBottom: 12, textAlign: 'center' },
+  trendSub: { fontFamily: REG, fontSize: 10, color: C.dim, marginTop: 4, marginBottom: 12, textAlign: 'center' },
 
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  barLabel: { fontFamily: BOLD, fontSize: 9, color: INK, width: 90, letterSpacing: 0.5 },
-  barTrack: { flex: 1, height: 10, backgroundColor: '#E8E4DD', borderRadius: 5, overflow: 'hidden' },
-  barFill: { height: 10, backgroundColor: ORANGE, borderRadius: 5 },
-  barValue: { fontFamily: NUM, fontSize: 10, color: MUTED, width: 30, textAlign: 'right' },
+  barLabel: { fontFamily: BOLD, fontSize: 10, color: C.ink, width: 90, letterSpacing: 0.5 },
+  barTrack: { flex: 1, height: 10, backgroundColor: C.surface, borderRadius: 5, overflow: 'hidden' },
+  barFill: { height: 10, backgroundColor: C.hot, borderRadius: 5 },
+  barValue: { fontFamily: NUM, fontSize: 10, color: C.dim, width: 30, textAlign: 'right' },
 });

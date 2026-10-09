@@ -11,13 +11,9 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import OnboardingShell from '@/components/OnboardingShell';
 
-const INK    = '#1A1714';
-const MUTED  = '#8C857B';
-const ORANGE = '#FF4D00';
-const BORDER = '#E5E1DA';
-const CARD   = '#FCFBF9';
-const REG    = 'PixeloidSans_400Regular';
-const BOLD   = 'PixeloidSans_700Bold';
+import { C, F } from '@/lib/theme';
+const REG = F.mono;
+const BOLD = F.mono;
 
 const CHAPTERS: { icon: string; title: string; body: string }[] = [
   { icon: 'checkbox-marked-circle-outline', title: 'Habits', body: 'Streaks, heatmaps, and a Medication & Supplements tracker.' },
@@ -33,7 +29,7 @@ export default function Book() {
     <OnboardingShell step={7} title="What's inside" subtitle="A quick look at what you can do." onNext={() => router.push('/(onboarding)/connect')}>
       {CHAPTERS.map(c => (
         <View key={c.title} style={styles.row}>
-          <MaterialCommunityIcons name={c.icon as any} size={22} color={ORANGE} />
+          <MaterialCommunityIcons name={c.icon as any} size={22} color={C.hot} />
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{c.title}</Text>
             <Text style={styles.body}>{c.body}</Text>
@@ -47,8 +43,8 @@ export default function Book() {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row', gap: 12, padding: 14, borderRadius: 10,
-    borderWidth: 1, borderColor: BORDER, backgroundColor: CARD, alignItems: 'flex-start',
+    borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, alignItems: 'flex-start',
   },
-  title: { fontFamily: BOLD, fontSize: 12, color: INK },
-  body: { fontFamily: REG, fontSize: 11, color: MUTED, marginTop: 2, lineHeight: 15 },
+  title: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  body: { fontFamily: REG, fontSize: 12, color: C.dim, marginTop: 2, lineHeight: 15 },
 });

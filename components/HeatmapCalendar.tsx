@@ -8,10 +8,11 @@
 import { View, StyleSheet } from 'react-native';
 import type { HeatmapCell } from '@/lib/habits-data';
 
+import { C } from '@/lib/theme';
 const COLORS: Record<HeatmapCell['state'], string> = {
-  done: '#3B7A57',
-  missed: '#C0432B',
-  before: '#E5E1DA',
+  done: C.live,
+  missed: C.alert,
+  before: C.line,
   frozen: '#3B82F6',
 };
 

@@ -8,9 +8,8 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { buildDayGrid } from '@/lib/body-data';
 
-const ORANGE = '#FF4D00';
-const MUTED  = '#8C857B';
-const FAINT  = '#C7C1B8';
+import { C, F } from '@/lib/theme';
+const ORANGE = C.hot;
 
 export type SquareKind = 'hit' | 'partial' | 'missed' | 'empty' | 'trained' | 'rest' | 'cheat';
 
@@ -29,7 +28,7 @@ function HeatSquare({ kind }: { kind: SquareKind }) {
           const row = Math.floor(i / DITHER_TILES);
           const col = i % DITHER_TILES;
           const on = (row + col) % 2 === 0;
-          return <View key={i} style={{ width: tile, height: tile, backgroundColor: on ? ORANGE : '#FCFBF9' }} />;
+          return <View key={i} style={{ width: tile, height: tile, backgroundColor: on ? C.hot : C.surface }} />;
         })}
       </View>
     );
@@ -74,15 +73,15 @@ const hs = StyleSheet.create({
   sq: { width: SQ, height: SQ, borderRadius: 0, marginRight: 3, marginBottom: 3, overflow: 'hidden' },
   invisible: {},
   solid: { backgroundColor: ORANGE },
-  dotted: { borderWidth: 1.5, borderColor: ORANGE, borderStyle: 'dotted' },
-  missed: { borderWidth: 1.5, borderColor: '#D8D2C8' },
+  dotted: { borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dotted' },
+  missed: { borderWidth: 1.5, borderColor: C.line },
 });
 
 const hm = StyleSheet.create({
   headerRow: { flexDirection: 'row', marginBottom: 4 },
-  headerDate: { width: SQ + 3, textAlign: 'center', fontFamily: 'PixeloidSans_400Regular', fontSize: 7, color: FAINT },
+  headerDate: { width: SQ + 3, textAlign: 'center', fontFamily: F.mono, fontSize: 8, color: C.faint },
   row: { flexDirection: 'row' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  legendText: { fontFamily: 'PixeloidSans_400Regular', fontSize: 7, color: MUTED },
+  legendText: { fontFamily: F.mono, fontSize: 8, color: C.dim },
 });
