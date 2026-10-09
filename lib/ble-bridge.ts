@@ -498,12 +498,20 @@ class BleBridgeManager {
   }
 
   private async _syncTime(device: Device) {
+    // h, m, s, then year (LE u16), month (1-12), day. The puck has no RTC, so
+    // this is its only source of the calendar date (the log home screen's
+    // year-of-dots needs it). Firmware also accepts the old 4-byte form.
     const now = new Date();
+    const year = now.getFullYear();
     const payload = new Uint8Array([
       BLE_CMD_SET_TIME,
       now.getHours(),
       now.getMinutes(),
       now.getSeconds(),
+      year & 0xff,
+      (year >> 8) & 0xff,
+      now.getMonth() + 1,
+      now.getDate(),
     ]);
     await device.writeCharacteristicWithResponseForService(
       SERVICE_UUID, CMD_CHAR_UUID, bytesToBase64(payload)
