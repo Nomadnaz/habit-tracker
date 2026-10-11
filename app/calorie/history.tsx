@@ -7,12 +7,13 @@
 import { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { toDateKey, addDaysToKey, fromDateKey } from '@/lib/dateKey';
 import { getMealsForDate, dailyTotals, MEAL_TYPES, type Meal } from '@/lib/meals-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const CARD   = C.surface;
 const BOLD = F.mono;
 const REG = F.mono;
@@ -30,7 +31,6 @@ function formatDateLabel(dateKey: string): string {
 }
 
 export default function CalorieHistoryScreen() {
-  const router = useRouter();
   const [dateKey, setDateKey] = useState(toDateKey(new Date()));
   const [meals, setMeals] = useState<Meal[]>([]);
 
@@ -45,13 +45,7 @@ export default function CalorieHistoryScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-        </TouchableOpacity>
-        <Text style={s.title}>HISTORY</Text>
-        <View style={{ width: 26 }} />
-      </View>
+      <ScreenHeader title="MEAL HISTORY" />
 
       <View style={s.dateNav}>
         <TouchableOpacity onPress={() => setDateKey(k => addDaysToKey(k, -1))} hitSlop={10}>
@@ -104,8 +98,6 @@ export default function CalorieHistoryScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingBottom: 12 },
   dateLabel: { fontFamily: BOLD, fontSize: 14, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 32 },

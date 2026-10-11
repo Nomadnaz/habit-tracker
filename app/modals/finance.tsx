@@ -12,8 +12,7 @@ import {
   Modal, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import {
@@ -24,6 +23,7 @@ import {
 import { toDateKey } from '@/lib/dateKey';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const CARD   = C.surface;
 const BOLD = F.mono;
@@ -32,7 +32,6 @@ const REG = F.mono;
 type Section = 'spending' | 'bills' | 'budgets';
 
 export default function FinanceModal() {
-  const router = useRouter();
   const [section, setSection] = useState<Section>('spending');
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -79,15 +78,11 @@ export default function FinanceModal() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
-        </TouchableOpacity>
-        <Text style={styles.title}>FINANCE</Text>
-        <TouchableOpacity onPress={() => (section === 'bills' ? setAddBillVisible(true) : setAddExpenseVisible(true))} hitSlop={12}>
-          <MaterialCommunityIcons name="plus" size={22} color={C.ink} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title="FINANCE" close
+        right={<>
+          <HeaderIcon icon="plus" label="Add" onPress={() => (section === 'bills' ? setAddBillVisible(true) : setAddExpenseVisible(true))} />
+        </>}
+      />
 
       <View style={styles.segmentRow}>
         {(['spending', 'bills', 'budgets'] as Section[]).map(s => (
@@ -199,8 +194,6 @@ export default function FinanceModal() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   segmentRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
   segment: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line, alignItems: 'center' },
   segmentActive: { backgroundColor: ORANGE, borderColor: C.hot },

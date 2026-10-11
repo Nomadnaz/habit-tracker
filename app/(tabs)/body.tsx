@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────
-// BODY — the axonometric body map + the health systems (absorbs the old
+// BODY — the front/back body map + the health systems (absorbs the old
 // HEALTH hub's cards; app/(tabs)/health.tsx stays registered but has no tab).
 //
 // Tap a muscle → a floating panel assigns it a target category, a note and
@@ -19,17 +19,12 @@ import * as Haptics from 'expo-haptics';
 import { C, F, SPRING } from '@/lib/theme';
 import {
   REGIONS, REGION_BY_ID, loadBodyMap, saveBodyMap,
-  type BodyMap, type Category, type Tone,
+  type BodyMap, type Category, type Plate, type Tone,
 } from '@/lib/body-map';
 import { BodyStage, TONE } from '@/components/body/BodyStage';
 import { Board, BoardRow } from '@/components/Board';
 
-const VIEWS = [
-  { label: 'FRONT', yaw: 0 },
-  { label: 'AXON', yaw: -0.62 },
-  { label: 'SIDE', yaw: -Math.PI / 2 },
-  { label: 'BACK', yaw: Math.PI },
-];
+const SIDES: Plate[] = ['front', 'back'];
 
 const SYSTEMS: { label: string; route: string }[] = [
   { label: 'CALORIES', route: '/calorie' },
@@ -46,8 +41,7 @@ export default function BodyScreen() {
   const [map, setMap] = useState<BodyMap | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
-  const [view, setView] = useState(1);
-  const [yawTarget, setYawTarget] = useState({ yaw: VIEWS[1].yaw, key: 0 });
+  const [side, setSide] = useState<Plate>('front');
   const [editing, setEditing] = useState(false);
 
   useEffect(() => { loadBodyMap().then(setMap); }, []);
@@ -62,8 +56,15 @@ export default function BodyScreen() {
   }, []);
 
   const select = (id: string | null) => {
-    if (id) Haptics.selectionAsync();
+    if (id) {
+      Haptics.selectionAsync();
+      setSide(REGION_BY_ID[id].plate);
+    }
     setSelected(id);
+  };
+  const flip = (to?: Plate) => {
+    setSelected(null);
+    setSide(cur => to ?? (cur === 'front' ? 'back' : 'front'));
   };
 
   const assign = (regionId: string, categoryId: string) => {
@@ -79,7 +80,7 @@ export default function BodyScreen() {
 
   if (!map) return <SafeAreaView style={styles.safe} />;
 
-  const stageH = Math.min(500, Math.round(width * 1.18));
+  const stageH = Math.min(520, Math.round(width * 1.24));
   const counts = Object.values(map.marks).reduce<Record<string, number>>((a, m) => ({ ...a, [m.category]: (a[m.category] ?? 0) + 1 }), {});
   const targets = REGIONS.filter(r => map.marks[r.id]).sort((a, b) =>
     map.categories.findIndex(c => c.id === map.marks[a.id].category) - map.categories.findIndex(c => c.id === map.marks[b.id].category));
@@ -92,35 +93,38 @@ export default function BodyScreen() {
             <Text style={styles.eyebrow}>{`${targets.length} TARGETS · ${REGIONS.length} REGIONS`}</Text>
             <Text style={styles.title}>BODY</Text>
           </View>
-          <Pressable onPress={() => setEditing(true)} style={styles.ghostBtn} hitSlop={8}>
-            <Text style={styles.ghostBtnText}>CATEGORIES</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.views}>
-          {VIEWS.map((v, i) => (
-            <Pressable
-              key={v.label}
-              onPress={() => { Haptics.selectionAsync(); setView(i); setYawTarget({ yaw: v.yaw, key: Date.now() }); }}
-              style={[styles.view, view === i && styles.viewOn]}
-            >
-              <Text style={[styles.viewText, view === i && styles.viewTextOn]}>{v.label}</Text>
+          <View style={styles.headerRight}>
+            <View style={styles.views}>
+              {SIDES.map(v => (
+                <Pressable
+                  key={v}
+                  onPress={() => { if (v !== side) { Haptics.selectionAsync(); flip(v); } }}
+                  style={[styles.view, side === v && styles.viewOn]}
+                  hitSlop={4}
+                >
+                  <Text style={[styles.viewText, side === v && styles.viewTextOn]}>{v.toUpperCase()}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable onPress={() => setEditing(true)} style={styles.iconBtn} hitSlop={8} accessibilityLabel="Edit categories">
+              <MaterialCommunityIcons name="tune-variant" size={17} color={C.ink} />
             </Pressable>
-          ))}
+          </View>
         </View>
 
         <BodyStage
           width={width}
           height={stageH}
           map={map}
+          side={side}
           selected={selected}
           filter={filter}
-          yawTarget={yawTarget}
           onSelect={select}
+          onFlip={() => flip()}
           onMoveLabel={(id, dx, dy) => update(m => m.marks[id] ? { ...m, marks: { ...m.marks, [id]: { ...m.marks[id], dx, dy } } } : m)}
         />
 
-        <Text style={styles.hint}>DRAG TO ROTATE · TAP A MUSCLE TO TARGET IT</Text>
+        <Text style={styles.hint}>SWIPE TO TURN · TAP A MUSCLE TO TARGET IT</Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.legend}>
           {map.categories.map(c => {
@@ -212,7 +216,7 @@ function AssignPanel({ map, regionId, onAssign, onNote, onPin, onClose, onNewCat
       <Animated.View style={[styles.panel, { transform: [{ translateY: y }] }]}>
         <View style={styles.panelHead}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.panelEyebrow}>{region.plate === 'front' ? 'FRONT PLATE' : 'BACK PLATE'}</Text>
+            <Text style={styles.panelEyebrow}>{region.plate === 'front' ? 'FRONT' : 'BACK'}</Text>
             <Text style={styles.panelTitle}>{region.name}</Text>
           </View>
           {mark && (
@@ -315,16 +319,15 @@ function CategoryEditor({ visible, categories, onChange, onClose }: {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
+  header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, marginBottom: 6 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 2 },
   title: { fontFamily: F.dot, fontSize: 40, color: C.ink, letterSpacing: 2, marginTop: 4 },
-  ghostBtn: { borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, marginBottom: 6 },
-  ghostBtnText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 2 },
-
-  views: { flexDirection: 'row', marginHorizontal: 20, marginTop: 16, borderWidth: 1, borderColor: C.line, borderRadius: 999, padding: 3 },
-  view: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 999 },
+  views: { flexDirection: 'row', borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, padding: 3 },
+  view: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 11, borderRadius: 999 },
   viewOn: { backgroundColor: C.hot },
-  viewText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2 },
+  viewText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5 },
   viewTextOn: { color: C.onHot },
 
   hint: { fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: 1, textAlign: 'center', marginTop: 2 },

@@ -9,21 +9,20 @@
 import { useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { getRecentMoodLogs, getTodayMood, logMood, pullRemoteMood, TRIGGERS, type MoodLog } from '@/lib/mood-data';
 import ChatScreen from '@/components/ChatScreen';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const CARD   = C.surface;
 const BOLD = F.mono;
 const REG = F.mono;
 
 export default function MoodModal() {
-  const router = useRouter();
   const [mood, setMood] = useState(5);
   const [stress, setStress] = useState(5);
   const [triggers, setTriggers] = useState<string[]>([]);
@@ -52,15 +51,11 @@ export default function MoodModal() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
-        </TouchableOpacity>
-        <Text style={styles.title}>MOOD</Text>
-        <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
-          <MaterialCommunityIcons name="chat-processing-outline" size={20} color={C.hot} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title="MOOD" close
+        right={<>
+          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
+        </>}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
@@ -114,8 +109,6 @@ export default function MoodModal() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
   label: { fontFamily: BOLD, fontSize: 12, color: C.ink },

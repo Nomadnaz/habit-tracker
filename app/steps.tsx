@@ -28,6 +28,7 @@ import {
 import { formatDistance } from '@/lib/activity-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 // ── Design tokens (identical to BODY page) ─────────────────────────────────
 const ORANGE = C.hot;
 const INK    = C.ink;
@@ -142,24 +143,7 @@ export default function StepsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
 
         {/* ── Header ─────────────────────────────────────── */}
-        <View style={s.header}>
-          <View style={s.headerLeft}>
-            <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-            </TouchableOpacity>
-            <View>
-              <View style={s.titleWrap}>
-                <Text style={s.title}>STEPS</Text>
-              </View>
-              <Text style={s.subtitle}>TRACK YOUR JOURNEY</Text>
-            </View>
-          </View>
-          <View style={s.headerIcons}>
-            <MaterialCommunityIcons name="information-outline" size={18} color={C.dim} />
-            <MaterialCommunityIcons name="chart-bar" size={18} color={C.dim} />
-            <MaterialCommunityIcons name="dots-horizontal" size={18} color={C.dim} />
-          </View>
-        </View>
+        <ScreenHeader title="STEPS" />
 
         {/* ── Today stats row ────────────────────────────── */}
         <View style={s.statsRow}>
@@ -480,12 +464,6 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.surface },
 
   // Header
-  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
-  headerLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  titleWrap: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, position: 'relative' },
-  title: { fontFamily: F.dot, fontSize: 30, color: C.ink, letterSpacing: 2 },
-  subtitle: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2, marginTop: 6, marginLeft: 8 },
-  headerIcons: { flexDirection: 'row', gap: 14, paddingTop: 8 },
 
   // Today stats row
   statsRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 18 },

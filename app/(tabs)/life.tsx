@@ -22,6 +22,7 @@ const AMBITION = [
   { label: 'LIBRARY', sub: 'Books, ideas, links, films', route: '/modals/library' },
 ];
 const SYSTEM = [
+  { label: 'PROFILE', sub: 'Badges and milestones', route: '/(tabs)/profile' },
   { label: 'PUCK DEVICE', sub: 'Pair and sync the puck', route: '/ble-bridge' },
   { label: 'SETTINGS', sub: 'Account, companion, export', route: '/settings' },
 ];

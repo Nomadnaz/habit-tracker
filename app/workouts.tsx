@@ -16,6 +16,7 @@ import {
 } from '@/lib/workout-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 
 const COLOUR_OPTIONS = [C.hot, '#4A90D9', C.live, '#9B59B6', '#E67E22', C.alert];
@@ -64,20 +65,10 @@ export default function WorkoutsScreen() {
   return (
     <SafeAreaView style={s.container} edges={['top']}>
 
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="arrow-left" size={20} color={C.hot} />
-          <Text style={s.backLabel}>BODY</Text>
-        </TouchableOpacity>
-        <View style={s.titleWrap}>
-          <Text style={s.title}>WORKOUTS</Text>
-        </View>
-        <TouchableOpacity onPress={() => setCreateOpen(true)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="plus" size={26} color={C.hot} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="WORKOUTS"
+        right={<HeaderIcon icon="plus" label="New workout" onPress={() => setCreateOpen(true)} />}
+      />
 
       <ScrollView contentContainerStyle={s.scroll}>
         {templates.length === 0 && (
@@ -87,7 +78,7 @@ export default function WorkoutsScreen() {
         {templates.map(t => (
           <TouchableOpacity
             key={t.id}
-            style={[s.card, { borderLeftColor: t.colour }]}
+            style={s.card}
             activeOpacity={0.85}
             onPress={() => router.push({ pathname: '/workout-detail', params: { templateId: t.id } })}
           >
@@ -150,16 +141,11 @@ export default function WorkoutsScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.surface },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  backLabel: { fontFamily: F.mono, fontSize: 11, color: C.hot, letterSpacing: 1 },
-  titleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 2 },
   scroll: { padding: 16, paddingBottom: 40 },
   empty: { fontFamily: F.mono, fontSize: 11, color: C.dim, textAlign: 'center', marginTop: 48 },
 
-  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line, borderLeftWidth: 4, marginBottom: 12, overflow: 'hidden' },
-  colourBar: { width: 4, alignSelf: 'stretch' },
+  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line, marginBottom: 12, overflow: 'hidden' },
+  colourBar: { width: 3, alignSelf: 'stretch' },
   cardBody: { flex: 1, paddingVertical: 16, paddingHorizontal: 14 },
   cardName: { fontFamily: F.mono, fontSize: 13, color: C.ink, letterSpacing: 1 },
   cardSub: { fontFamily: F.mono, fontSize: 10, color: C.dim, marginTop: 4, letterSpacing: 1 },
@@ -173,7 +159,7 @@ const s = StyleSheet.create({
   input: { fontFamily: F.mono, fontSize: 16, color: C.ink, borderBottomWidth: 2, borderBottomColor: C.line, paddingVertical: 10, marginBottom: 24 },
   colourRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   colourDot: { width: 34, height: 34, borderRadius: 17 },
-  colourDotSelected: { borderWidth: 3, borderColor: C.lineHi },
+  colourDotSelected: { borderWidth: 3, borderColor: C.hot },
   createBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   createBtnText: { fontFamily: F.mono, fontSize: 12, color: C.onHot, letterSpacing: 1 },
 });

@@ -8,7 +8,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -21,6 +21,7 @@ import { toDateKey } from '@/lib/dateKey';
 import ChatScreen from '@/components/ChatScreen';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const GREEN  = C.live;
 const RED    = C.alert;
@@ -47,7 +48,6 @@ function WeeklyBars({ logs }: { logs: SleepLog[] }) {
 }
 
 export default function SleepDetailModal() {
-  const router = useRouter();
   const today = toDateKey(new Date());
 
   const [tonight, setTonight] = useState<SleepLog | null>(null);
@@ -98,15 +98,11 @@ export default function SleepDetailModal() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
-        </TouchableOpacity>
-        <Text style={styles.title}>SLEEP</Text>
-        <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
-          <MaterialCommunityIcons name="chat-processing-outline" size={20} color={C.hot} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title="SLEEP" close
+        right={<>
+          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
+        </>}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* ── Phone Down Challenge ─────────────────────── */}
@@ -210,11 +206,6 @@ export default function SleepDetailModal() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
-  },
-  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   card: {
     backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line,

@@ -39,6 +39,7 @@ import { taskToDbRow } from '@/lib/task-supabase';
 import { TASKS_CHANGED_EVENT } from '@/lib/use-remote-task-sync';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon, HeaderPill } from '@/components/ScreenHeader';
 const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 const MONTH_NAMES = [
   'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
@@ -291,35 +292,12 @@ export default function DayScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={styles.backBtn}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={20} color={C.hot} />
-          <Text style={styles.backLabel}>CALENDAR</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setEditMode(v => !v)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={styles.editBtn}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.editBtnText, editMode && styles.editBtnTextActive]}>
-            {editMode ? 'DONE' : 'EDIT'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setChatOpen(true)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={styles.askCoachBtn}
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons name="lightbulb-on" size={18} color={C.hot} />
-          <Text style={styles.askCoachText}>ASK COACH</Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title=""
+        right={<>
+          <HeaderPill label={editMode ? 'DONE' : 'EDIT'} on={editMode} onPress={() => setEditMode(v => !v)} />
+          <HeaderIcon icon="lightbulb-on-outline" label="Ask coach" onPress={() => setChatOpen(true)} />
+        </>}
+      />
 
       <View style={styles.body}>
         <DateTaskList
@@ -395,27 +373,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.surface,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  editBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 2,
-  },
-  editBtnText: {
-    fontFamily: F.mono,
-    fontSize: 11,
-    color: C.dim,
-    letterSpacing: 1.5,
-  },
-  editBtnTextActive: {
-    color: C.hot,
   },
   body: {
     flex: 1,
@@ -527,21 +484,6 @@ const styles = StyleSheet.create({
     fontFamily: F.mono,
     fontSize: 11,
     color: C.onHot,
-    letterSpacing: 1,
-  },
-  askCoachBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: C.raised,
-    borderRadius: 6,
-  },
-  askCoachText: {
-    fontFamily: F.mono,
-    fontSize: 10,
-    color: C.hot,
     letterSpacing: 1,
   },
 });

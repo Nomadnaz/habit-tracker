@@ -19,6 +19,7 @@ import { BADGES, getEarnedBadgeIds } from '@/lib/badges';
 import { getCumulativeStats, type CumulativeStats } from '@/lib/postWrite';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const MUTED  = C.dim;
 const CARD   = C.surface;
 const BOLD = F.mono;
@@ -52,8 +53,8 @@ export default function ProgressScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
+      <ScreenHeader title="PROGRESS" />
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-        <Text style={s.title}>PROGRESS</Text>
 
         <Text style={s.sectionLabel}>ACTIVITY CALENDAR</Text>
         <View style={s.card}>
@@ -110,14 +111,13 @@ function StatRow({ label, value, last }: { label: string; value: string; last?: 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.surface },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 },
-  title: { fontFamily: F.dot, fontSize: 24, color: C.ink, letterSpacing: 1, marginBottom: 20 },
   sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1, marginBottom: 10 },
   sectionLabelSpaced: { marginTop: 24 },
   card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14 },
 
   badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   badge: { width: '31%', backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 10, alignItems: 'center' },
-  badgeLocked: { opacity: 0.6 },
+  badgeLocked: { opacity: 0.85 },
   badgeName: { fontFamily: BOLD, fontSize: 11, color: C.ink, textAlign: 'center' },
   badgeNameLocked: { color: MUTED },
   badgeDesc: { fontFamily: REG, fontSize: 9, color: C.dim, textAlign: 'center', marginTop: 4 },

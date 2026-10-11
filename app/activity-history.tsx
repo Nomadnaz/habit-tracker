@@ -12,6 +12,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getRecentActivities, formatDuration, formatPace, formatDistance, type Activity, type ActivityType } from '@/lib/activity-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const BOLD = F.mono;
 const REG = F.mono;
 
@@ -33,13 +34,7 @@ export default function ActivityHistoryScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-        </TouchableOpacity>
-        <Text style={s.title}>ACTIVITY HISTORY</Text>
-        <View style={{ width: 26 }} />
-      </View>
+      <ScreenHeader title="HISTORY" />
 
       <ScrollView contentContainerStyle={s.content}>
         {activities.length === 0 && <Text style={s.empty}>No activities logged yet.</Text>}
@@ -65,8 +60,6 @@ export default function ActivityHistoryScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 8 },
   empty: { fontFamily: REG, fontSize: 13, color: C.dim, paddingVertical: 12 },
   row: {

@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { bleBridge, type BridgeState } from '@/lib/ble-bridge';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const COMPANION_TYPES = [
   { id: 'habitCoach', label: 'Habit Coach' },
   { id: 'life', label: 'Life & Schedule' },
@@ -70,12 +71,7 @@ export default function BleBridgeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.backBtn}>← BACK</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>PUCK</Text>
-      </View>
+      <ScreenHeader title="PUCK" />
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         {/* Status */}
@@ -172,17 +168,6 @@ export default function BleBridgeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
-    gap: 16,
-  },
-  backBtn: { color: C.hot, fontFamily: F.mono, fontSize: 12 },
-  title: { color: C.hot, fontFamily: F.dot, fontSize: 14, letterSpacing: 2 },
   body: { padding: 20, gap: 20 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 10, height: 10, borderRadius: 5 },
@@ -205,8 +190,8 @@ const styles = StyleSheet.create({
   btnDisconnect: { backgroundColor: C.raised, borderWidth: 1, borderColor: C.hot },
   btnText: { color: C.onHot, fontFamily: F.dot, fontSize: 12, letterSpacing: 1 },
   bubble: {
-    backgroundColor: C.hot, borderRadius: 4, borderWidth: 1,
-    borderColor: '#2A2A2A', padding: 12,
+    backgroundColor: C.raised, borderRadius: 4, borderWidth: 1,
+    borderColor: C.line, padding: 12,
   },
   bubbleAi: { borderColor: C.hot, backgroundColor: C.surface },
   bubbleText: { color: C.ink, fontFamily: F.mono, fontSize: 12, lineHeight: 18 },

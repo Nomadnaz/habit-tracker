@@ -10,7 +10,7 @@ import {
   Modal, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import ChatScreen from '@/components/ChatScreen';
@@ -22,6 +22,7 @@ import {
 } from '@/lib/goals-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const MUTED  = C.dim;
 const CARD   = C.surface;
@@ -31,7 +32,6 @@ const REG = F.mono;
 type Row = { goal: Goal; milestones: Milestone[]; logs: GoalLog[] };
 
 export default function GoalsModal() {
-  const router = useRouter();
   const { highlightId } = useLocalSearchParams<{ highlightId?: string }>(); // set by GlobalSearch (task 074)
   const [rows, setRows] = useState<Row[]>([]);
   const [expanded, setExpanded] = useState<string | null>(highlightId ?? null);
@@ -75,20 +75,12 @@ export default function GoalsModal() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
-        </TouchableOpacity>
-        <Text style={styles.title}>GOALS</Text>
-        <View style={{ flexDirection: 'row', gap: 16 }}>
-          <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={12}>
-            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={C.ink} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setAddVisible(true)} hitSlop={12}>
-            <MaterialCommunityIcons name="plus" size={22} color={C.ink} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ScreenHeader title="GOALS" close
+        right={<>
+          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
+          <HeaderIcon icon="plus" label="Add" onPress={() => setAddVisible(true)} />
+        </>}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         {rows.length === 0 && <Text style={styles.empty}>No active goals yet. Tap + to add one.</Text>}
@@ -168,8 +160,6 @@ export default function GoalsModal() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 40 },
   card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14 },

@@ -10,7 +10,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -21,6 +21,7 @@ import {
 } from '@/lib/library-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const BOLD = F.mono;
 const REG = F.mono;
@@ -28,7 +29,6 @@ const REG = F.mono;
 type Section = 'books' | 'movies' | 'links' | 'ideas';
 
 export default function LibraryModal() {
-  const router = useRouter();
   const [section, setSection] = useState<Section>('books');
   const [capture, setCapture] = useState('');
 
@@ -60,13 +60,7 @@ export default function LibraryModal() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
-        </TouchableOpacity>
-        <Text style={styles.title}>LIBRARY</Text>
-        <View style={{ width: 22 }} />
-      </View>
+      <ScreenHeader title="LIBRARY" close />
 
       <View style={styles.captureRow}>
         <TextInput
@@ -146,8 +140,6 @@ export default function LibraryModal() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
   captureRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 10 },
   captureInput: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: C.ink, backgroundColor: C.surface },
   captureBtn: { backgroundColor: ORANGE, borderRadius: 10, width: 44, alignItems: 'center', justifyContent: 'center' },

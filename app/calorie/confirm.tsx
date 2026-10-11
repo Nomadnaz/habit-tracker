@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { addMeal, updateMeal, todayKey, MEAL_TYPES, type MealType } from '@/lib/meals-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const BOLD = F.mono;
 const REG = F.mono;
@@ -83,13 +84,7 @@ export default function ConfirmScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-          </TouchableOpacity>
-          <Text style={styles.title}>{editingId ? 'EDIT MEAL' : 'LOG MEAL'}</Text>
-          <View style={{ width: 26 }} />
-        </View>
+        <ScreenHeader title={editingId ? 'EDIT MEAL' : 'LOG MEAL'} />
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {isAiEstimate && (
@@ -145,8 +140,6 @@ export default function ConfirmScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 18, paddingBottom: 20 },
 
   estimateBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.raised, borderRadius: 8, padding: 8, marginBottom: 12 },

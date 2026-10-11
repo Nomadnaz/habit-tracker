@@ -21,10 +21,14 @@ import { companions } from '@/lib/companions';
 import { exportToObsidian } from '@/lib/obsidianExport';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { Board, BoardRow } from '@/components/Board';
 const ORANGE = C.hot;
 const CARD   = C.surface;
 const BOLD = F.mono;
 const REG = F.mono;
+
+const ARROW = <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />;
 
 export default function Settings() {
   const router = useRouter();
@@ -95,19 +99,13 @@ export default function Settings() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
-        </TouchableOpacity>
-        <Text style={styles.title}>SETTINGS</Text>
-        <View style={{ width: 22 }} />
-      </View>
+      <ScreenHeader title="SETTINGS" close />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
+        <View style={[styles.card, { marginHorizontal: 16 }]}>
           <View style={styles.row}>
             <Text style={styles.cardTitle}>USE MY OWN ANTHROPIC API KEY</Text>
-            <Switch value={useOwnKey} onValueChange={setUseOwnKey} trackColor={{ true: ORANGE }} />
+            <Switch value={useOwnKey} onValueChange={setUseOwnKey} trackColor={{ false: C.lineHi, true: C.live }} thumbColor={C.hot} ios_backgroundColor={C.lineHi} />
           </View>
           <Text style={styles.sub}>
             {hasKey ? 'A key is currently saved (encrypted).' : 'Currently using app credits.'}
@@ -128,43 +126,31 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionLabel}>COMPANIONS</Text>
-        {Object.entries(companions).map(([type, cfg]) => (
-          <TouchableOpacity
-            key={type}
-            style={styles.companionRow}
-            onPress={() => router.push({ pathname: '/settings/companion-persona', params: { companionType: type } })}
-          >
-            <MaterialCommunityIcons name="account-circle-outline" size={22} color={C.hot} />
-            <Text style={styles.companionLabel}>{cfg.defaultName} ({type})</Text>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
-          </TouchableOpacity>
-        ))}
+        <Board title="COMPANIONS">
+          {Object.entries(companions).map(([type, cfg], i, all) => (
+            <BoardRow
+              key={type}
+              index={i + 1}
+              label={cfg.defaultName.toUpperCase()}
+              sub={type}
+              last={i === all.length - 1}
+              right={ARROW}
+              onPress={() => router.push({ pathname: '/settings/companion-persona', params: { companionType: type } })}
+            />
+          ))}
+        </Board>
 
-        <Text style={styles.sectionLabel}>SECOND BRAIN</Text>
-        <TouchableOpacity style={styles.companionRow} onPress={handleExport} disabled={exporting}>
-          <MaterialCommunityIcons name="brain" size={22} color={C.hot} />
-          <Text style={styles.companionLabel}>
-            {exporting ? 'Preparing export…' : 'Export to Obsidian (.zip)'}
-          </Text>
-          {exporting
-            ? <ActivityIndicator size="small" color={C.hot} />
-            : <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />}
-        </TouchableOpacity>
-
-        <Text style={styles.sectionLabel}>CONNECTED DEVICES</Text>
-        <TouchableOpacity style={styles.companionRow} onPress={() => router.push('/ble-bridge')}>
-          <MaterialCommunityIcons name="bluetooth" size={22} color={C.hot} />
-          <Text style={styles.companionLabel}>Companion HUD (BLE bridge)</Text>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
-        </TouchableOpacity>
-
-        <Text style={styles.sectionLabel}>PRIVACY</Text>
-        <TouchableOpacity style={styles.companionRow} onPress={() => router.push('/modals/cycle-tracking')}>
-          <MaterialCommunityIcons name="calendar-heart" size={22} color={C.hot} />
-          <Text style={styles.companionLabel}>Cycle tracking (off by default)</Text>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
-        </TouchableOpacity>
+        <Board title="DATA">
+          <BoardRow
+            index={1}
+            label="EXPORT TO OBSIDIAN"
+            sub={exporting ? 'Preparing export…' : 'Your second brain as a .zip'}
+            right={exporting ? <ActivityIndicator size="small" color={C.hot} /> : ARROW}
+            onPress={exporting ? undefined : handleExport}
+          />
+          <BoardRow index={2} label="PUCK DEVICE" sub="Bluetooth bridge to the puck" right={ARROW} onPress={() => router.push('/ble-bridge')} />
+          <BoardRow index={3} label="CYCLE TRACKING" sub="Private, off by default" right={ARROW} last onPress={() => router.push('/modals/cycle-tracking')} />
+        </Board>
       </ScrollView>
     </SafeAreaView>
   );
@@ -172,12 +158,7 @@ export default function Settings() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
-  },
-  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
-  content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
+  content: { paddingBottom: 40 },
   card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink, flex: 1 },
@@ -185,10 +166,4 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: C.ink },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
-  sectionLabel: { fontFamily: BOLD, fontSize: 12, color: C.dim, marginTop: 4 },
-  companionRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12,
-    borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
-  },
-  companionLabel: { fontFamily: REG, fontSize: 12, color: C.ink, flex: 1 },
 });

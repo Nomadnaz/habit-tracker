@@ -13,7 +13,7 @@ import {
   Modal, Pressable, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -32,6 +32,7 @@ import { toDateKey } from '@/lib/dateKey';
 import HeatmapCalendar from '@/components/HeatmapCalendar';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 // ── Design tokens (identical to BODY / CALORIE pages) ───────────────────────
 const ORANGE = C.hot;
 const CARD   = C.surface;
@@ -122,19 +123,14 @@ export default function HabitsScreen() {
   }
 
   const today = toDateKey(new Date());
-  const router = useRouter();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={C.ink} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { flex: 1 }]}>{section === 'habits' ? 'HABITS' : 'MEDS'}</Text>
-        <TouchableOpacity onPress={() => (section === 'habits' ? setAddVisible(true) : setAddMedVisible(true))} hitSlop={12}>
-          <MaterialCommunityIcons name="plus" size={22} color={C.ink} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader title={section === 'habits' ? 'HABITS' : 'MEDS'}
+        right={<>
+          <HeaderIcon icon="plus" label="Add" onPress={() => (section === 'habits' ? setAddVisible(true) : setAddMedVisible(true))} />
+        </>}
+      />
 
       <View style={styles.segmentRow}>
         {(['habits', 'meds'] as Section[]).map(s => (
@@ -317,11 +313,6 @@ export default function HabitsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
-  },
-  title: { fontFamily: F.dot, fontSize: 30, color: C.ink, letterSpacing: 1 },
   segmentRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
   segment: {
     flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line,

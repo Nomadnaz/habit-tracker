@@ -87,7 +87,7 @@ function Conversation({ thread, busy }: { thread: Thread | null; busy: boolean }
         mono={!!thread}
         left={<IconBtn name="format-list-bulleted" onPress={openList} />}
         right={
-          <View style={{ flexDirection: 'row', gap: 4 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <IconBtn name="plus" onPress={newChat} />
             <IconBtn name="close" onPress={closeSheet} />
           </View>
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: C.line },
   headerSide: { width: 84 },
   headerTitle: { flex: 1, textAlign: 'center', fontFamily: F.dot, fontSize: 15, color: C.ink, letterSpacing: 2 },
-  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
 
   msgs: { padding: 16, paddingBottom: 24, gap: 14 },
   mineWrap: { alignItems: 'flex-end' },

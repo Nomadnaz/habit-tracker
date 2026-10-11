@@ -1163,19 +1163,18 @@ export default function TodayScreen() {
 
       {/* ── Header: date eyebrow + TODAY, the 4 things TODAY owns ── */}
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
+        {/* The date opens the calendar; profile lives under LIFE. */}
+        <TouchableOpacity style={{ flex: 1 }} onPress={() => router.push('/calendar')} activeOpacity={0.7}>
           <Text style={styles.eyebrow}>
             {(() => {
               const n = new Date();
-              return `${DAY_NAMES[n.getDay()].slice(0, 3)} ${String(n.getDate()).padStart(2, '0')} ${MONTH_NAMES[n.getMonth()].slice(0, 3)}`;
+              return `${DAY_NAMES[n.getDay()].slice(0, 3)} ${String(n.getDate()).padStart(2, '0')} ${MONTH_NAMES[n.getMonth()].slice(0, 3)} ›`;
             })()}
           </Text>
           <Text style={styles.title}>TODAY</Text>
-        </View>
+        </TouchableOpacity>
         {([
           ['magnify', '/modals/search'],
-          ['calendar-month-outline', '/calendar'],
-          ['account-circle-outline', '/(tabs)/profile'],
           ['cog-outline', '/settings'],
         ] as const).map(([icon, route]) => (
           <TouchableOpacity key={route} onPress={() => router.push(route as any)} hitSlop={8} style={styles.headIcon}>

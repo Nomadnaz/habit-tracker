@@ -50,7 +50,9 @@ const PALETTE = {
     pillBg: C.raised,
     cancelBorder: C.line,
     startBorder: C.hot,
-    pauseIcon: C.onHot,
+    pauseIcon: C.ink, // on the dark circle button
+    accent: C.hot,
+    onAccent: C.onHot,
   },
   light: {
     bg: '#FCFBF9',
@@ -62,8 +64,10 @@ const PALETTE = {
     trackBorder: '#C8C5C0',
     pillBg: '#F0EEEB',
     cancelBorder: '#D5D2CD',
-    startBorder: '#FF4D00',
+    startBorder: '#0D0C0B',
     pauseIcon: '#FCFBF9',
+    accent: '#0D0C0B',
+    onAccent: '#FCFBF9',
   },
 };
 
@@ -276,7 +280,7 @@ export default function FocusTimerScreen() {
   });
 
   const palette = PALETTE[colorTheme];
-  const phaseLabelColor = C.onHot; // always on the white phase pill
+  const phaseLabelColor = palette.onAccent; // always on the accent phase pill
 
   // ── Restore saved session on mount (resume without params, or matching launch) ──
   useEffect(() => {
@@ -682,13 +686,13 @@ export default function FocusTimerScreen() {
         <MaterialCommunityIcons
           name="moon-waning-crescent"
           size={14}
-          color="rgba(252,251,249,0.55)"
+          color={C.dim}
           style={styles.themeIconMoon}
         />
         <MaterialCommunityIcons
           name="white-balance-sunny"
           size={15}
-          color="rgba(252,251,249,0.55)"
+          color={C.dim}
           style={styles.themeIconSun}
         />
         <Animated.View
@@ -785,7 +789,7 @@ export default function FocusTimerScreen() {
             activeOpacity={0.85}
             accessibilityLabel="Leave timer running"
           >
-            <MaterialCommunityIcons name="close" size={32} color={C.ink} />
+            <MaterialCommunityIcons name="close" size={22} color={C.ink} />
           </TouchableOpacity>
         </View>
       </View>
@@ -795,7 +799,7 @@ export default function FocusTimerScreen() {
         {/* Activity title, phase, and timer — centered */}
         <View style={styles.centerStage}>
           <Text
-            style={[styles.focusName]}
+            style={[[styles.focusName, { color: palette.accent }]]}
             numberOfLines={2}
             adjustsFontSizeToFit
             minimumFontScale={0.6}
@@ -804,7 +808,7 @@ export default function FocusTimerScreen() {
           </Text>
 
           <View style={styles.phaseRow}>
-            <View style={styles.phasePill}>
+            <View style={[styles.phasePill, { backgroundColor: palette.accent }]}>
               <Text style={[styles.phaseText, { color: phaseLabelColor }]}>
                 {isBreak ? 'BREAK' : 'FOCUS'}
               </Text>
@@ -827,7 +831,7 @@ export default function FocusTimerScreen() {
 
         {/* Progress bar */}
         <View style={[styles.progressTrack, { backgroundColor: palette.track }]}>
-          <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
+          <View style={[[styles.progressFill, { backgroundColor: palette.accent }], { width: `${progress * 100}%` as any }]} />
         </View>
 
         {/* Strike indicators */}
@@ -838,11 +842,11 @@ export default function FocusTimerScreen() {
               style={[
                 styles.strikePip,
                 { backgroundColor: palette.track, borderColor: palette.trackBorder },
-                i < strikes && styles.strikePipUsed,
+                i < strikes && [styles.strikePipUsed, { backgroundColor: palette.accent }],
               ]}
             />
           ))}
-          <Text style={[styles.strikeText, { color: palette.label }, strikes > 0 && styles.strikeTextWarn]}>
+          <Text style={[styles.strikeText, { color: palette.label }, strikes > 0 && [styles.strikeTextWarn, { color: palette.accent }]]}>
             {strikes === 0 ? 'NO STRIKES' : strikes === 1 ? '1 STRIKE — LAST WARNING' : '2 STRIKES'}
           </Text>
         </View>
@@ -871,7 +875,7 @@ export default function FocusTimerScreen() {
                 onPress={handleStart}
                 activeOpacity={0.85}
               >
-                <Text style={styles.startBtnText}>START SESSION</Text>
+                <Text style={[styles.startBtnText, { color: palette.accent }]}>START SESSION</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={[styles.circleBtn, styles.runControlSide]} onPress={handlePause} activeOpacity={0.85}>
@@ -893,20 +897,20 @@ export default function FocusTimerScreen() {
               activeOpacity={0.85}
               accessibilityLabel="Leave timer running"
             >
-              <MaterialCommunityIcons name="close" size={28} color={C.ink} />
+              <MaterialCommunityIcons name="close" size={22} color={C.ink} />
             </TouchableOpacity>
           </View>
           <View style={styles.landscapeContainer}>
           {/* Left: Timer */}
-          <View style={styles.landscapeLeft}>
+          <View style={[styles.landscapeLeft, { borderRightColor: palette.accent }]}>
             <Text
-              style={[styles.focusName, styles.focusNameLandscape]}
+              style={[[styles.focusName, { color: palette.accent }], styles.focusNameLandscape]}
               numberOfLines={1}
               adjustsFontSizeToFit
             >
               {isBreak ? 'REST UP.' : focusName}
             </Text>
-            <View style={styles.phasePill}>
+            <View style={[styles.phasePill, { backgroundColor: palette.accent }]}>
               <Text style={[styles.phaseText, { color: phaseLabelColor }]}>
                 {isBreak ? 'BREAK' : 'FOCUS'}
               </Text>
@@ -919,13 +923,13 @@ export default function FocusTimerScreen() {
               {minutes}:{seconds}
             </Text>
             <View style={[styles.progressTrack, { backgroundColor: palette.track, marginTop: 16 }]}>
-              <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
+              <View style={[[styles.progressFill, { backgroundColor: palette.accent }], { width: `${progress * 100}%` as any }]} />
             </View>
           </View>
 
           {/* Right: Controls */}
           <View style={styles.landscapeRight}>
-            <View style={styles.strikeBox}>
+            <View style={[styles.strikeBox, { borderColor: palette.accent }]}>
               <View style={styles.strikeRow}>
                 {[...Array(STRIKE_LIMIT)].map((_, i) => (
                   <View
@@ -933,12 +937,12 @@ export default function FocusTimerScreen() {
                     style={[
                       styles.strikePip,
                       { backgroundColor: palette.track, borderColor: palette.trackBorder },
-                      i < strikes && styles.strikePipUsed,
+                      i < strikes && [styles.strikePipUsed, { backgroundColor: palette.accent }],
                     ]}
                   />
                 ))}
               </View>
-              <Text style={[styles.strikeText, { color: palette.label }, strikes > 0 && styles.strikeTextWarn]}>
+              <Text style={[styles.strikeText, { color: palette.label }, strikes > 0 && [styles.strikeTextWarn, { color: palette.accent }]]}>
                 {strikes === 0 ? 'NO STRIKES' : strikes === 1 ? '1 STRIKE' : '2 STRIKES'}
               </Text>
             </View>
@@ -970,7 +974,7 @@ export default function FocusTimerScreen() {
                     onPress={handleStart}
                     activeOpacity={0.85}
                   >
-                    <Text style={styles.startBtnText}>START</Text>
+                    <Text style={[styles.startBtnText, { color: palette.accent }]}>START</Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity style={[styles.circleBtn, styles.runControlSide]} onPress={handlePause} activeOpacity={0.85}>
@@ -1008,7 +1012,7 @@ const styles = StyleSheet.create({
   bannerText: {
     fontFamily: F.mono,
     fontSize: 9,
-    color: '#FCFBF9',
+    color: C.onHot,
     letterSpacing: 1,
     textAlign: 'center',
   },
@@ -1031,7 +1035,9 @@ const styles = StyleSheet.create({
     width: THEME_SLIDER_W,
     height: THEME_SLIDER_H,
     borderRadius: THEME_SLIDER_H / 2,
-    backgroundColor: C.hot,
+    backgroundColor: C.raised,
+    borderWidth: 1,
+    borderColor: C.lineHi,
     overflow: 'hidden',
   },
   themeSliderTrack: {
@@ -1062,18 +1068,20 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   themeThumbDark: {
-    backgroundColor: '#0D0C0B',
-    borderColor: '#2A2826',
+    backgroundColor: C.hot,
+    borderColor: C.hot,
   },
   themeThumbLight: {
-    backgroundColor: '#FCFBF9',
-    borderColor: '#E5E3E0',
+    backgroundColor: C.hot,
+    borderColor: C.hot,
   },
   circleBtn: {
-    width: CIRCLE_BTN_SIZE,
-    height: CIRCLE_BTN_SIZE,
-    borderRadius: CIRCLE_BTN_SIZE / 2,
-    backgroundColor: C.hot,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.raised,
+    borderWidth: 1,
+    borderColor: C.lineHi,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1302,7 +1310,7 @@ const styles = StyleSheet.create({
   failSub: {
     fontFamily: F.mono,
     fontSize: 12,
-    color: '#5A5653',
+    color: C.dim,
     lineHeight: 20,
     marginBottom: 52,
   },
@@ -1316,20 +1324,20 @@ const styles = StyleSheet.create({
   failRetryText: {
     fontFamily: F.mono,
     fontSize: 11,
-    color: '#FCFBF9',
+    color: C.onHot,
     letterSpacing: 2,
   },
   failExitBtn: {
     paddingVertical: 16,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#2A2826',
+    borderWidth: 1,
+    borderColor: C.lineHi,
     borderRadius: 4,
   },
   failExitText: {
     fontFamily: F.mono,
     fontSize: 10,
-    color: '#5A5653',
+    color: C.dim,
     letterSpacing: 2,
   },
 

@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { companions, type CompanionType } from '@/lib/companions';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const BOLD = F.mono;
 const REG = F.mono;
 
@@ -93,13 +94,7 @@ export default function CompanionPersona() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <MaterialCommunityIcons name="chevron-left" size={24} color={C.ink} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{cfg?.defaultName ?? 'COMPANION'}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <ScreenHeader title={cfg?.defaultName ?? 'COMPANION'} />
 
       <View style={styles.content}>
         <TouchableOpacity style={styles.photoWrap} onPress={pickPhoto}>
@@ -129,11 +124,6 @@ export default function CompanionPersona() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12,
-  },
-  title: { fontFamily: BOLD, fontSize: 14, color: C.ink },
   content: { paddingHorizontal: 24, paddingTop: 16, gap: 16, alignItems: 'center' },
   photoWrap: { alignItems: 'center', gap: 8 },
   photo: { width: 72, height: 72, borderRadius: 36 },

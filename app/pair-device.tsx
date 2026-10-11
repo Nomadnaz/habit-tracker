@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  View,
   Text,
   TextInput,
   TouchableOpacity,
@@ -9,11 +8,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { bleBridge, isDeviceProvisioned, type BridgeState } from '@/lib/ble-bridge';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 /**
  * Pair the Companion HUD for standalone Wi-Fi mode, and manage up to two
  * saved networks (device firmware caps it at 3 total — see wifi.c) so it
@@ -39,7 +38,6 @@ import { C, F } from '@/lib/theme';
  * screen can't prefill them — see the inline hint.
  */
 export default function PairDeviceScreen() {
-  const router = useRouter();
   const [bridge, setBridge] = useState<BridgeState | null>(null);
   const [provisioned, setProvisioned] = useState(false);
 
@@ -106,12 +104,7 @@ export default function PairDeviceScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.backBtn}>← BACK</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>PAIR DEVICE</Text>
-      </View>
+      <ScreenHeader title="PAIR DEVICE" />
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <Text style={styles.step}>
@@ -235,17 +228,6 @@ export default function PairDeviceScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0A0A0A' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
-    gap: 16,
-  },
-  backBtn: { color: C.hot, fontFamily: F.mono, fontSize: 12 },
-  title: { color: C.hot, fontFamily: F.dot, fontSize: 14, letterSpacing: 2 },
   body: { padding: 20, gap: 14 },
   step: { color: '#888', fontFamily: F.dot, fontSize: 11, letterSpacing: 1, marginTop: 8 },
   input: {

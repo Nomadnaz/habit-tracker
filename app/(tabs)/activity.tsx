@@ -32,6 +32,7 @@ import {
 } from '@/lib/activity-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const RED    = C.alert;
 const BOLD = F.mono;
@@ -115,17 +116,12 @@ export default function ActivityScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>ACTIVITY</Text>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity onPress={() => router.push('/activity-history')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="history" size={20} color={C.hot} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={C.hot} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ScreenHeader title="ACTIVITY"
+        right={<>
+          <HeaderIcon icon="history" label="History" onPress={() => router.push('/activity-history')} />
+          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
+        </>}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.typeRow}>
@@ -181,9 +177,6 @@ export default function ActivityScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: BOLD, fontSize: 16, color: C.ink },
-  headerIcons: { flexDirection: 'row', gap: 16 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 14 },
   typeRow: { flexDirection: 'row', gap: 8 },
   typeChip: {

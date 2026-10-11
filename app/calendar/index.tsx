@@ -12,10 +12,10 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { toDateKey } from '@/lib/dateKey';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 type Task = { id: string; label: string; done: boolean; archived?: boolean };
 type TaskMap = Record<string, Task[]>;
 
@@ -153,21 +153,7 @@ export default function CalendarScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
 
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={20} color={C.hot} />
-          <Text style={styles.backLabel}>TODAY</Text>
-        </TouchableOpacity>
-
-        <View style={styles.titleWrap}>
-          <Text style={styles.title}>CALENDAR</Text>
-        </View>
-      </View>
+      <ScreenHeader title="CALENDAR" close />
 
       <View style={styles.yearBar}>
         <Text style={styles.yearText}>{visibleYear}</Text>
@@ -266,39 +252,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.surface,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  backLabel: {
-    fontFamily: F.mono,
-    fontSize: 11,
-    color: C.hot,
-    letterSpacing: 1,
-  },
-  titleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    position: 'relative',
-  },
-  title: {
-    fontFamily: F.dot,
-    fontSize: 18,
-    color: C.ink,
-    letterSpacing: 2,
   },
   yearBar: {
     paddingHorizontal: 20,

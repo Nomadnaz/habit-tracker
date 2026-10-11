@@ -6,7 +6,7 @@ import {
   Modal, Pressable, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Polyline, Circle } from 'react-native-svg';
@@ -28,6 +28,7 @@ import {
 } from '@/lib/unit-preference';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderPill } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const INK    = C.ink;
 const GREEN  = C.live;
@@ -290,7 +291,6 @@ function PBChart({ entries }: { entries: PBEntry[] }) {
 }
 
 export default function WorkoutDetailScreen() {
-  const router = useRouter();
   const { templateId } = useLocalSearchParams<{ templateId: string }>();
   const { unitSystem, setUnitSystem } = useUnitPreference();
   const prevUnitRef = useRef<UnitSystem>(unitSystem);
@@ -470,26 +470,10 @@ export default function WorkoutDetailScreen() {
     <SafeAreaView style={s.container} edges={['top']}>
 
       {/* Header */}
-      <View style={[s.header, { borderBottomColor: template?.colour ?? C.line }]}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="arrow-left" size={20} color={C.hot} />
-        </TouchableOpacity>
-        <View style={s.titleWrap}>
-          <View style={[s.colourDot, { backgroundColor: template?.colour ?? C.hot }]} />
-          <Text style={s.title}>{template?.name ?? '...'}</Text>
-        </View>
-        <TouchableOpacity
-          style={[s.doneBtn, done && s.doneBtnActive]}
-          onPress={toggleDone}
-          activeOpacity={0.85}
-        >
-          <MaterialCommunityIcons name={done ? 'check-circle' : 'circle-outline'} size={16} color={done ? C.onHot : C.hot} />
-          <Text style={[s.doneBtnText, done && s.doneBtnTextActive]}>
-            {done ? 'DONE!' : 'MARK DONE'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={template?.name ?? '...'}
+        right={<HeaderPill label={done ? 'DONE' : 'MARK DONE'} on={done} onPress={toggleDone} />}
+      />
 
       <ScrollView contentContainerStyle={s.scroll}>
         <Text style={s.countLabel}>{exercises.length} EXERCISES · TAP TO EDIT OR LOG PB</Text>
@@ -712,15 +696,6 @@ export default function WorkoutDetailScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.surface },
 
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 2 },
-  backBtn: { padding: 4 },
-  titleWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginLeft: 8 },
-  colourDot: { width: 12, height: 12, borderRadius: 6 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
-  doneBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderColor: C.hot, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
-  doneBtnActive: { backgroundColor: GREEN, borderColor: C.live },
-  doneBtnText: { fontFamily: F.mono, fontSize: 10, color: C.hot, letterSpacing: 1 },
-  doneBtnTextActive: { color: C.surface },
 
   scroll: { padding: 16, paddingBottom: 40 },
   countLabel: { fontFamily: F.mono, fontSize: 9, color: C.faint, letterSpacing: 1, marginBottom: 14 },

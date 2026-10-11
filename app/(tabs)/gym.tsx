@@ -14,13 +14,11 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import ChatScreen from '@/components/ChatScreen';
-import { GymHeatmap, GymHeatmapLegend } from '@/components/GymHeatmap';
 import { Spark } from '@/components/Spark';
 
 import {
   loadBodyData, addWater, logWeight, pullRemoteBody,
   todaySteps, todayWaterMl, latestWeight, weightHistory,
-  stepsSquareState, trainingDayType,
   goalStatus, formatSleep, refreshAppleHealthIfConnected,
   type BodyData,
 } from '@/lib/body-data';
@@ -128,10 +126,6 @@ export default function BodyScreen() {
     router.push('/workouts');
   }
 
-  // Progress-bar squares (≈84% filled at 16,842 / 20,000).
-  const BAR_SQUARES = 16;
-  const filledSquares = Math.round(stepsPct * BAR_SQUARES);
-
   async function quickWater(ml: number) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const d = await addWater(ml);
@@ -205,137 +199,7 @@ export default function BodyScreen() {
         </TouchableOpacity>
         </View>
 
-        {/* ── PPL day planner (task 025) — tap a day to cycle push/pull/legs/upper/lower/rest/cheat ── */}
-        <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>WEEK PLAN</Text>
-        <View style={styles.plannerRow}>
-          {WEEKDAYS.map(day => {
-            const value = gymPlan?.[day] ?? null;
-            const isRest = value === 'rest';
-            const isCheat = value === 'cheat';
-            return (
-              <TouchableOpacity key={day} style={styles.plannerCol} onPress={() => cyclePlanDay(day)}>
-                <Text style={styles.plannerDayLabel}>{day.slice(0, 3).toUpperCase()}</Text>
-                <View style={[
-                  styles.plannerChip,
-                  value && !isRest && !isCheat && styles.plannerChipActive,
-                  isRest && styles.plannerChipRest,
-                  isCheat && styles.plannerChipCheat,
-                ]}>
-                  <Text style={[styles.plannerChipText, value && styles.plannerChipTextActive]}>
-                    {value ? (isRest ? 'REST' : isCheat ? 'CHEAT' : value.slice(0, 4).toUpperCase()) : '—'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ── Global stats bar ───────────────────────────── */}
-        <View style={styles.statsBar}>
-          <Stat label="WORKOUTS" value={String(data.workoutsTotal)} sub="TOTAL" />
-          <View style={styles.statDivider} />
-          <Stat label="STEPS" value={formatBig(data.stepsThisYear)} sub="THIS YEAR" />
-          <View style={styles.statDivider} />
-          <Stat label="STREAK" value={String(data.streak)} sub="DAYS" />
-        </View>
-
-        {/* ── Today's steps + heatmap ────────────────────── */}
-        <View style={styles.sectionRow}>
-          <View style={styles.stepsLeft}>
-            <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/steps')}>
-              <Text style={styles.sectionLabel}>TODAY'S STEPS</Text>
-              <Text style={styles.bigNumber}>{steps.toLocaleString()}</Text>
-            </TouchableOpacity>
-            {data.appleHealthConnected && data.activityToday && data.activityToday.distanceM > 0 && (
-              <Text style={styles.walkDistance}>
-                {(data.activityToday.distanceM / 1000).toFixed(2)} KM WALKED TODAY
-              </Text>
-            )}
-            <View style={styles.goalRow}>
-              <Text style={styles.goalText}>GOAL: {data.stepsGoal.toLocaleString()} STEPS</Text>
-              <Text style={styles.goalPct}>{Math.round(stepsPct * 100)}%</Text>
-            </View>
-            <View style={styles.progressBar}>
-              {Array.from({ length: BAR_SQUARES }).map((_, i) => (
-                <View key={i} style={[styles.progressSquare, i < filledSquares && styles.progressSquareFilled]} />
-              ))}
-            </View>
-            {Platform.OS === 'ios' && (
-              <TouchableOpacity
-                style={styles.healthConnectBtn}
-                onPress={handleAppleHealth}
-                activeOpacity={0.85}
-                disabled={healthSyncing}
-              >
-                {healthSyncing ? (
-                  <ActivityIndicator size="small" color={C.hot} />
-                ) : (
-                  <MaterialCommunityIcons name="heart-pulse" size={14} color={C.hot} />
-                )}
-                <Text style={styles.healthConnectText}>
-                  {data.appleHealthConnected ? 'SYNC APPLE HEALTH' : 'CONNECT APPLE HEALTH'}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {Platform.OS === 'ios' && !isAppleHealthSupported() && (
-              <Text style={styles.healthHint}>
-                Rebuild the iOS app (npx expo run:ios) to enable HealthKit — not available in Expo Go.
-              </Text>
-            )}
-            {data.appleHealthLastSync && (
-              <Text style={styles.healthSynced}>
-                Last sync {new Date(data.appleHealthLastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.heatRight}>
-            <GymHeatmap weeks={4} getKind={day => stepsSquareState(data, day)} />
-            <GymHeatmapLegend items={[
-              { kind: 'hit', label: 'GOAL HIT' },
-              { kind: 'partial', label: 'PARTIAL' },
-              { kind: 'missed', label: 'MISSED' },
-            ]} />
-            <TouchableOpacity style={styles.viewLink} onPress={() => router.push('/steps')}>
-              <Text style={styles.viewLinkText}>VIEW STEPS ›</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ── Training ───────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>TRAINING</Text>
-        <View style={styles.sectionRow}>
-          <TouchableOpacity style={styles.nextCard} activeOpacity={0.85}>
-            <View style={styles.nextCardRow}>
-              <View style={styles.nextCardBody}>
-                <Text style={styles.nextLabel}>NEXT SESSION</Text>
-                {data.nextSession ? (
-                  <>
-                    <Text style={styles.nextTitle}>{data.nextSession.name}</Text>
-                    <View style={styles.nextMeta}>
-                      <MaterialCommunityIcons name="calendar-blank-outline" size={12} color={C.dim} />
-                      <Text style={styles.nextMetaText}>{data.nextSession.when}</Text>
-                    </View>
-                  </>
-                ) : (
-                  <Text style={styles.nextTitle}>NOT PLANNED</Text>
-                )}
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={C.dim} />
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.heatRight}>
-            <GymHeatmap weeks={3} getKind={day => trainingDayType(data, day)} />
-            <GymHeatmapLegend items={[
-              { kind: 'trained', label: 'TRAINED' },
-              { kind: 'rest', label: 'REST' },
-              { kind: 'cheat', label: 'CHEAT' },
-              { kind: 'missed', label: 'MISSED' },
-            ]} />
-          </View>
-        </View>
-
+        <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>SESSION</Text>
         {/* ── Movement filter pills ──────────────────────── */}
         <View style={styles.pillRow}>
           {MOVEMENTS.map(m => (
@@ -416,6 +280,71 @@ export default function BodyScreen() {
               </Text>
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* ── PPL day planner (task 025) — tap a day to cycle push/pull/legs/upper/lower/rest/cheat ── */}
+        <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>WEEK PLAN</Text>
+        <View style={styles.plannerRow}>
+          {WEEKDAYS.map(day => {
+            const value = gymPlan?.[day] ?? null;
+            const isRest = value === 'rest';
+            const isCheat = value === 'cheat';
+            return (
+              <TouchableOpacity key={day} style={styles.plannerCol} onPress={() => cyclePlanDay(day)}>
+                <Text style={styles.plannerDayLabel}>{day.slice(0, 3).toUpperCase()}</Text>
+                <View style={[
+                  styles.plannerChip,
+                  value && !isRest && !isCheat && styles.plannerChipActive,
+                  isRest && styles.plannerChipRest,
+                  isCheat && styles.plannerChipCheat,
+                ]}>
+                  <Text style={[styles.plannerChipText, value && styles.plannerChipTextActive]}>
+                    {value ? (isRest ? 'REST' : isCheat ? 'CHEAT' : value.slice(0, 4).toUpperCase()) : '—'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Stats strip ────────────────────────────────── */}
+        <View style={styles.statsBar}>
+          <Stat label="WORKOUTS" value={String(data.workoutsTotal)} sub="TOTAL" />
+          <View style={styles.statDivider} />
+          <Stat label="STREAK" value={String(data.streak)} sub="DAYS" />
+          <View style={styles.statDivider} />
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => router.push('/steps')}>
+            <Stat label="STEPS" value={formatBig(steps)} sub={`${Math.round(stepsPct * 100)}% OF GOAL`} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.healthRow}>
+      {Platform.OS === 'ios' && (
+        <TouchableOpacity
+          style={styles.healthConnectBtn}
+          onPress={handleAppleHealth}
+          activeOpacity={0.85}
+          disabled={healthSyncing}
+        >
+          {healthSyncing ? (
+            <ActivityIndicator size="small" color={C.hot} />
+          ) : (
+            <MaterialCommunityIcons name="heart-pulse" size={14} color={C.hot} />
+          )}
+          <Text style={styles.healthConnectText}>
+            {data.appleHealthConnected ? 'SYNC APPLE HEALTH' : 'CONNECT APPLE HEALTH'}
+          </Text>
+        </TouchableOpacity>
+      )}
+      {Platform.OS === 'ios' && !isAppleHealthSupported() && (
+        <Text style={styles.healthHint}>
+          Rebuild the iOS app (npx expo run:ios) to enable HealthKit — not available in Expo Go.
+        </Text>
+      )}
+      {data.appleHealthLastSync && (
+        <Text style={styles.healthSynced}>
+          Last sync {new Date(data.appleHealthLastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      )}
         </View>
 
         {/* ── Strength (compact — full detail lives on /strength) ── */}
@@ -559,7 +488,6 @@ function Recovery({ icon, label, value, status }: { icon: string; label: string;
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.surface },
   scroll: { paddingBottom: 48 },
-  empty: { fontFamily: F.mono, fontSize: 12, color: C.dim, paddingVertical: 12 },
 
   // Header
   header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
@@ -581,8 +509,8 @@ const styles = StyleSheet.create({
   statValue: { fontFamily: NUM_FONT, fontSize: 26, color: C.hot, marginVertical: 4 },
   statSub: { fontFamily: F.mono, fontSize: 9, color: C.dim, letterSpacing: 1 },
 
-  sectionRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 18, justifyContent: 'space-between' },
   sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
+  healthRow: { paddingHorizontal: 20, marginTop: -8, marginBottom: 24, gap: 6 },
   sectionLabelStandalone: { paddingHorizontal: 20, marginBottom: 12 },
 
   plannerRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 18, gap: 4 },
@@ -598,21 +526,6 @@ const styles = StyleSheet.create({
   plannerChipText: { fontFamily: NUM_FONT, fontSize: 7, color: C.dim },
   plannerChipTextActive: { color: C.surface },
 
-  stepsLeft: { flex: 1, paddingRight: 14 },
-  bigNumber: { fontFamily: NUM_FONT, fontSize: 38, color: C.hot, marginTop: 6 },
-  walkDistance: {
-    fontFamily: F.mono,
-    fontSize: 9,
-    color: C.dim,
-    marginTop: 4,
-    letterSpacing: 0.5,
-  },
-  goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  goalText: { fontFamily: F.mono, fontSize: 9, color: C.dim },
-  goalPct: { fontFamily: NUM_FONT, fontSize: 10, color: C.ink },
-  progressBar: { flexDirection: 'row', marginTop: 8, gap: 2 },
-  progressSquare: { flex: 1, height: 12, borderWidth: 1, borderColor: C.line, borderRadius: 0 },
-  progressSquareFilled: { backgroundColor: ORANGE, borderColor: C.hot },
   healthConnectBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -646,25 +559,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  heatRight: { alignItems: 'flex-start' },
-  viewLink: { marginTop: 6 },
   viewLinkText: { fontFamily: F.mono, fontSize: 9, color: C.hot, letterSpacing: 1 },
 
-  nextCard: {
-    flex: 1,
-    marginRight: 14,
-    borderWidth: 1.5,
-    borderColor: C.hot,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  nextCardRow: { flexDirection: 'row', alignItems: 'center' },
-  nextCardBody: { flex: 1, paddingRight: 12 },
-  nextLabel: { fontFamily: F.mono, fontSize: 8, color: C.dim, letterSpacing: 1 },
-  nextTitle: { fontFamily: F.dot, fontSize: 18, color: C.hot, marginVertical: 6 },
-  nextMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
-  nextMetaText: { fontFamily: F.mono, fontSize: 10, color: C.ink },
 
   // Pills
   pillRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 6, marginBottom: 16 },
@@ -695,12 +591,6 @@ const styles = StyleSheet.create({
   // Strength + metric cards
   strengthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
   cardRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 16 },
-  liftCard: { flex: 1, backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 10 },
-  liftName: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginTop: 6, letterSpacing: 1 },
-  liftValue: { fontFamily: NUM_FONT, fontSize: 20, color: C.hot, marginTop: 4 },
-  liftUnit: { fontFamily: F.mono, fontSize: 11 },
-  lift1rm: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginBottom: 6 },
-  liftDelta: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginTop: 6 },
 
   metricCard: { flex: 1, backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 10, minHeight: 120 },
   metricLabel: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginTop: 6, letterSpacing: 1 },
@@ -727,4 +617,11 @@ const styles = StyleSheet.create({
   weightInput: { fontFamily: NUM_FONT, fontSize: 18, color: C.ink, borderBottomWidth: 2, borderBottomColor: C.line, paddingVertical: 10, marginBottom: 20 },
   doneBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   doneBtnText: { fontFamily: F.mono, fontSize: 12, color: C.onHot, letterSpacing: 1 },
+  empty: { fontFamily: F.mono, fontSize: 12, color: C.dim, paddingVertical: 12 },
+  liftCard: { flex: 1, backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 10 },
+  liftName: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginTop: 6, letterSpacing: 1 },
+  liftValue: { fontFamily: NUM_FONT, fontSize: 20, color: C.hot, marginTop: 4 },
+  liftUnit: { fontFamily: F.mono, fontSize: 11 },
+  lift1rm: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginBottom: 6 },
+  liftDelta: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginTop: 6 },
 });

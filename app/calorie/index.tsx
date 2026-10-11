@@ -23,6 +23,7 @@ import {
 import ChatScreen from '@/components/ChatScreen';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const CARD   = C.surface;
 const BOLD = F.mono;
@@ -103,20 +104,12 @@ export default function CalorieScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-        </TouchableOpacity>
-        <Text style={styles.title}>FUEL</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity onPress={() => router.push('/calorie/history')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="history" size={20} color={C.hot} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <MaterialCommunityIcons name="chat-processing-outline" size={22} color={C.hot} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <ScreenHeader title="FUEL"
+        right={<>
+          <HeaderIcon icon="history" label="History" onPress={() => router.push('/calorie/history')} />
+          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
+        </>}
+      />
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
@@ -214,9 +207,6 @@ export default function CalorieScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  headerRight: { flexDirection: 'row', gap: 16 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 2 },
   scroll: { paddingHorizontal: 16, paddingBottom: 20 },
 
   card: { backgroundColor: CARD, borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 16, marginBottom: 14 },

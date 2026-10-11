@@ -6,21 +6,20 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { Spark } from '@/components/Spark';
 import { loadBodyData, getMuscleGroupBreakdown, type BodyData, type MuscleGroupTally } from '@/lib/body-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const CARD   = C.surface;
 const BOLD = F.mono;
 const REG = F.mono;
 const NUM    = F.mono;
 
 export default function StrengthScreen() {
-  const router = useRouter();
   const [data, setData] = useState<BodyData | null>(null);
   const [muscleGroups, setMuscleGroups] = useState<MuscleGroupTally[]>([]);
 
@@ -35,13 +34,7 @@ export default function StrengthScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-        </TouchableOpacity>
-        <Text style={s.title}>STRENGTH</Text>
-        <View style={{ width: 26 }} />
-      </View>
+      <ScreenHeader title="STRENGTH" />
 
       <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
         <Text style={s.sectionLabel}>HEADLINE LIFTS</Text>
@@ -101,8 +94,6 @@ export default function StrengthScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.surface },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1, marginBottom: 10 },
   sectionLabelSpaced: { marginTop: 24 },
