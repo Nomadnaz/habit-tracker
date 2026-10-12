@@ -48,6 +48,8 @@ export default function BleBridgeScreen() {
     lastAnswer: '',
     error: null,
     lastSyncAt: null,
+    deviceProvisioned: null,
+    deviceWifi: null,
   }));
   const [companion, setCompanion] = useState('habitCoach');
 
@@ -57,7 +59,7 @@ export default function BleBridgeScreen() {
 
   function handleConnect() {
     bleBridge.setCompanionType(companion);
-    bleBridge.start();
+    bleBridge.start(true);
   }
 
   function handleDisconnect() {

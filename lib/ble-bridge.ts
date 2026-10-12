@@ -17,7 +17,8 @@
 // launch wherever the native module is absent (Expo Go). Same pattern as
 // lib/apple-health.ts and lib/locationTask.ts.
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
+import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { BleManager, Device, Subscription } from 'react-native-ble-plx';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
@@ -33,6 +34,9 @@ const EVER_CONNECTED_KEY = '@ble_ever_connected';
 // skip re-asking for the account password on every later "add a network"
 // visit -- the device already has what it needs, only SSID/PSK is new.
 const DEVICE_PROVISIONED_KEY = '@device_provisioned';
+// The puck's CoreBluetooth id, remembered after the first connection so later
+// connects can be a standing request to that exact peripheral (see _connectLoop).
+const KNOWN_DEVICE_ID_KEY = '@ble_device_id';
 export async function isDeviceProvisioned(): Promise<boolean> {
   return (await AsyncStorage.getItem(DEVICE_PROVISIONED_KEY)) === '1';
 }
@@ -96,6 +100,10 @@ export interface BridgeState {
   error: string | null;
   /** ms epoch of the last snapshot successfully pushed to the device */
   lastSyncAt: number | null;
+  /** From the puck's "hello" on connect: does it still have its own cloud
+   *  login (Wi-Fi path)? null until it has said. */
+  deviceProvisioned: boolean | null;
+  deviceWifi: boolean | null;
 }
 
 type Listener = (state: BridgeState) => void;
@@ -125,8 +133,12 @@ class BleBridgeManager {
     lastAnswer: '',
     error: null,
     lastSyncAt: null,
+    deviceProvisioned: null,
+    deviceWifi: null,
   };
   private _stopping = false;
+  private _looping = false;      // single-flight guard for _connectLoop
+  private _relinkPrompted = false;
 
   get companionType() { return this._companionType; }
   getState(): BridgeState { return this._state; }
@@ -162,10 +174,19 @@ class BleBridgeManager {
     return this.manager;
   }
 
-  async start() {
-    if (this._state.status !== 'idle' && this._state.status !== 'error') return;
+  /** Connect and STAY connected: retries forever, reconnects on every drop.
+   *  Safe to call any number of times. `force` (the CONNECT button) abandons
+   *  whatever attempt is in flight and starts a fresh one. */
+  async start(force = false) {
     this._stopping = false;
-    await this._scanAndConnect();
+    if (this.device) return;
+    if (force && this._looping) {
+      try { this.manager?.stopDeviceScan(); } catch { /* not scanning */ }
+      const knownId = await AsyncStorage.getItem(KNOWN_DEVICE_ID_KEY);
+      if (knownId) await this.manager?.cancelDeviceConnection(knownId).catch(() => {});
+      this._looping = false;
+    }
+    void this._connectLoop();
   }
 
   stop() {
@@ -178,6 +199,7 @@ class BleBridgeManager {
     if (this.syncTimerId) { clearInterval(this.syncTimerId); this.syncTimerId = null; }
     if (this.realtimeDebounce) { clearTimeout(this.realtimeDebounce); this.realtimeDebounce = null; }
     if (this.realtimeChannel) { supabase.removeChannel(this.realtimeChannel); this.realtimeChannel = null; }
+    try { this.manager?.stopDeviceScan(); } catch { /* not scanning */ }
     this.device?.cancelConnection().catch(() => {});
     this.device = null;
     this.samples = [];
@@ -185,46 +207,118 @@ class BleBridgeManager {
     this.emit({ status: 'idle', error: null });
   }
 
-  private async _scanAndConnect() {
-    this.emit({ status: 'scanning', error: null });
+  /**
+   * The old flow (scan 20 s, connect once) had three dead ends, all reported
+   * on hardware as "takes two tries" / "won't reconnect until I force quit":
+   *   - a scan that missed the puck (asleep, rebooting, out of range) ended
+   *     in 'error' and nothing ever retried;
+   *   - one failed connect (often the very first, while iOS sets up the
+   *     encrypted bond, or before the radio reports PoweredOn) also ended in
+   *     'error';
+   *   - device.connect() has no timeout on iOS, so a puck that vanished
+   *     mid-connect left status 'connecting' forever -- and start() and the
+   *     auto-connect hook both ignored any request while not idle/error.
+   * Now: wait for PoweredOn, then race a standing connect to the remembered
+   * peripheral (CoreBluetooth completes it whenever the puck shows up, the
+   * way earphones reconnect) against a scan (first pairing, or the id
+   * changed). Any failure retries after a short pause; it never gives up.
+   */
+  private async _connectLoop() {
+    if (this._looping || this._stopping || this.device) return;
+    this._looping = true;
     let ble: BleManager;
     try {
       ble = this.getBleManager();
     } catch (e: any) {
+      this._looping = false;
       this.emit({ status: 'error', error: e?.message ?? 'BLE unavailable' });
       return;
     }
-
-    let found = false;
-    ble.startDeviceScan(null, { allowDuplicates: false }, async (err, device) => {
-      if (err || found || this._stopping) return;
-      if (device?.name !== DEVICE_NAME) return;
-      found = true;
-      ble.stopDeviceScan();
-      await this._connect(device);
-    });
-
-    // Timeout scan after 20s
-    setTimeout(() => {
-      if (!found && !this._stopping) {
-        ble.stopDeviceScan();
-        this.emit({ status: 'error', error: 'Device not found. Is CompanionHUD powered on?' });
-      }
-    }, 20_000);
+    try {
+      await this._poweredOn(ble);
+      if (this._stopping) return;
+      this.emit({ status: 'connecting', error: null });
+      const knownId = await AsyncStorage.getItem(KNOWN_DEVICE_ID_KEY);
+      const device = await this._findAndConnect(ble, knownId);
+      if (this._stopping) { device.cancelConnection().catch(() => {}); return; }
+      await this._attachToDevice(device);
+      void AsyncStorage.setItem(KNOWN_DEVICE_ID_KEY, device.id);
+    } catch (e: any) {
+      console.warn('[ble-bridge] connect attempt failed, retrying:', e?.message);
+      // A half-finished attach (e.g. the first write failing while iOS
+      // bonds) must not leave live subscriptions or a dangling link behind.
+      this.audioSub?.remove(); this.audioSub = null;
+      this.actionSub?.remove(); this.actionSub = null;
+      (this.device as Device | null)?.cancelConnection().catch(() => {}); // TS narrows to null across the awaits
+      this.device = null;
+      this._attachedId = null;
+    } finally {
+      this._looping = false;
+    }
+    if (!this.device && !this._stopping) setTimeout(() => void this._connectLoop(), 2000);
   }
 
-  private async _connect(device: Device) {
-    try {
-      this.emit({ status: 'connecting' });
-      // requestMTU is Android-only (ignored on iOS, which auto-negotiates
-      // ~185). The 181-byte SYNC chunks need ATT_MTU >= 184; Android's
-      // default of 23 would fail every write without this.
-      const connected = await device.connect({ requestMTU: 247 });
-      await connected.discoverAllServicesAndCharacteristics();
-      await this._attachToDevice(connected);
-    } catch (e: any) {
-      this.emit({ status: 'error', error: e?.message ?? 'Connection failed' });
-    }
+  /** Resolves once Bluetooth is on (immediately if it already is). */
+  private _poweredOn(ble: BleManager): Promise<void> {
+    return new Promise((resolve) => {
+      const sub = ble.onStateChange((s) => {
+        if (s === 'PoweredOn') { sub.remove(); resolve(); }
+        else if (s === 'PoweredOff') this.emit({ status: 'error', error: 'Bluetooth is off.' });
+        else if (s === 'Unauthorized') this.emit({ status: 'error', error: 'Bluetooth permission is off for this app.' });
+      }, true);
+    });
+  }
+
+  /** First connected puck wins: the standing connect to `knownId`, or one
+   *  found by scanning. Rejects only on a real connect failure (the loop
+   *  retries); simply not finding the puck keeps waiting. */
+  private _findAndConnect(ble: BleManager, knownId: string | null): Promise<Device> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const win = (d: Device) => {
+        if (settled) { d.cancelConnection().catch(() => {}); return; }
+        settled = true;
+        try { ble.stopDeviceScan(); } catch { /* not scanning */ }
+        resolve(d);
+      };
+      const fail = (e: unknown) => {
+        if (settled) return;
+        settled = true;
+        try { ble.stopDeviceScan(); } catch { /* not scanning */ }
+        reject(e);
+      };
+      // requestMTU is Android-only (iOS negotiates ~185 itself); the 181-byte
+      // SYNC chunks need ATT_MTU >= 184, Android's default 23 fails them.
+      const connectTo = (id: string, timeout?: number) =>
+        ble.connectToDevice(id, { requestMTU: 247, ...(timeout ? { timeout } : {}) })
+          .then((d) => d.discoverAllServicesAndCharacteristics());
+
+      let knownPending = false;
+      if (knownId) {
+        knownPending = true;
+        connectTo(knownId).then(win, () => { knownPending = false; });
+      }
+
+      ble.startDeviceScan(null, { allowDuplicates: false }, (err, d) => {
+        if (err || settled || !d) return;
+        const isPuck = d.name === DEVICE_NAME || d.localName === DEVICE_NAME
+          || (d.serviceUUIDs ?? []).includes(SERVICE_UUID);
+        if (!isPuck) return;
+        try { ble.stopDeviceScan(); } catch { /* not scanning */ }
+        if (knownPending && d.id === knownId) {
+          // It's advertising, so the standing connect should land now. If
+          // CoreBluetooth sits on it, cancel and connect afresh.
+          setTimeout(() => {
+            if (settled) return;
+            ble.cancelDeviceConnection(d.id).catch(() => {})
+              .then(() => connectTo(d.id, 10_000)).then(win, fail);
+          }, 5000);
+          return;
+        }
+        const switchFrom = knownPending && knownId ? ble.cancelDeviceConnection(knownId).catch(() => {}) : Promise.resolve();
+        switchFrom.then(() => connectTo(d.id, 10_000)).then(win, fail);
+      });
+    });
   }
 
   /** Shared post-connection wiring: subscriptions, timers, snapshot push.
@@ -268,8 +362,9 @@ class BleBridgeManager {
       this.device = null;
       this.samples = [];
       this.adpcmState = makeAdpcmState();
-      // Auto-reconnect after 3s
-      setTimeout(() => { if (!this._stopping) this._scanAndConnect(); }, 3000);
+      this.emit({ status: 'connecting', deviceProvisioned: null, deviceWifi: null });
+      // Straight back to a standing reconnect -- see _connectLoop.
+      if (!this._stopping) void this._connectLoop();
     });
 
     this.audioSub = connected.monitorCharacteristicForService(
@@ -532,14 +627,18 @@ class BleBridgeManager {
    *  per-network: omit it on every call after the very first pairing (the
    *  device already has one; re-sending isn't harmful, just needless BLE
    *  traffic and an extra account-password prompt the user shouldn't need). */
-  async provisionDevice(opts: { ssid: string; psk: string; label: string; refreshToken?: string }) {
+  /** `ssid` omitted = account re-link only: the puck keeps every Wi-Fi
+   *  network it already has (firmware skips the Wi-Fi TLVs when absent). */
+  async provisionDevice(opts: { ssid?: string; psk?: string; label?: string; refreshToken?: string }) {
     if (!this.device) throw new Error('Not connected — connect to the device first.');
 
     const enc = new TextEncoder();
     const parts: Array<{ t: number; v: Uint8Array }> = [
-      { t: PROV_TLV_SSID, v: enc.encode(opts.ssid) },
-      { t: PROV_TLV_PSK, v: enc.encode(opts.psk) },
-      { t: PROV_TLV_NET_LABEL, v: enc.encode(opts.label) },
+      ...(opts.ssid ? [
+        { t: PROV_TLV_SSID, v: enc.encode(opts.ssid) },
+        { t: PROV_TLV_PSK, v: enc.encode(opts.psk ?? '') },
+        { t: PROV_TLV_NET_LABEL, v: enc.encode(opts.label ?? 'home') },
+      ] : []),
       {
         t: PROV_TLV_TZ_OFFSET,
         v: (() => {
@@ -569,7 +668,10 @@ class BleBridgeManager {
     await this.device.writeCharacteristicWithResponseForService(
       SERVICE_UUID, PROV_CHAR_UUID, bytesToBase64(tlv));
 
-    if (opts.refreshToken) void AsyncStorage.setItem(DEVICE_PROVISIONED_KEY, '1');
+    if (opts.refreshToken) {
+      void AsyncStorage.setItem(DEVICE_PROVISIONED_KEY, '1');
+      this.emit({ deviceProvisioned: true });
+    }
   }
 
   // ── device-state sync relay ────────────────────────────────────────────────
@@ -647,6 +749,27 @@ class BleBridgeManager {
     // NEXT audio session as a vault capture rather than an ASK question.
     if (action?.op === 'capture_start') {
       this.noteMode = true;
+      return;
+    }
+    // Sent by the puck on every connect. provisioned:false means its own
+    // cloud login is gone (the server rejected it and the firmware wiped it),
+    // so it only works through this phone. The old @device_provisioned flag
+    // stayed '1' regardless and hid the password field, leaving no way to fix
+    // it -- trust the device's own report instead.
+    if (action?.op === 'hello') {
+      const provisioned = action.provisioned === true;
+      this.emit({ deviceProvisioned: provisioned, deviceWifi: action.wifi === true });
+      if (!provisioned) {
+        void AsyncStorage.removeItem(DEVICE_PROVISIONED_KEY);
+        if (!this._relinkPrompted) {
+          this._relinkPrompted = true;
+          Alert.alert(
+            'Re-link your puck',
+            "It lost its sign-in, so it can only work through this phone. Re-link it once and it works on Wi-Fi by itself.",
+            [{ text: 'Later', style: 'cancel' }, { text: 'Re-link', onPress: () => router.push('/pair-device') }],
+          );
+        }
+      }
       return;
     }
     // Context injection: the device says which tab the question came from;
@@ -738,10 +861,7 @@ export function useBleAutoConnect() {
     async function tryStart() {
       const everConnected = await AsyncStorage.getItem(EVER_CONNECTED_KEY);
       if (cancelled || !everConnected) return;
-      const status = bleBridge.getState().status;
-      if (status === 'idle' || status === 'error') {
-        bleBridge.start().catch(() => {});
-      }
+      bleBridge.start().catch(() => {}); // no-op when connected or already trying
     }
 
     void tryStart();

@@ -78,6 +78,25 @@ export default function PairDeviceScreen() {
     return json.refresh_token as string;
   }
 
+  // The puck reported (hello) that its own sign-in is gone. Re-link sends a
+  // fresh login only -- every Wi-Fi network it saved is kept, nothing to
+  // re-enter.
+  const [relinking, setRelinking] = useState(false);
+  async function handleRelink() {
+    setError(null);
+    setRelinking(true);
+    try {
+      const refreshToken = await mintDeviceRefreshToken();
+      await bleBridge.provisionDevice({ refreshToken });
+      setAccountPassword('');
+      setProvisioned(true);
+    } catch (e: any) {
+      setError(e?.message ?? 'Re-link failed.');
+    } finally {
+      setRelinking(false);
+    }
+  }
+
   async function handleSave(slot: 'home' | 'hotspot') {
     const ssid = (slot === 'home' ? homeSsid : hotspotSsid).trim();
     const psk = slot === 'home' ? homePsk : hotspotPsk;
@@ -96,7 +115,8 @@ export default function PairDeviceScreen() {
     }
   }
 
-  const needsPassword = !provisioned;
+  const signedOut = bridge?.deviceProvisioned === false;
+  const needsPassword = !provisioned || signedOut;
   const canSave = (slot: 'home' | 'hotspot') => {
     const ssid = (slot === 'home' ? homeSsid : hotspotSsid).trim();
     return connected && ssid.length > 0 && (!needsPassword || accountPassword.length > 0) && !busySlot;
@@ -111,7 +131,7 @@ export default function PairDeviceScreen() {
           1 · CONNECT{connected ? '  ✓' : ''}
         </Text>
         {!connected ? (
-          <TouchableOpacity style={styles.btn} onPress={() => bleBridge.start()}>
+          <TouchableOpacity style={styles.btn} onPress={() => bleBridge.start(true)}>
             <Text style={styles.btnText}>
               {bridge?.status === 'scanning' || bridge?.status === 'connecting'
                 ? 'CONNECTING…'
@@ -120,6 +140,37 @@ export default function PairDeviceScreen() {
           </TouchableOpacity>
         ) : null}
         {bridge?.error ? <Text style={styles.errorText}>{bridge.error}</Text> : null}
+
+        {connected && signedOut ? (
+          <>
+            <Text style={styles.step}>RE-LINK ACCOUNT</Text>
+            <Text style={styles.hint}>
+              The puck lost its sign-in, so right now it only works through
+              this phone. Your Wi-Fi networks are still saved on it -- just
+              confirm your password once.
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Account password"
+              placeholderTextColor="#555"
+              autoCapitalize="none"
+              secureTextEntry
+              value={accountPassword}
+              onChangeText={setAccountPassword}
+            />
+            <TouchableOpacity
+              style={[styles.btn, (!accountPassword || relinking) && styles.btnDisabled]}
+              disabled={!accountPassword || relinking}
+              onPress={handleRelink}
+            >
+              {relinking ? <ActivityIndicator color={C.onHot} /> : <Text style={styles.btnText}>RE-LINK</Text>}
+            </TouchableOpacity>
+          </>
+        ) : connected && bridge?.deviceProvisioned ? (
+          <Text style={styles.doneText}>
+            Puck is signed in{bridge.deviceWifi ? ' and on Wi-Fi' : ''} -- it works without this phone{bridge.deviceWifi ? '' : ' once it is on Wi-Fi'}. Only add a network below if it's a new one.
+          </Text>
+        ) : null}
 
         {/* Home Wi-Fi */}
         <Text style={styles.step}>
