@@ -3,10 +3,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Modal, Pressable, TextInput, KeyboardAvoidingView, Platform,
+  Modal, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Polyline, Circle } from 'react-native-svg';
@@ -14,8 +14,8 @@ import {
   ensureSeeded, getTemplates, getExercises, getJunctions,
   getTemplateExercises, isDoneToday, markDoneToday, unmarkDoneToday,
   createExercise, addExerciseToTemplate, removeExerciseFromTemplate,
-  updateExercise, getPBHistory, logPB, deletePB,
-  type WorkoutTemplate, type Exercise, type WorkoutExercise, type PBEntry,
+  updateExercise, getPBHistory, logPB, deletePB, getSetsForDay,
+  type WorkoutTemplate, type Exercise, type WorkoutExercise, type PBEntry, type SetEntry,
 } from '@/lib/workout-data';
 import {
   useUnitPreference,
@@ -28,6 +28,8 @@ import {
 } from '@/lib/unit-preference';
 
 import { C, F } from '@/lib/theme';
+import { bleBridge } from '@/lib/ble-bridge';
+import { toDateKey } from '@/lib/dateKey';
 import { ScreenHeader, HeaderPill } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const INK    = C.ink;
@@ -291,7 +293,10 @@ function PBChart({ entries }: { entries: PBEntry[] }) {
 }
 
 export default function WorkoutDetailScreen() {
-  const { templateId } = useLocalSearchParams<{ templateId: string }>();
+  // exerciseId (optional): open that exercise's sheet straight away -- TRAIN's
+  // exercise rows link here with it.
+  const { templateId, exerciseId } = useLocalSearchParams<{ templateId: string; exerciseId?: string }>();
+  const openedParam = useRef(false);
   const { unitSystem, setUnitSystem } = useUnitPreference();
   const prevUnitRef = useRef<UnitSystem>(unitSystem);
 
@@ -310,6 +315,8 @@ export default function WorkoutDetailScreen() {
   const [pbHistory,   setPbHistory]   = useState<PBEntry[]>([]);
   const [pbInput,     setPbInput]     = useState('');
   const [pbOpen,      setPbOpen]      = useState(false);  // dropdown toggle
+  const [puck,        setPuck]        = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [sets,        setSets]        = useState<SetEntry[]>([]);
 
   // ── Add exercise modal ───────────────────────────────────────────────────
   const [addOpen,   setAddOpen]   = useState(false);
@@ -335,6 +342,10 @@ export default function WorkoutDetailScreen() {
     const exMap = Object.fromEntries(exs.map(e => [e.id, e]));
     setExercises(templateJcts.map(j => exMap[j.exerciseId]).filter(Boolean));
     setDone(await isDoneToday(templateId));
+    if (exerciseId && !openedParam.current && exMap[exerciseId]) {
+      openedParam.current = true;
+      openEdit(exMap[exerciseId]);
+    }
   }
 
   async function toggleDone() {
@@ -356,6 +367,40 @@ export default function WorkoutDetailScreen() {
     setPbHistory(pbs);
     setPbInput('');
     setPbOpen(false);
+    setPuck('idle');
+    setSets([]);
+    getSetsForDay(ex.id, toDateKey(new Date())).then(setSets);
+  }
+
+  // Sets the puck sends back for the open exercise refresh its list live.
+  useEffect(() => {
+    if (!editEx) return;
+    return bleBridge.onSetLogged(id => {
+      if (id !== editEx.id) return;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      getSetsForDay(id, toDateKey(new Date())).then(setSets);
+    });
+  }, [editEx]);
+
+  // SEND TO PUCK: the puck jumps to LIFT with this exercise and starts the
+  // countdown; the set it measures comes back tagged with this exercise and
+  // today (lib/ble-bridge.ts) and lands in the list below.
+  async function sendToPuck() {
+    if (!editEx || puck === 'sending') return;
+    const name = editName.trim().toUpperCase() || editEx.name;
+    const kg = parseWeightToKg(editWeight, unitSystem) ?? editEx.weightKg ?? 0;
+    setPuck('sending');
+    const ok = await bleBridge.sendToPuck(editEx.id, name, kg).catch(() => false);
+    if (!ok) {
+      setPuck('idle');
+      Alert.alert('Puck not connected', 'Turn the puck on and keep it near your phone, then try again.', [
+        { text: 'OK', style: 'cancel' },
+        { text: 'Open Puck', onPress: () => { closeEditModal(); router.push('/ble-bridge'); } },
+      ]);
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setPuck('sent');
   }
 
   useEffect(() => {
@@ -538,6 +583,32 @@ export default function WorkoutDetailScreen() {
                   onWeightChange={setEditWeight}
                   onRepsChange={setEditReps}
                 />
+
+                <TouchableOpacity style={s.puckBtn} onPress={sendToPuck} activeOpacity={0.85} accessibilityLabel="Send to puck">
+                  <MaterialCommunityIcons name={puck === 'sent' ? 'check' : 'send'} size={16} color={C.onHot} />
+                  <Text style={s.puckBtnText}>{puck === 'sending' ? 'SENDING' : puck === 'sent' ? 'SENT  -  SEND AGAIN' : 'SEND TO PUCK'}</Text>
+                </TouchableOpacity>
+                <Text style={s.puckHint}>
+                  {puck === 'sent'
+                    ? 'Countdown is on the puck. Hold it still, then lift. Sets appear here when you finish.'
+                    : 'Starts the countdown on the puck and logs what it measures to this exercise, today.'}
+                </Text>
+
+                {sets.length > 0 && (
+                  <View style={s.loggedList}>
+                    <Text style={s.fieldLabel}>TODAY · {sets.length} SET{sets.length === 1 ? '' : 'S'}</Text>
+                    {sets.map((st, i) => (
+                      <View key={st.id} style={s.loggedRow}>
+                        <Text style={s.loggedIdx}>{i + 1}</Text>
+                        <Text style={s.loggedMain}>{formatWeightWithUnit(st.weightKg, unitSystem)} × {st.reps}</Text>
+                        <Text style={s.loggedMeasured} numberOfLines={1}>
+                          {[st.romCm != null ? `${Math.round(st.romCm)} cm` : null,
+                            st.peakVelocityMps != null ? `${st.peakVelocityMps.toFixed(2)} m/s` : null].filter(Boolean).join('  ·  ')}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
                 <Text style={[s.fieldLabel, s.fieldLabelCenter]}>SETS</Text>
                 <SetCountPicker value={editSets} onChange={setEditSets} />
@@ -878,6 +949,14 @@ const s = StyleSheet.create({
 
   // ── PB section ─────────────────────────────────────────────────────────
   pbDivider: { height: 1, backgroundColor: C.line, marginVertical: 14 },
+  puckBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.hot, borderRadius: 999, minHeight: 48, marginBottom: 8 },
+  puckBtnText: { fontFamily: F.dot, fontSize: 13, color: C.onHot, letterSpacing: 2 },
+  puckHint: { fontFamily: F.mono, fontSize: 11, color: C.dim, textAlign: 'center', lineHeight: 16, marginBottom: 16 },
+  loggedList: { borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 12, marginBottom: 18, backgroundColor: C.bg },
+  loggedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  loggedIdx: { fontFamily: F.dot, fontSize: 12, color: C.faint, width: 16 },
+  loggedMain: { fontFamily: F.mono, fontSize: 14, color: C.ink },
+  loggedMeasured: { fontFamily: F.mono, fontSize: 11, color: C.dim, flex: 1, textAlign: 'right' },
   pbDropdownBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
   pbDropdownLabel: { fontFamily: F.mono, fontSize: 11, color: C.ink, letterSpacing: 1 },
   chartWrap: { alignItems: 'center', marginBottom: 12 },

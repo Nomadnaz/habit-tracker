@@ -24,6 +24,7 @@ import type { BleManager, Device, Subscription } from 'react-native-ble-plx';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { adpcmDecode, makeAdpcmState, type AdpcmState } from '@/lib/adpcm';
 import { reconcile as reconcileRemoteTasks } from '@/lib/use-remote-task-sync';
+import { toDateKey } from '@/lib/dateKey';
 
 // Set once a BLE connection has ever succeeded. Gates auto-connect-on-launch
 // (below) so a user who has never owned/paired the physical device doesn't
@@ -75,6 +76,7 @@ const BLE_CMD_SYNC_END = 0x0a;
 // Voice-driven lift_begin() -- see companion-hud's ble_svc.h for the wire
 // format (weight_kg as a 4-byte LE float, then the exercise name as UTF-8).
 const BLE_CMD_LIFT_BEGIN = 0x0b;
+const PENDING_LIFT_MS = 4 * 60 * 60 * 1000; // SEND TO PUCK tag lifetime
 
 const SAMPLE_RATE_HZ = 16000; // must match MIC_SAMPLE_RATE_HZ in main/mic.c
 const MAX_TEXT_BYTES = 200;   // matches gatt_svr.c write buffer
@@ -140,7 +142,34 @@ class BleBridgeManager {
   private _looping = false;      // single-flight guard for _connectLoop
   private _relinkPrompted = false;
 
+  // SEND TO PUCK: the exercise the app last started on the puck. The puck only
+  // knows the name, so sets it reports back under that name get this id and
+  // day attached before the relay -- they land on the exercise you tapped, not
+  // whatever the server's name matcher picks. Kept for a few hours (not
+  // cleared after one set) because the puck's own START button runs the next
+  // set under the same name.
+  private pendingLift: { exerciseId: string; name: string; date: string; at: number } | null = null;
+  private setListeners = new Set<(exerciseId: string) => void>();
+
   get companionType() { return this._companionType; }
+
+  /** Send an exercise to the puck: it jumps to LIFT and starts the countdown.
+   *  Resolves false if no puck is connected. */
+  async sendToPuck(exerciseId: string, name: string, weightKg: number): Promise<boolean> {
+    const busy = this._state.status === 'listening' || this._state.status === 'processing';
+    if (!this.device || !(this._state.status === 'connected' || busy)) return false;
+    const label = name.trim().toUpperCase();
+    await writeLiftBegin(this.device, weightKg > 0 ? weightKg : 0, label);
+    this.pendingLift = { exerciseId, name: label, date: toDateKey(new Date()), at: Date.now() };
+    return true;
+  }
+
+  /** Called with the exercise id whenever a set started from the app has
+   *  been saved, so an open screen can refresh its list. */
+  onSetLogged(fn: (exerciseId: string) => void): () => void {
+    this.setListeners.add(fn);
+    return () => this.setListeners.delete(fn);
+  }
   getState(): BridgeState { return this._state; }
   setCompanionType(type: string) { this._companionType = type; }
 
@@ -791,6 +820,13 @@ class BleBridgeManager {
       this.liftSetupMode = tab === 'LIFT';
       return;
     }
+    // A set from an exercise sent with SEND TO PUCK: pin it to that exercise
+    // and day. The firmware caps names at 39 bytes, so compare on that.
+    const pending = this.pendingLift;
+    const tagged = action?.op === 'log_set' && pending
+      && Date.now() - pending.at < PENDING_LIFT_MS
+      && String(action.exercise ?? '').trim().toUpperCase() === pending.name.slice(0, 39);
+    if (tagged) action = { ...action, exercise_id: pending.exerciseId, date: pending.date };
     const { error } = await supabase.functions.invoke('device-state', {
       body: { actions: [action], tzOffsetMinutes: new Date().getTimezoneOffset() },
     });
@@ -798,6 +834,7 @@ class BleBridgeManager {
       console.warn('[ble-bridge] device-state POST failed:', error.message);
       return;
     }
+    if (tagged) this.setListeners.forEach(fn => fn(pending.exerciseId));
     // complete_task/etc. write server-side too — same reconcile gap as the
     // voice path below.
     void this._reconcileTasksAfterAction();

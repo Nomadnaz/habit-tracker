@@ -290,7 +290,12 @@ async function applyAction(admin: Admin, userId: string, tz: number, a: Action):
         if (!Number.isFinite(weightKg) || !Number.isFinite(reps) || reps <= 0) {
           return { op, ok: false, error: 'weight_kg + reps required' };
         }
-        let exerciseId = await resolveExerciseId(admin, userId, exerciseName);
+        // SEND TO PUCK: the phone relay tags sets it started with the
+        // exercise's id and the day it was sent (lib/ble-bridge.ts), so they
+        // skip name matching entirely.
+        const taggedId = typeof a.exercise_id === 'string' && a.exercise_id.length <= 64 ? a.exercise_id : null;
+        const day = typeof a.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(a.date) ? a.date : today;
+        let exerciseId = taggedId ?? await resolveExerciseId(admin, userId, exerciseName);
         if (!exerciseId) {
           const newId = crypto.randomUUID();
           const { error: createErr } = await admin.from('exercises')
@@ -299,7 +304,7 @@ async function applyAction(admin: Admin, userId: string, tz: number, a: Action):
           exerciseId = newId;
         }
 
-        const data: Record<string, unknown> = { exerciseId, weightKg, reps, date: today, source: 'device' };
+        const data: Record<string, unknown> = { exerciseId, weightKg, reps, date: day, source: 'device' };
         if (Number.isFinite(Number(a.rom_cm))) data.romCm = Number(a.rom_cm);
         if (Number.isFinite(Number(a.peak_velocity_mps))) data.peakVelocityMps = Number(a.peak_velocity_mps);
         if (Number.isFinite(Number(a.tempo_seconds))) data.tempoSeconds = Number(a.tempo_seconds);

@@ -96,9 +96,9 @@ export default function BodyScreen() {
 
   const preview = workoutPreview;
 
-  function openWorkoutDetail() {
+  function openWorkoutDetail(exerciseId?: string) {
     if (preview?.templateId) {
-      router.push({ pathname: '/workout-detail', params: { templateId: preview.templateId } });
+      router.push({ pathname: '/workout-detail', params: { templateId: preview.templateId, ...(exerciseId ? { exerciseId } : {}) } });
       return;
     }
     router.push('/workouts');
@@ -164,7 +164,7 @@ export default function BodyScreen() {
         <View style={styles.workoutCard}>
           <View style={styles.workoutHeader}>
             <Text style={styles.workoutTitle}>{preview?.templateName ?? 'NO TEMPLATE'}</Text>
-            <TouchableOpacity onPress={openWorkoutDetail} activeOpacity={0.8}>
+            <TouchableOpacity onPress={() => openWorkoutDetail()} activeOpacity={0.8}>
               <Text style={styles.viewLinkText}>VIEW LOG ›</Text>
             </TouchableOpacity>
           </View>
@@ -179,7 +179,7 @@ export default function BodyScreen() {
                     key={ex.id}
                     style={[styles.exerciseRow, idx > 0 && styles.exerciseRowBorder]}
                     activeOpacity={0.85}
-                    onPress={openWorkoutDetail}
+                    onPress={() => openWorkoutDetail(ex.id)}
                   >
                     <MaterialCommunityIcons name={ex.icon as any} size={26} color={C.ink} style={styles.exerciseIcon} />
                     <Text style={styles.exerciseName}>{ex.name}</Text>
@@ -204,7 +204,7 @@ export default function BodyScreen() {
                 );
               })}
               {preview.extraCount > 0 && (
-                <TouchableOpacity style={styles.moreRow} activeOpacity={0.85} onPress={openWorkoutDetail}>
+                <TouchableOpacity style={styles.moreRow} activeOpacity={0.85} onPress={() => openWorkoutDetail()}>
                   <Text style={styles.moreText}>
                     + {preview.extraCount} MORE EXERCISE{preview.extraCount === 1 ? '' : 'S'}
                   </Text>
@@ -212,7 +212,7 @@ export default function BodyScreen() {
               )}
             </>
           ) : (
-            <TouchableOpacity activeOpacity={0.85} onPress={openWorkoutDetail}>
+            <TouchableOpacity activeOpacity={0.85} onPress={() => openWorkoutDetail()}>
               <Text style={styles.emptyTemplate}>
                 {preview?.templateId
                   ? 'No exercises yet — tap to build this workout.'

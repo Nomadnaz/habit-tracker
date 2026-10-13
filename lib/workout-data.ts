@@ -439,6 +439,34 @@ export async function deletePB(pbId: string): Promise<void> {
   });
 }
 
+// ── Logged sets (exercise_sets) ───────────────────────────────────────────
+// Sets the puck measured (SEND TO PUCK, or its own START button). They're
+// written server-side by device-state, so there is no local copy -- read
+// straight from Supabase. Empty when offline or signed out.
+
+export type SetEntry = {
+  id: string;
+  weightKg: number;
+  reps: number;
+  romCm: number | null;
+  peakVelocityMps: number | null;
+  source: 'manual' | 'device';
+};
+
+export async function getSetsForDay(exerciseId: string, date: string): Promise<SetEntry[]> {
+  const { data, error } = await supabase
+    .from('exercise_sets')
+    .select('id, weight_kg, reps, rom_cm, peak_velocity_mps, source')
+    .eq('exercise_id', exerciseId)
+    .eq('date', date)
+    .order('logged_at');
+  if (error || !data) return [];
+  return data.map(r => ({
+    id: r.id, weightKg: r.weight_kg, reps: r.reps, romCm: r.rom_cm,
+    peakVelocityMps: r.peak_velocity_mps, source: r.source,
+  }));
+}
+
 // ── Gym plan (PPL day planner, task 025) ────────────────────────────────────
 // gym_plan already existed (migration 003) but nothing read/wrote it. One row
 // per user, one column per weekday — reusing BodyMovement's push/pull/legs/
