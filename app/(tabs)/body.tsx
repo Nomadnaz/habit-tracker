@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────
-// BODY — the front/back body map + today's vitals (calories, sleep, mood,
+// BODY — the 3D muscle map + today's vitals (calories, sleep, mood,
 // steps, water, weight). Water and weight log right here via
 // components/BodyLogSheets.tsx; the rest open their own screens.
 //
-// Tap a muscle → a floating panel assigns it a target category, a note and
-// whether its callout stays pinned. Categories are the user's own (rename,
+// Spin the figure, pinch in, tap a muscle → a floating panel assigns it a
+// target category and a note. Categories are the user's own (rename,
 // recolour, add, delete). Everything persists locally via lib/body-map.ts.
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -20,9 +20,9 @@ import * as Haptics from 'expo-haptics';
 import { C, F, SPRING, numFace } from '@/lib/theme';
 import {
   REGIONS, REGION_BY_ID, loadBodyMap, saveBodyMap,
-  type BodyMap, type Category, type Plate, type Tone,
+  type BodyMap, type Category, type Tone,
 } from '@/lib/body-map';
-import { BodyStage, TONE } from '@/components/body/BodyStage';
+import { BodyStage, TONE, type Facing } from '@/components/body/BodyStage';
 import { Board, BoardRow } from '@/components/Board';
 import { WaterSheet, WeightSheet } from '@/components/BodyLogSheets';
 import {
@@ -33,7 +33,7 @@ import { connectAndSyncAppleHealth } from '@/lib/apple-health';
 import { getMealsForDate, dailyTotals, getTargets, todayKey } from '@/lib/meals-data';
 import { getTodayMood } from '@/lib/mood-data';
 
-const SIDES: Plate[] = ['front', 'back'];
+const SIDES: Facing[] = ['front', 'back'];
 
 type Vitals = { kcal: number; kcalGoal: number; mood: number | null };
 
@@ -43,7 +43,8 @@ export default function BodyScreen() {
   const [map, setMap] = useState<BodyMap | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
-  const [side, setSide] = useState<Plate>('front');
+  const [side, setSide] = useState<Facing>('front');
+  const [stageZoomed, setStageZoomed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState<BodyData | null>(null);
   const [vitals, setVitals] = useState<Vitals>({ kcal: 0, kcalGoal: 0, mood: null });
@@ -82,15 +83,8 @@ export default function BodyScreen() {
   }, []);
 
   const select = (id: string | null) => {
-    if (id) {
-      Haptics.selectionAsync();
-      setSide(REGION_BY_ID[id].plate);
-    }
+    if (id) Haptics.selectionAsync();
     setSelected(id);
-  };
-  const flip = (to?: Plate) => {
-    setSelected(null);
-    setSide(cur => to ?? (cur === 'front' ? 'back' : 'front'));
   };
 
   const assign = (regionId: string, categoryId: string) => {
@@ -99,24 +93,24 @@ export default function BodyScreen() {
       const cur = m.marks[regionId];
       const marks = { ...m.marks };
       if (cur?.category === categoryId) delete marks[regionId];
-      else marks[regionId] = { ...cur, pinned: cur?.pinned ?? true, category: categoryId };
+      else marks[regionId] = { ...cur, category: categoryId };
       return { ...m, marks };
     });
   };
 
   if (!map) return <SafeAreaView style={styles.safe} />;
 
-  const stageH = Math.min(520, Math.round(width * 1.24));
+  const stageH = Math.min(580, Math.round(width * 1.36));
   const counts = Object.values(map.marks).reduce<Record<string, number>>((a, m) => ({ ...a, [m.category]: (a[m.category] ?? 0) + 1 }), {});
   const targets = REGIONS.filter(r => map.marks[r.id]).sort((a, b) =>
     map.categories.findIndex(c => c.id === map.marks[a.id].category) - map.categories.findIndex(c => c.id === map.marks[b.id].category));
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: selected ? 300 : 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: selected ? 300 : 40 }} showsVerticalScrollIndicator={false} scrollEnabled={!stageZoomed}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.eyebrow}>{`${targets.length} TARGETS · ${REGIONS.length} REGIONS`}</Text>
+            <Text style={styles.eyebrow}>{`${targets.length} TARGETS · ${REGIONS.length} MUSCLES`}</Text>
             <Text style={styles.title}>BODY</Text>
           </View>
           <View style={styles.headerRight}>
@@ -124,7 +118,7 @@ export default function BodyScreen() {
               {SIDES.map(v => (
                 <Pressable
                   key={v}
-                  onPress={() => { if (v !== side) { Haptics.selectionAsync(); flip(v); } }}
+                  onPress={() => { if (v !== side) { Haptics.selectionAsync(); setSide(v); } }}
                   style={[styles.view, side === v && styles.viewOn]}
                   hitSlop={4}
                 >
@@ -142,15 +136,15 @@ export default function BodyScreen() {
           width={width}
           height={stageH}
           map={map}
-          side={side}
+          facing={side}
           selected={selected}
           filter={filter}
-          onSelect={select}
-          onFlip={() => flip()}
-          onMoveLabel={(id, dx, dy) => update(m => m.marks[id] ? { ...m, marks: { ...m.marks, [id]: { ...m.marks[id], dx, dy } } } : m)}
+          onSelect={setSelected}
+          onFacing={setSide}
+          onZoomed={setStageZoomed}
         />
 
-        <Text style={styles.hint}>SWIPE TO TURN · TAP A MUSCLE TO TARGET IT</Text>
+        <Text style={styles.hint}>DRAG TO SPIN · PINCH TO ZOOM · TAP A MUSCLE</Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.legend}>
           {map.categories.map(c => {
@@ -216,7 +210,6 @@ export default function BodyScreen() {
         regionId={selected}
         onAssign={assign}
         onNote={(id, note) => update(m => m.marks[id] ? { ...m, marks: { ...m.marks, [id]: { ...m.marks[id], note } } } : m)}
-        onPin={id => update(m => m.marks[id] ? { ...m, marks: { ...m.marks, [id]: { ...m.marks[id], pinned: !m.marks[id].pinned } } } : m)}
         onClose={() => setSelected(null)}
         onNewCategory={() => setEditing(true)}
       />
@@ -251,10 +244,10 @@ function Vital({ i, label, value, sub, onPress }: { i: number; label: string; va
 
 // ── floating assign panel ────────────────────────────────────────────────
 
-function AssignPanel({ map, regionId, onAssign, onNote, onPin, onClose, onNewCategory }: {
+function AssignPanel({ map, regionId, onAssign, onNote, onClose, onNewCategory }: {
   map: BodyMap; regionId: string | null;
   onAssign: (id: string, cat: string) => void; onNote: (id: string, note: string) => void;
-  onPin: (id: string) => void; onClose: () => void; onNewCategory: () => void;
+  onClose: () => void; onNewCategory: () => void;
 }) {
   const y = useRef(new Animated.Value(400)).current;
   const [shown, setShown] = useState<string | null>(regionId);
@@ -280,15 +273,9 @@ function AssignPanel({ map, regionId, onAssign, onNote, onPin, onClose, onNewCat
       <Animated.View style={[styles.panel, { transform: [{ translateY: y }] }]}>
         <View style={styles.panelHead}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.panelEyebrow}>{region.plate === 'front' ? 'FRONT' : 'BACK'}</Text>
+            <Text style={styles.panelEyebrow}>{region.side ? `${region.group}  ${region.side === 'l' ? 'LEFT' : 'RIGHT'}` : region.group}</Text>
             <Text style={styles.panelTitle}>{region.name}</Text>
           </View>
-          {mark && (
-            <Pressable onPress={() => onPin(shown)} hitSlop={8} style={[styles.pinBtn, mark.pinned && styles.pinBtnOn]}>
-              <MaterialCommunityIcons name={mark.pinned ? 'pin' : 'pin-off-outline'} size={14} color={mark.pinned ? C.onHot : C.dim} />
-              <Text style={[styles.pinText, mark.pinned && { color: C.onHot }]}>CALLOUT</Text>
-            </Pressable>
-          )}
           <Pressable onPress={onClose} hitSlop={10} style={{ marginLeft: 10 }}>
             <MaterialCommunityIcons name="close" size={20} color={C.dim} />
           </Pressable>
@@ -419,9 +406,6 @@ const styles = StyleSheet.create({
   panelHead: { flexDirection: 'row', alignItems: 'center' },
   panelEyebrow: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2 },
   panelTitle: { fontFamily: F.dot, fontSize: 22, color: C.ink, letterSpacing: 1, marginTop: 3 },
-  pinBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  pinBtnOn: { backgroundColor: C.hot, borderColor: C.hot },
-  pinText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5 },
   panelLabel: { fontFamily: F.dot, fontSize: 9, color: C.faint, letterSpacing: 2, marginTop: 14, marginBottom: 8 },
   catWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   cat: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
