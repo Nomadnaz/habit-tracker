@@ -13,7 +13,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import ChatScreen from '@/components/ChatScreen';
 
 import {
   getActiveGoals, addGoal, setGoalStatus, getMilestones, addMilestone, toggleMilestone,
@@ -38,7 +37,6 @@ export default function GoalsModal() {
   const [addVisible, setAddVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [milestoneInput, setMilestoneInput] = useState<Record<string, string>>({});
-  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const goals = await getActiveGoals();
@@ -76,10 +74,7 @@ export default function GoalsModal() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="GOALS" close
-        right={<>
-          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
-          <HeaderIcon icon="plus" label="Add" onPress={() => setAddVisible(true)} />
-        </>}
+        right={<HeaderIcon icon="plus" label="Add" onPress={() => setAddVisible(true)} />}
       />
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -147,13 +142,6 @@ export default function GoalsModal() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
-      <ChatScreen
-        visible={chatOpen}
-        onClose={() => setChatOpen(false)}
-        companionType="goals"
-        onTasksUpdated={refresh}
-      />
     </SafeAreaView>
   );
 }

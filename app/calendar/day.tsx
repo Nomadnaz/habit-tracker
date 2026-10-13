@@ -33,13 +33,12 @@ import { useAppleReminderSync } from '@/lib/use-apple-reminder-sync';
 import { defaultReminderTime } from '@/lib/reminder-time';
 import { TaskModalFields } from '@/components/TaskModalFields';
 import { DateTaskList } from '@/components/DateTaskList';
-import ChatScreen from '@/components/ChatScreen';
 import { buildDateOptions, findTaskDateKey, moveTaskInMap, parseDateKey } from '@/lib/task-schedule';
 import { taskToDbRow } from '@/lib/task-supabase';
 import { TASKS_CHANGED_EVENT } from '@/lib/use-remote-task-sync';
 
 import { C, F } from '@/lib/theme';
-import { ScreenHeader, HeaderIcon, HeaderPill } from '@/components/ScreenHeader';
+import { ScreenHeader, HeaderPill } from '@/components/ScreenHeader';
 const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 const MONTH_NAMES = [
   'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
@@ -79,7 +78,6 @@ export default function DayScreen() {
   const [sheetMinute, setSheetMinute] = useState(() => defaultReminderTime().minute);
   const [sheetDateIndex, setSheetDateIndex] = useState(0);
   const [sheetLocation, setSheetLocation] = useState('');
-  const [chatOpen, setChatOpen] = useState(false);
   const sheetHourRef = useRef(sheetHour);
   const sheetMinuteRef = useRef(sheetMinute);
   const sheetDateIndexRef = useRef(sheetDateIndex);
@@ -293,10 +291,7 @@ export default function DayScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScreenHeader title=""
-        right={<>
-          <HeaderPill label={editMode ? 'DONE' : 'EDIT'} on={editMode} onPress={() => setEditMode(v => !v)} />
-          <HeaderIcon icon="lightbulb-on-outline" label="Ask coach" onPress={() => setChatOpen(true)} />
-        </>}
+        right={<HeaderPill label={editMode ? 'DONE' : 'EDIT'} on={editMode} onPress={() => setEditMode(v => !v)} />}
       />
 
       <View style={styles.body}>
@@ -357,14 +352,6 @@ export default function DayScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
-
-      <ChatScreen
-        visible={chatOpen}
-        onClose={() => setChatOpen(false)}
-        selectedTasks={taskMap[dateKey] || []}
-        selectedDate={dateKey}
-        onTasksUpdated={loadTasks}
-      />
     </SafeAreaView>
   );
 }

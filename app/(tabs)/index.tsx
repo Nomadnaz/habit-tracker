@@ -9,8 +9,6 @@ import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 // expo-haptics triggers the phone's vibration motor — used for the tactile "click" as dates scroll.
 import * as Haptics from 'expo-haptics';
 
-// NativeSyntheticEvent/NativeScrollEvent are the types describing a scroll event (for TypeScript).
-import type { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 
 // AsyncStorage is the phone's built-in storage — like a tiny database saved on the device.
 // We use it to remember tasks between app launches so they load instantly without a network call.
@@ -70,7 +68,6 @@ import {
   TASK_ROW_SLOT_PX,
   AUTO_SCROLL_EDGE_PX,
   AUTO_SCROLL_STEP_PX,
-  DELETE_ZONE_X,
   COMPLETE_HOLD_MS,
   COMPLETE_FADE_MS,
   LIST_MOVE_SPRING_MS,
@@ -95,12 +92,12 @@ import {
 import { defaultReminderTime } from '@/lib/reminder-time';
 import { useAppleReminderSync } from '@/lib/use-apple-reminder-sync';
 import { TaskModalFields } from '@/components/TaskModalFields';
-import { WHEEL_DECELERATION } from '@/components/WheelPicker';
 import { buildDateOptions, findTaskDateKey, moveTaskInMap } from '@/lib/task-schedule';
 import { TASKS_CHANGED_EVENT } from '@/lib/use-remote-task-sync';
 import { TASK_SELECT_COLUMNS, taskFromDbRow, taskToDbRow } from '@/lib/task-supabase';
 import BriefingCard from '@/components/BriefingCard';
 import { YearDots } from '@/components/YearDots';
+import { WeekStrip, type ZoneRect } from '@/components/WeekStrip';
 
 // Enable LayoutAnimation on Android (iOS enables it automatically).
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -161,11 +158,6 @@ const DATES = buildDates();
 // The wheel starts centred here, and the task list opens on today.
 const TODAY_INDEX = PAST_DAYS;
 
-// ── Date wheel sizing ──────────────────────────────────────────────
-// VISIBLE: how many date rows show at once (odd, so one sits dead-centre).
-// The actual row height is measured at runtime so 3 big dates fill the whole column —
-// see the `itemH` state and the wheel's onLayout handler below.
-const VISIBLE = 3;
 function normalizeTaskMap(map: TaskMap): TaskMap {
   const out: TaskMap = {};
   for (const key of Object.keys(map)) {
@@ -249,8 +241,8 @@ export default function TodayScreen() {
   const [overDelete, setOverDelete] = useState(false);
   const overEditRef        = useRef(false);
   const [overEdit, setOverEdit]     = useState(false);
-  // Measured screen-Y of the midpoint of the left bin column — splits delete (top) from edit (bottom).
-  const binMidYRef         = useRef(0);
+  // Window rect of the week strip, which becomes the DELETE | EDIT drop zones mid-drag.
+  const zoneRectRef        = useRef<ZoneRect>({ top: 0, bottom: 0, midX: 0 });
   // taskMapRef / selectedKeyRef / userIdRef — stable copies so the PanResponder's
   // closures never go stale when state changes during a drag.
   const taskMapRef     = useRef<TaskMap>({});
@@ -303,11 +295,9 @@ export default function TodayScreen() {
   const sheetHourRef = useRef(sheetHour);
   const sheetMinuteRef = useRef(sheetMinute);
   const sheetDateIndexRef = useRef(sheetDateIndex);
-  const sheetModeRef = useRef(sheetMode);
   sheetHourRef.current = sheetHour;
   sheetMinuteRef.current = sheetMinute;
   sheetDateIndexRef.current = sheetDateIndex;
-  sheetModeRef.current = sheetMode;
 
   const onSheetDatePreview = useCallback((i: number) => {
     sheetDateIndexRef.current = i;
@@ -617,57 +607,8 @@ export default function TodayScreen() {
     else stopAutoScrollRef.current();
   }, [draggingTaskId, measureTasksScroll]);
 
-  // A direct reference to the scroll wheel, so we can programmatically scroll it
-  // (e.g. when the user taps a date instead of dragging).
-  const wheelRef = useRef<any>(null);
-
-  // The live scroll position as an Animated value. This drives the white-text overlay so its
-  // colour change tracks the orange square pixel-for-pixel, on the native thread (very smooth).
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Remembers which date index was last centred. We only update the selection (and fire a
-  // haptic tick) when the centred date actually CHANGES — not on every pixel of scrolling.
-  // Starts at TODAY_INDEX so the initial position on today doesn't fire a stray haptic.
-  const lastIndexRef = useRef(TODAY_INDEX);
-
-  // True only while the USER is dragging/flinging the wheel. We use this to fire haptics ONLY
-  // for real finger scrolls — never for programmatic centring (launch / returning to the tab).
-  const userScrollingRef = useRef(false);
-
-  // The measured height of one date row. Set from the wheel's real height ÷ VISIBLE so that
-  // exactly 3 big dates fill the column. Starts at 0 (unknown) until the column is measured.
-  // The wheel itself isn't rendered until this is known, so it can start parked on today.
-  const [itemH, setItemH] = useState(0);
-  // Top offset of the orange band — centered in the column (avoids drift from floor division).
-  const [wheelBandTop, setWheelBandTop] = useState(0);
-
-  // The wheel stays invisible until first layout, then appears on the selected date.
-  const [wheelReady, setWheelReady] = useState(false);
-  const wheelInitializedRef = useRef(false);
-  const itemHRef = useRef(itemH);
-  itemHRef.current = itemH;
-  const selectedKeyRef = useRef(selectedKey);
-  selectedKeyRef.current = selectedKey;
-
-  // The blank padding above the first / below the last date, so they can reach the centre slot.
-  const spacer = wheelBandTop;
-
-  // The index of the currently centred date (used to colour past vs upcoming dates differently).
-  const selectedIndex = DATES.findIndex(d => d.key === selectedKey);
   const todayDateKey = DATES[TODAY_INDEX].key;
-  const showTodayLabel = selectedKey === todayDateKey;
-
-  // Sync wheel + overlay to a date index without animation (not a user scroll).
-  function centerOnIndex(index: number) {
-    const h = itemHRef.current;
-    if (h <= 0) return;
-    const safe = Math.max(0, Math.min(DATES.length - 1, index));
-    const y = safe * h;
-    userScrollingRef.current = false;
-    scrollY.setValue(y);
-    lastIndexRef.current = safe;
-    wheelRef.current?.scrollTo({ y, animated: false });
-  }
+  const selectedIndex = DATES.findIndex(d => d.key === selectedKey);
 
   // Reset to today when leaving this tab and coming back — not on layout remeasure while staying here.
   // If the calendar passed a date key, jump to it; otherwise reset to today.
@@ -680,13 +621,7 @@ export default function TodayScreen() {
         const found = DATES.findIndex(d => d.key === selectDate);
         if (found >= 0) targetIndex = found;
       }
-      const targetKey = DATES[targetIndex].key;
-      setSelectedKey(targetKey);
-      selectedKeyRef.current = targetKey;
-      lastIndexRef.current = targetIndex;
-      if (itemHRef.current > 0) {
-        centerOnIndex(targetIndex);
-      }
+      setSelectedKey(DATES[targetIndex].key);
 
       refreshFocusSessionPreview();
 
@@ -714,41 +649,6 @@ export default function TodayScreen() {
     }, FOCUS_SESSION_SYNC_MS);
     return () => clearInterval(id);
   }, [hasSavedSession, refreshFocusSessionPreview]);
-
-  // One-time bootstrap after row height is measured — opens on today on first launch.
-  useEffect(() => {
-    if (itemH > 0 && !wheelInitializedRef.current) {
-      wheelInitializedRef.current = true;
-      centerOnIndex(TODAY_INDEX);
-      setWheelReady(true);
-    }
-  }, [itemH]);
-
-  // Runs as the wheel scrolls. Works out which date is currently in the centre slot,
-  // and if it's a new one, selects it (task list updates live) and fires a haptic tick.
-  function onWheelScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
-    if (itemH <= 0) return;                           // Not measured yet — nothing to compute.
-    const y = e.nativeEvent.contentOffset.y;          // How far we've scrolled, in pixels.
-    let index = Math.round(y / itemH);                // The nearest date row to the centre.
-    if (index < 0) index = 0;                         // Clamp so we never go out of bounds.
-    if (index > DATES.length - 1) index = DATES.length - 1;
-
-    if (index !== lastIndexRef.current) {             // Only act when the centred date changes.
-      lastIndexRef.current = index;
-      setSelectedKey(DATES[index].key);               // Update selection → task list updates instantly.
-
-      // Only tick for real finger scrolls — not for the programmatic jump-to-today on launch.
-      // impactAsync(Light) fires immediately and isn't dropped under load (unlike selectionAsync).
-      if (userScrollingRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  }
-
-  // Feeds the scroll position into both `scrollY` (drives the smooth white-text overlay, native
-  // thread) and our onWheelScroll listener (handles selection + haptics on the JS thread).
-  const onScrollEvent = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    { useNativeDriver: true, listener: onWheelScroll }
-  );
 
   // Runs once when the screen first loads.
   // Loads tasks from AsyncStorage (instant) and gets the user's ID from Supabase.
@@ -1096,11 +996,14 @@ export default function TodayScreen() {
 
       moveFloat(pageY);
       syncColumnLeft(taskColLeftRef.current);
-      updateAutoScrollRef.current(pageY);
 
-      const inBin    = pageX < DELETE_ZONE_X;
-      const inDelete = inBin && pageY < binMidYRef.current;
-      const inEdit   = inBin && pageY >= binMidYRef.current;
+      // Over the week strip = over the drop zones: left half deletes, right half edits.
+      const zone = zoneRectRef.current;
+      const inBin    = pageY >= zone.top - 12 && pageY <= zone.bottom + 12;
+      const inDelete = inBin && pageX < zone.midX;
+      const inEdit   = inBin && pageX >= zone.midX;
+      if (inBin) stopAutoScrollRef.current();
+      else updateAutoScrollRef.current(pageY);
 
       if (inDelete !== overDeleteRef.current) {
         overDeleteRef.current = inDelete;
@@ -1187,147 +1090,21 @@ export default function TodayScreen() {
 
       <BriefingCard />
 
-      {/* ── Main body: date column + task list ─────────── */}
-      {/* This row takes up all remaining space (flex: 1) between the header and tracker bar. */}
+      {/* Week of days; becomes the DELETE | EDIT drop zones while a task is dragged. */}
+      <WeekStrip
+        dates={DATES}
+        selectedKey={selectedKey}
+        todayKey={todayDateKey}
+        pending={key => (taskMap[key] ?? []).filter(t => !t.done && !t.archived).length}
+        onSelect={setSelectedKey}
+        dragging={!!draggingTaskId}
+        overDelete={overDelete}
+        overEdit={overEdit}
+        onZoneLayout={r => { zoneRectRef.current = r; }}
+      />
+
+      {/* ── Task list: full width under the strip ─────────── */}
       <View style={styles.row}>
-
-        {/* Left column — same fixed-width slot always. Contents swap based on drag state. */}
-        <View
-          style={[styles.wheelWrap, draggingTaskId ? styles.deleteBinCol : { opacity: wheelReady ? 1 : 0 }]}
-          onLayout={(e) => {
-            const h = e.nativeEvent.layout.height;
-            // Record the screen-Y midpoint so we can split the bin into delete (top) / edit (bottom).
-            const { y } = e.nativeEvent.layout;
-            binMidYRef.current = insets.top + y + h / 2;
-            const next = Math.floor(h / VISIBLE);
-            const bandTop = Math.round((h - next) / 2);
-            if (next > 0 && (next !== itemH || bandTop !== wheelBandTop)) {
-              setItemH(next);
-              setWheelBandTop(bandTop);
-              // Don't re-seat the wheel during task modal / active finger scroll (breaks sync).
-              if (sheetModeRef.current === 'task' || userScrollingRef.current) return;
-              const index = DATES.findIndex(d => d.key === selectedKeyRef.current);
-              const safe = index >= 0 ? index : TODAY_INDEX;
-              scrollY.setValue(safe * next);
-              if (wheelInitializedRef.current) {
-                requestAnimationFrame(() => {
-                  wheelRef.current?.scrollTo({ y: safe * next, animated: false });
-                });
-              }
-            }
-          }}
-        >
-          {/* While dragging: two zones — delete (top) and edit (bottom). Always split. */}
-          {draggingTaskId ? (
-            <>
-              <View style={[styles.binHalf, overDelete && styles.binHalfDeleteActive]}>
-                <MaterialCommunityIcons
-                  name={overDelete ? 'trash-can' : 'trash-can-outline'}
-                  size={28}
-                  color={overDelete ? C.onHot : C.hot}
-                />
-                <Text style={[styles.binHalfLabel, overDelete && styles.binHalfLabelActive]}>
-                  {overDelete ? 'RELEASE' : 'DELETE'}
-                </Text>
-              </View>
-              <View style={styles.binDivider} />
-              <View style={[styles.binHalf, overEdit && styles.binHalfEditActive]}>
-                <MaterialCommunityIcons
-                  name={overEdit ? 'pencil' : 'pencil-outline'}
-                  size={28}
-                  color={overEdit ? C.onHot : C.hot}
-                />
-                <Text style={[styles.binHalfLabel, overEdit && styles.binHalfLabelActive]}>
-                  {overEdit ? 'RELEASE' : 'EDIT'}
-                </Text>
-              </View>
-            </>
-          ) : null}
-
-          {/* Only render the wheel once we know the row height, so it can start already parked
-              on today (via contentOffset) instead of visibly scrolling there after launch. */}
-          {!draggingTaskId && itemH > 0 && (
-            <>
-          {/* LAYER 1 (bottom): the scrollable list of dates in their DARK appearance.
-              This is the real scroll view — it owns the scrolling, snapping and tap targets. */}
-          <Animated.ScrollView
-            ref={wheelRef}
-            style={styles.wheel}
-            showsVerticalScrollIndicator={false}
-            snapToInterval={itemH}            // Snaps so a date always lands dead-centre.
-            decelerationRate={WHEEL_DECELERATION}
-            scrollEventThrottle={1}
-            onScroll={onScrollEvent}
-            onScrollBeginDrag={() => { userScrollingRef.current = true; }}
-            onScrollEndDrag={(e) => {
-              const vy = e.nativeEvent.velocity?.y ?? 0;
-              if (Math.abs(vy) < 0.12) userScrollingRef.current = false;
-            }}
-            onMomentumScrollEnd={() => { userScrollingRef.current = false; }}
-            contentOffset={{ x: 0, y: TODAY_INDEX * itemH }}                  // Start parked on today.
-            contentContainerStyle={{ paddingVertical: spacer }}
-          >
-            {DATES.map((d, i) => {
-              // All dates are black (solid text on both past and upcoming).
-              // (The white version lives in the overlay layer below, clipped to the orange square.)
-              const color = C.ink;
-              const pending = (taskMap[d.key] ?? []).filter(t => !t.done && !t.archived).length;
-
-              return (
-                <TouchableOpacity
-                  key={d.key}
-                  style={[styles.wheelItem, { height: itemH }]}
-                  activeOpacity={0.8}
-                  onPress={() => wheelRef.current?.scrollTo({ y: i * itemH, animated: true })}
-                >
-                  {showTodayLabel && d.key === todayDateKey && (
-                    <Text style={[styles.wheelTodayLabel, { color }]}>TODAY</Text>
-                  )}
-                  <Text style={[styles.wheelDay, { color }]}>{d.day}</Text>
-                  <Text style={[styles.wheelNum, { color }]}>{d.date}</Text>
-                  {pending > 0 && (
-                    <View style={[styles.badge, { backgroundColor: C.hot }]}>
-                      <Text style={[styles.badgeText, { color: C.onHot }]}>{pending}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </Animated.ScrollView>
-
-          {/* LAYER 2 (top): the orange square. It is CLIPPED to the centre slot (overflow hidden),
-              and holds a second copy of the dates in WHITE. We slide that copy by -scrollY so it
-              lines up exactly with the layer below — so only the part of a number that's actually
-              over the orange square appears white. pointerEvents none lets touches reach layer 1. */}
-          <View style={[styles.bandClip, { top: wheelBandTop, height: itemH }]} pointerEvents="none">
-            <Animated.View style={{ transform: [{ translateY: Animated.multiply(scrollY, -1) }] }}>
-              {DATES.map((d, i) => {
-                const pending = (taskMap[d.key] ?? []).filter(t => !t.done && !t.archived).length;
-                return (
-                  <View key={d.key} style={[styles.wheelItem, { height: itemH }]}>
-                    {showTodayLabel && d.key === todayDateKey && (
-                      <Text style={styles.wheelTodayLabel}>TODAY</Text>
-                    )}
-                    <Text style={[styles.wheelDay, { color: C.onHot }]}>{d.day}</Text>
-                    <Text style={[styles.wheelNum, { color: C.onHot }]}>{d.date}</Text>
-                    {/* Month only in overlay — absolute so day/number stay aligned with layer below. */}
-                    <Text style={styles.wheelMonth}>{d.month}</Text>
-                    {pending > 0 && (
-                      <View style={[styles.badge, { backgroundColor: C.surface }]}>
-                        <Text style={[styles.badgeText, { color: C.hot }]}>{pending}</Text>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </Animated.View>
-          </View>
-            </>
-          )}
-        </View>
-
-        {/* A thin vertical line separating the date column from the task list. */}
-        <View style={styles.vDivider} />
 
         {/* Right column: scrollable task list for the selected date. */}
         {/* keyboardShouldPersistTaps="handled" means tapping the ADD button while the
@@ -1352,66 +1129,64 @@ export default function TodayScreen() {
             });
           }}
         >
-          {/* ── TODAY'S FOCUS card ────────────────────────── */}
-          <Text style={styles.focusSection}>TODAY'S FOCUS</Text>
+          {/* ── Focus: one row — name (tap to edit), block length (tap to cycle), play ── */}
+          <View style={styles.focusRow}>
+            <View style={{ flex: 1 }}>
+              <TouchableOpacity onPress={() => openSheet('focus')} activeOpacity={0.7}>
+                <Text style={styles.focusSection}>FOCUS</Text>
+                <Text style={[styles.focusName, !focusName && styles.focusNamePlaceholder]} numberOfLines={1}>
+                  {focusName || 'SET A FOCUS'}
+                </Text>
+              </TouchableOpacity>
+              {hasSavedSession && activeSessionLabel ? (
+                <Text style={styles.focusSessionRemaining}>{activeSessionLabel}</Text>
+              ) : (
+                <TouchableOpacity
+                  style={styles.focusBlockBtn}
+                  onPress={() => {
+                    const next = (focusBlockIdx + 1) % FOCUS_BLOCKS.length;
+                    applyFocusSettings(focusName, next);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 0, right: 12 }}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="clock-outline" size={12} color={C.dim} />
+                  <Text style={styles.focusBlockLabel}>
+                    {focusBlockDisplayLabel(focusWorkMins, focusBreakMins, focusBlockIdx)}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-          {/* Tapping the name opens the bottom sheet to edit it. */}
-          <TouchableOpacity onPress={() => openSheet('focus')} activeOpacity={0.7}>
-            <Text style={[styles.focusName, !focusName && styles.focusNamePlaceholder]}>
-              {focusName || 'TAP TO SET FOCUS'}
-            </Text>
-          </TouchableOpacity>
-
-          {hasSavedSession && activeSessionLabel ? (
-            <Text style={styles.focusSessionRemaining}>{activeSessionLabel}</Text>
-          ) : (
+            {/* Start / resume — goes to the timer screen; with no focus name it opens the sheet first. */}
             <TouchableOpacity
-              style={styles.focusBlockBtn}
+              style={styles.startFocusBtn}
+              activeOpacity={0.85}
+              accessibilityLabel={hasSavedSession ? 'Resume focus' : 'Start focus'}
               onPress={() => {
-                const next = (focusBlockIdx + 1) % FOCUS_BLOCKS.length;
-                applyFocusSettings(focusName, next);
-              }}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons name="clock-outline" size={13} color={C.dim} />
-              <Text style={styles.focusBlockLabel}>
-                {focusBlockDisplayLabel(focusWorkMins, focusBreakMins, focusBlockIdx)}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* START/RESUME FOCUS button — navigates to the timer screen.
-              If there's a saved session, shows "RESUME FOCUS" and the timer will restore its state. */}
-          <TouchableOpacity
-            style={styles.startFocusBtn}
-            activeOpacity={0.85}
-            onPress={() => {
-              if (hasSavedSession) {
-                // Resume: go to timer with no params, it'll load the saved session.
-                router.push('/focus-timer');
-              } else {
-                // Start new: need focus name and block settings.
-                if (!focusName.trim()) {
-                  openSheet('focus');
-                  return;
+                if (hasSavedSession) {
+                  // Resume: go to timer with no params, it'll load the saved session.
+                  router.push('/focus-timer');
+                } else {
+                  // Start new: need focus name and block settings.
+                  if (!focusName.trim()) {
+                    openSheet('focus');
+                    return;
+                  }
+                  router.push({
+                    pathname: '/focus-timer',
+                    params: {
+                      name:       focusName.trim(),
+                      workMins:   String(focusWorkMins),
+                      breakMins:  String(focusBreakMins),
+                    },
+                  });
                 }
-                router.push({
-                  pathname: '/focus-timer',
-                  params: {
-                    name:       focusName.trim(),
-                    workMins:   String(focusWorkMins),
-                    breakMins:  String(focusBreakMins),
-                  },
-                });
-              }
-            }}
-          >
-            <Text style={styles.startFocusBtnText}>
-              {hasSavedSession ? 'RESUME FOCUS' : 'START FOCUS'}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.focusDivider} />
+              }}
+            >
+              <MaterialCommunityIcons name={hasSavedSession ? 'play-pause' : 'play'} size={22} color={C.onHot} />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.cardLabelRow}>
             <View style={styles.cardLabelCol}>
@@ -1554,6 +1329,7 @@ export default function TodayScreen() {
                 onChangeText={setSheetText}
                 placeholder="TASK NAME..."
                 placeholderTextColor={C.faint}
+                autoFocus={!editingTaskId}
                 autoCapitalize="characters"
                 returnKeyType="done"
                 onSubmitEditing={confirmSheet}
@@ -1618,54 +1394,7 @@ const styles = StyleSheet.create({
   // flex: 1 makes it fill all space between the header and the tracker bar.
   row: {
     flex: 1,
-    flexDirection: 'row',
     paddingHorizontal: 16,
-  },
-  // The wheel's outer container — fills the full column height (so 3 big dates fit).
-  // The row's default stretch makes this full-height; width sets the column size.
-  wheelWrap: {
-    width: 136,
-    alignSelf: 'stretch',
-    flexGrow: 0,
-  },
-  // The orange square locked in the centre slot. overflow:'hidden' clips the white date copy
-  // inside it, so only the portion of a number over the square shows white. top + height inline.
-  bandClip: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    backgroundColor: C.hot,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  // The scroll view itself — fills the wrap; transparent so the orange band shows through.
-  wheel: {
-    flex: 1,
-  },
-  // One date row in the wheel. Height is set inline from itemH.
-  wheelItem: {
-    position: 'relative',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // "TODAY" above the weekday when the selected date is the current day.
-  wheelTodayLabel: { position: 'absolute', top: 6, left: 0, right: 0, textAlign: 'center', fontFamily: F.dot, fontSize: 9, letterSpacing: 2, color: C.onHot },
-  // Day name (e.g. "MONDAY") above the number.
-  wheelDay: { fontFamily: F.dot, fontSize: 12, marginBottom: 8, letterSpacing: 2 },
-  // The big bold date number.
-  wheelNum: {
-    fontFamily: F.dot,
-    fontSize: 52,
-    lineHeight: 58,
-  },
-  // Month label at the bottom of the orange square (overlay only — does not affect row layout).
-  wheelMonth: { position: 'absolute', bottom: 10, left: 0, right: 0, textAlign: 'center', fontFamily: F.dot, fontSize: 12, letterSpacing: 2, color: C.onHot },
-  // The thin vertical line between the date column and task list.
-  vDivider: {
-    width: 1,
-    backgroundColor: C.line,
-    marginHorizontal: 14,
   },
   // The right column — takes all remaining horizontal space (flex: 1).
   tasksCol: {
@@ -1674,10 +1403,9 @@ const styles = StyleSheet.create({
   // "TODAY'S TASKS" label at the top of the task list.
   cardLabelRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
-    marginTop: 4,
+    marginBottom: 8,
   },
   cardLabelCol: {
     flexDirection: 'column',
@@ -1694,18 +1422,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   editHeaderBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 2,
-    marginTop: 14,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    marginRight: -12,
+    justifyContent: 'center',
   },
   editHeaderBtnText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2 },
   editHeaderBtnTextActive: {
     color: C.hot,
   },
   editModeActive: {
-    backgroundColor: 'rgba(255,77,0,0.10)',
-    borderRadius: 4,
-    padding: 3,
+    backgroundColor: C.raised,
+    borderRadius: 22,
   },
   // Edit mode task rows.
   editModeRow: {
@@ -1789,7 +1517,7 @@ const styles = StyleSheet.create({
   taskLabel: {
     fontFamily: F.mono,
     fontSize: 11,
-    color: '#000000',
+    color: C.ink,
     lineHeight: 16,
   },
   // Strikethrough and grey text when the task is done.
@@ -1807,7 +1535,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: C.hot,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 77, 0, 0.06)',
+    backgroundColor: C.raised,
   },
   // Invisible spacer at the dragged item's old index while the gap is elsewhere.
   dragRowSpacer: {
@@ -1826,17 +1554,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 16,
   },
-  // Full-height left column shown instead of the date wheel while dragging.
-  deleteBinCol: {
-    backgroundColor: C.raised,
-    borderRadius: 12,
-    alignItems: 'stretch',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: C.hot,
-    borderStyle: 'dashed',
-  },
   // Each half of the split bin (delete top, edit bottom).
   binFull: {
     flex: 1,
@@ -1844,28 +1561,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 8,
-  },
-  binHalf: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-  },
-  binHalfDeleteActive: { backgroundColor: C.hot },
-  binHalfEditActive:   { backgroundColor: C.hot },
-  binHalfLabel: {
-    fontFamily: F.mono,
-    fontSize: 10,
-    color: C.hot,
-    textAlign: 'center',
-    letterSpacing: 1,
-  },
-  binHalfLabelActive: { color: C.surface },
-  binDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,77,0,0.25)',
-    marginHorizontal: 8,
   },
   deleteBinLabel: {
     fontFamily: F.mono,
@@ -1932,65 +1627,50 @@ const styles = StyleSheet.create({
     color: C.dim,
     letterSpacing: 1,
   },
-  // The small circular badge in the bottom-right corner of each date card,
-  // showing how many tasks are still incomplete for that date.
-  // position: 'absolute' places it on top of the card content without affecting layout.
-  badge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10, // Makes it a circle.
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  // The number inside the badge.
-  badgeText: {
-    fontFamily: F.mono,
-    fontSize: 11,
-  },
 
   // ── Today's Focus card ───────────────────────────────────────────
-  focusSection: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3, marginBottom: 10 },
+  focusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 16,
+    paddingLeft: 14,
+    paddingRight: 10,
+    paddingVertical: 10,
+    marginBottom: 18,
+  },
+  focusSection: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2, marginBottom: 3 },
   focusName: {
     fontFamily: F.dot,
-    fontSize: 30,
+    fontSize: 16,
     color: C.ink,
-    lineHeight: 36,
-    marginBottom: 8,
+    letterSpacing: 1,
   },
   focusNamePlaceholder: {
     color: C.faint,
-    fontSize: 22,
-    lineHeight: 28,
   },
   focusBlockBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 14,
+    gap: 5,
+    marginTop: 4,
   },
   focusBlockLabel: {
     fontFamily: F.mono,
-    fontSize: 12,
+    fontSize: 11,
     color: C.dim,
   },
   focusSessionRemaining: {
     fontFamily: F.mono,
-    fontSize: 12,
+    fontSize: 11,
     color: C.hot,
     letterSpacing: 0.5,
-    marginBottom: 14,
+    marginTop: 4,
   },
-  startFocusBtn: { alignItems: 'center', justifyContent: 'center', backgroundColor: C.hot, borderRadius: 100, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 4 },
-  startFocusBtnText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
-  focusDivider: {
-    height: 1,
-    backgroundColor: C.line,
-    marginVertical: 20,
-  },
+  startFocusBtn: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: C.hot },
 
   // ── Priority tags on task rows ───────────────────────────────────
   priorityTag: {

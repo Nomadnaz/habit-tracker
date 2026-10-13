@@ -114,7 +114,7 @@ See `system-model.md` for the full picture (data layer / intelligence layer / su
 
 **Fonts** — loaded in `app/_layout.tsx`. `F.dot` = London Underground Heavy (SIL OFL, `assets/fonts/LondonUnderground-OFL.txt`) for titles, labels, board rows — it has NO `. / % ? !`, so never set prose or decimals in it; `F.num` = Doto (OFL) for values that need those glyphs (use `numFace(value, size)`); `F.mono` = Share Tech Mono for sentences. Do NOT ship Nothing's Ndot (the puck's font): its embedded licence restricts it to Nothing brand materials. Pixeloid is kept only for `components/ReceiptPrinter.tsx`.
 
-**Navigation** — custom tab bar (`components/PuckTabBar.tsx`): TODAY · BODY · [PUCK dot] · TRAIN · LIFE. Tap the dot = chat (`components/assistant/`), hold = voice log/ask (expo-audio → `transcribe` → `ai-chat`, auto actions executed locally). HABITS and HEALTH stay registered as hidden tabs, reached from LIFE and BODY.
+**Navigation** — custom tab bar (`components/PuckTabBar.tsx`): TODAY · BODY · [PUCK dot] · TRAIN · LIFE. Tap the dot = chat (`components/assistant/`), hold = voice log/ask (expo-audio → `transcribe` → `ai-chat`, auto actions executed locally). HABITS, ACTIVITY and PROGRESS stay registered as hidden tabs, reached from LIFE and TRAIN.
 
 **Path alias** — `@/` resolves to the repo root (configured in `tsconfig.json`).
 

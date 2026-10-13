@@ -12,6 +12,7 @@
 import { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { loadBodyData, trainingDayType, type BodyData } from '@/lib/body-data';
 import { GymHeatmap, GymHeatmapLegend } from '@/components/GymHeatmap';
@@ -22,9 +23,7 @@ import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const MUTED  = C.dim;
 const CARD   = C.surface;
-const BOLD = F.mono;
 const REG = F.mono;
-const NUM    = F.mono;
 
 function km(meters: number): string {
   return `${(meters / 1000).toFixed(1)} KM`;
@@ -67,15 +66,16 @@ export default function ProgressScreen() {
           ]} />
         </View>
 
-        <Text style={[s.sectionLabel, s.sectionLabelSpaced]}>TROPHY CASE ({earnedCount}/{BADGES.length})</Text>
+        <Text style={[s.sectionLabel, s.sectionLabelSpaced]}>{`TROPHY CASE  ${earnedCount} OF ${BADGES.length}`}</Text>
         <View style={s.badgeGrid}>
           {BADGES.map(b => {
             const unlocked = earned.includes(b.id);
             const showHidden = !!b.hidden && !unlocked;
             return (
               <View key={b.id} style={[s.badge, !unlocked && s.badgeLocked]}>
+                <MaterialCommunityIcons name={unlocked ? 'medal' : 'lock-outline'} size={18} color={unlocked ? C.hot : C.faint} />
                 <Text style={[s.badgeName, !unlocked && s.badgeNameLocked]}>
-                  {showHidden ? '???' : b.name}
+                  {showHidden ? '???' : b.name.toUpperCase()}
                 </Text>
                 <Text style={s.badgeDesc}>{showHidden ? '???' : b.description}</Text>
               </View>
@@ -85,14 +85,14 @@ export default function ProgressScreen() {
 
         <Text style={[s.sectionLabel, s.sectionLabelSpaced]}>ALL-TIME STATS</Text>
         <View style={s.card}>
-          <StatRow label="Total steps" value={stats.total_steps.toLocaleString()} />
-          <StatRow label="Distance walked" value={km(stats.total_distance_walked_m)} />
-          <StatRow label="Distance run" value={km(stats.total_distance_run_m)} />
-          <StatRow label="Gym sessions" value={String(stats.total_gym_sessions)} />
-          <StatRow label="Focus time" value={hours(stats.total_focus_secs)} />
-          <StatRow label="Habits completed" value={String(stats.total_habits_completed)} />
-          <StatRow label="Books finished" value={String(stats.total_books_finished)} />
-          <StatRow label="Longest streak ever" value={`${stats.longest_streak_ever} days`} last />
+          <StatRow label="STEPS" value={stats.total_steps.toLocaleString()} />
+          <StatRow label="WALKED" value={km(stats.total_distance_walked_m)} />
+          <StatRow label="RUN" value={km(stats.total_distance_run_m)} />
+          <StatRow label="GYM SESSIONS" value={String(stats.total_gym_sessions)} />
+          <StatRow label="FOCUS TIME" value={hours(stats.total_focus_secs)} />
+          <StatRow label="HABITS DONE" value={String(stats.total_habits_completed)} />
+          <StatRow label="BOOKS FINISHED" value={String(stats.total_books_finished)} />
+          <StatRow label="LONGEST STREAK" value={`${stats.longest_streak_ever} DAYS`} last />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -109,21 +109,21 @@ function StatRow({ label, value, last }: { label: string; value: string; last?: 
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.surface },
+  container: { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 },
-  sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1, marginBottom: 10 },
+  sectionLabel: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3, marginBottom: 8 },
   sectionLabelSpaced: { marginTop: 24 },
-  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14 },
+  card: { backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14 },
 
-  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  badge: { width: '31%', backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 10, alignItems: 'center' },
+  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 },
+  badge: { width: '32%', backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 10, alignItems: 'center', gap: 4, minHeight: 104 },
   badgeLocked: { opacity: 0.85 },
-  badgeName: { fontFamily: BOLD, fontSize: 11, color: C.ink, textAlign: 'center' },
+  badgeName: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1, textAlign: 'center' },
   badgeNameLocked: { color: MUTED },
-  badgeDesc: { fontFamily: REG, fontSize: 9, color: C.dim, textAlign: 'center', marginTop: 4 },
+  badgeDesc: { fontFamily: REG, fontSize: 10, color: C.dim, textAlign: 'center', lineHeight: 13 },
 
   statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10 },
   statRowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
-  statLabel: { fontFamily: REG, fontSize: 12, color: C.dim },
-  statValue: { fontFamily: NUM, fontSize: 13, color: C.hot },
+  statLabel: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5 },
+  statValue: { fontFamily: F.mono, fontSize: 14, color: C.ink },
 });

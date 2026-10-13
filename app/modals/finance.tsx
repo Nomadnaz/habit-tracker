@@ -24,6 +24,17 @@ import { toDateKey } from '@/lib/dateKey';
 
 import { C, F } from '@/lib/theme';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
+// Amounts follow the phone's region (en-GB → £, de-DE → €, en-US → $).
+const REGION_CURRENCY: Record<string, string> = {
+  GB: 'GBP', IE: 'EUR', DE: 'EUR', FR: 'EUR', ES: 'EUR', IT: 'EUR', NL: 'EUR', BE: 'EUR', PT: 'EUR', AT: 'EUR', FI: 'EUR',
+  US: 'USD', CA: 'CAD', AU: 'AUD', NZ: 'NZD', CH: 'CHF', SE: 'SEK', NO: 'NOK', DK: 'DKK', JP: 'JPY', IN: 'INR',
+};
+const LOCALE = Intl.NumberFormat().resolvedOptions().locale;
+const CURRENCY = REGION_CURRENCY[LOCALE.split('-').pop()?.toUpperCase() ?? ''] ?? 'GBP';
+function money(n: number, digits = 2) {
+  return new Intl.NumberFormat(LOCALE, { style: 'currency', currency: CURRENCY, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
+}
+
 const ORANGE = C.hot;
 const CARD   = C.surface;
 const BOLD = F.mono;
@@ -95,12 +106,12 @@ export default function FinanceModal() {
       <ScrollView contentContainerStyle={styles.content}>
         {section === 'spending' && (
           <>
-            <Text style={styles.totalText}>THIS MONTH: ${totalSpent.toFixed(2)}</Text>
+            <Text style={styles.totalText}>THIS MONTH: {money(totalSpent)}</Text>
             {expenses.length === 0 && <Text style={styles.empty}>No expenses logged this month.</Text>}
             {expenses.slice().reverse().map(e => (
               <View key={e.id} style={styles.row}>
                 <Text style={styles.rowLabel}>{e.category}{e.note ? ` — ${e.note}` : ''}</Text>
-                <Text style={styles.rowAmount}>${e.amount.toFixed(2)}</Text>
+                <Text style={styles.rowAmount}>{money(e.amount)}</Text>
               </View>
             ))}
           </>
@@ -115,7 +126,7 @@ export default function FinanceModal() {
                   <Text style={styles.rowLabel}>{b.name}</Text>
                   <Text style={styles.rowSub}>Due {b.dueDate} · {b.frequency}</Text>
                 </View>
-                <Text style={styles.rowAmount}>${b.amount.toFixed(2)}</Text>
+                <Text style={styles.rowAmount}>{money(b.amount)}</Text>
                 <TouchableOpacity style={styles.paidBtn} onPress={() => markBillPaid(b.id).then(refresh)}>
                   <Text style={styles.paidBtnText}>PAID</Text>
                 </TouchableOpacity>
@@ -144,7 +155,7 @@ export default function FinanceModal() {
                   />
                   {s && (
                     <Text style={[styles.rowAmount, s.over && { color: C.alert }]}>
-                      ${s.spent.toFixed(0)}{s.target ? ` / $${s.target}` : ''}
+                      {money(s.spent, 0)}{s.target ? ` / ${money(s.target, 0)}` : ''}
                     </Text>
                   )}
                 </View>
@@ -195,10 +206,10 @@ export default function FinanceModal() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   segmentRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
-  segment: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line, alignItems: 'center' },
+  segment: { flex: 1, minHeight: 40, paddingHorizontal: 6, borderRadius: 999, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   segmentActive: { backgroundColor: ORANGE, borderColor: C.hot },
-  segmentText: { fontFamily: REG, fontSize: 10, color: C.dim },
-  segmentTextActive: { color: C.surface },
+  segmentText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5 },
+  segmentTextActive: { color: C.onHot },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 8 },
   totalText: { fontFamily: BOLD, fontSize: 14, color: C.ink, marginBottom: 6 },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 20 },

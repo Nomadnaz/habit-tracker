@@ -26,6 +26,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { C, F } from '@/lib/theme';
+import { HeaderIcon } from '@/components/ScreenHeader';
 const CARD   = C.surface;
 const BOLD = F.mono;
 const REG = F.mono;
@@ -35,7 +36,8 @@ type SearchResult = { id: string; type: ResultType; title: string; subtitle?: st
 
 const PAGES: { title: string; route: string }[] = [
   { title: 'Habits', route: '/(tabs)/habits' },
-  { title: 'Body', route: '/(tabs)/gym' },
+  { title: 'Body', route: '/(tabs)/body' },
+  { title: 'Train', route: '/(tabs)/gym' },
   { title: 'Activity', route: '/(tabs)/activity' },
   { title: 'Goals', route: '/modals/goals' },
   { title: 'Finance', route: '/modals/finance' },
@@ -134,9 +136,7 @@ export default function GlobalSearch({ onClose }: { onClose: () => void }) {
           onChangeText={setQuery}
           autoFocus
         />
-        <TouchableOpacity onPress={onClose} hitSlop={12}>
-          <MaterialCommunityIcons name="close" size={22} color={C.ink} />
-        </TouchableOpacity>
+        <HeaderIcon icon="close" label="Close search" onPress={onClose} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>

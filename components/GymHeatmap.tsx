@@ -5,6 +5,7 @@
 // so both screens share one implementation instead of two.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { buildDayGrid } from '@/lib/body-data';
 
@@ -13,43 +14,45 @@ const ORANGE = C.hot;
 
 export type SquareKind = 'hit' | 'partial' | 'missed' | 'empty' | 'trained' | 'rest' | 'cheat';
 
-const SQ = 13;
+const SQ = 13; // legend swatch size; grid squares stretch to fill the card
 const DITHER_TILES = 4;
+const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const GAP = 6;
 
-function HeatSquare({ kind }: { kind: SquareKind }) {
-  if (kind === 'empty') return <View style={[hs.sq, hs.invisible]} />;
-  if (kind === 'hit' || kind === 'trained') return <View style={[hs.sq, hs.solid]} />;
-  if (kind === 'partial' || kind === 'rest') return <View style={[hs.sq, hs.dotted]} />;
+function HeatSquare({ kind, size }: { kind: SquareKind; size?: number }) {
+  const box = size ? [hs.cell, { width: size, height: size }] : hs.sq;
+  if (kind === 'empty') return <View style={[box, hs.invisible]} />;
+  if (kind === 'hit' || kind === 'trained') return <View style={[box, hs.solid]} />;
+  if (kind === 'partial' || kind === 'rest') return <View style={[box, hs.dotted]} />;
   if (kind === 'cheat') {
-    const tile = SQ / DITHER_TILES;
     return (
-      <View style={[hs.sq, { flexDirection: 'row', flexWrap: 'wrap', overflow: 'hidden' }]}>
+      <View style={[box, { flexDirection: 'row', flexWrap: 'wrap', overflow: 'hidden' }]}>
         {Array.from({ length: DITHER_TILES * DITHER_TILES }).map((_, i) => {
           const row = Math.floor(i / DITHER_TILES);
           const col = i % DITHER_TILES;
           const on = (row + col) % 2 === 0;
-          return <View key={i} style={{ width: tile, height: tile, backgroundColor: on ? C.hot : C.surface }} />;
+          return <View key={i} style={{ width: `${100 / DITHER_TILES}%`, height: `${100 / DITHER_TILES}%`, backgroundColor: on ? C.hot : C.surface }} />;
         })}
       </View>
     );
   }
-  return <View style={[hs.sq, hs.missed]} />;
+  return <View style={[box, hs.missed]} />;
 }
 
 export function GymHeatmap({ weeks, getKind }: { weeks: number; getKind: (d: Date | null) => SquareKind }) {
   const grid = buildDayGrid(weeks);
-  const headerDates = grid[grid.length - 1] ?? [];
+  // Seven squares and six gaps span the measured width exactly.
+  const [w, setW] = useState(0);
+  const size = w ? (w - GAP * 6) / 7 : 0;
 
   return (
-    <View>
+    <View onLayout={e => setW(e.nativeEvent.layout.width)}>
       <View style={hm.headerRow}>
-        {headerDates.map((day, i) => (
-          <Text key={i} style={hm.headerDate}>{day ? String(day.getDate()) : ''}</Text>
-        ))}
+        {WEEKDAYS.map((d, i) => <Text key={i} style={hm.headerDay}>{d}</Text>)}
       </View>
       {grid.map((row, r) => (
         <View key={r} style={hm.row}>
-          {row.map((day, c) => <HeatSquare key={c} kind={getKind(day)} />)}
+          {size > 0 && row.map((day, c) => <HeatSquare key={c} kind={getKind(day)} size={size} />)}
         </View>
       ))}
     </View>
@@ -70,7 +73,8 @@ export function GymHeatmapLegend({ items }: { items: { kind: SquareKind; label: 
 }
 
 const hs = StyleSheet.create({
-  sq: { width: SQ, height: SQ, borderRadius: 0, marginRight: 3, marginBottom: 3, overflow: 'hidden' },
+  sq: { width: SQ, height: SQ, borderRadius: 3, overflow: 'hidden' },
+  cell: { borderRadius: 6, overflow: 'hidden' },
   invisible: {},
   solid: { backgroundColor: ORANGE },
   dotted: { borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dotted' },
@@ -78,10 +82,10 @@ const hs = StyleSheet.create({
 });
 
 const hm = StyleSheet.create({
-  headerRow: { flexDirection: 'row', marginBottom: 4 },
-  headerDate: { width: SQ + 3, textAlign: 'center', fontFamily: F.mono, fontSize: 8, color: C.faint },
-  row: { flexDirection: 'row' },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 8 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  legendText: { fontFamily: F.mono, fontSize: 8, color: C.dim },
+  headerRow: { flexDirection: 'row', gap: GAP, marginBottom: 6 },
+  headerDay: { flex: 1, textAlign: 'center', fontFamily: F.dot, fontSize: 9, color: C.faint },
+  row: { flexDirection: 'row', gap: GAP, marginBottom: GAP },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 14 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1 },
 });

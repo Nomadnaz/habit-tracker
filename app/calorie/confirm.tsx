@@ -21,7 +21,6 @@ import { addMeal, updateMeal, todayKey, MEAL_TYPES, type MealType } from '@/lib/
 import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
-const BOLD = F.mono;
 const REG = F.mono;
 
 function str(v: string | string[] | undefined): string {
@@ -143,25 +142,25 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingBottom: 20 },
 
   estimateBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.raised, borderRadius: 8, padding: 8, marginBottom: 12 },
-  estimateText: { flex: 1, fontFamily: REG, fontSize: 11, color: '#A33C22', letterSpacing: 0.5 },
+  estimateText: { flex: 1, fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 0.5 },
   photo: { width: '100%', height: 180, borderRadius: 12, marginBottom: 14 },
 
-  fieldLabel: { fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 1, marginBottom: 4 },
+  fieldLabel: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 2, marginBottom: 6 },
   input: {
     borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
     fontFamily: REG, fontSize: 15, color: C.ink, backgroundColor: C.surface, marginBottom: 12,
   },
   typeRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
-  typePill: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  typePill: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40, borderRadius: 999, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   typePillActive: { backgroundColor: ORANGE, borderColor: C.hot },
-  typePillText: { fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 0.5 },
-  typePillTextActive: { color: C.surface, fontFamily: BOLD },
-  numGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  numCell: { width: '47%' },
+  typePillText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1 },
+  typePillTextActive: { color: C.onHot },
+  numGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  numCell: { width: '48.5%' },
 
   actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingBottom: 18, paddingTop: 6 },
-  cancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: C.line },
-  cancelText: { fontFamily: BOLD, fontSize: 12, color: C.dim, letterSpacing: 1 },
-  saveBtn: { flex: 2, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, backgroundColor: C.hot },
-  saveText: { fontFamily: BOLD, fontSize: 13, color: C.onHot, letterSpacing: 1 },
+  cancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, borderWidth: 1, borderColor: C.lineHi },
+  cancelText: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 2 },
+  saveBtn: { flex: 2, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, backgroundColor: C.hot },
+  saveText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
 });

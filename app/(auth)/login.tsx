@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 13,
     fontFamily: F.mono,
-    color: '#000',
+    color: C.ink,
     marginBottom: 12,
   },
   // The orange submit button.
@@ -214,14 +214,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   // The "NO ACCOUNT? SIGN UP" toggle link at the bottom.
-  switchBtn: {
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  switchText: {
-    fontFamily: F.mono,
-    fontSize: 9,
-    color: C.hot,
-    letterSpacing: 1,
-  },
+  switchBtn: { alignItems: 'center', justifyContent: 'center', marginTop: 12, minHeight: 48 },
+  switchText: { fontFamily: F.mono, fontSize: 12, color: C.hot, letterSpacing: 1 },
 });

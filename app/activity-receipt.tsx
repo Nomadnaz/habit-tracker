@@ -14,7 +14,6 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ReceiptPrinter, ReceiptRow, ReceiptRule, type ReceiptPrinterStage } from '@/components/ReceiptPrinter';
 import { PixelRouteMap } from '@/components/PixelRouteMap';
 import {
@@ -23,6 +22,7 @@ import {
 } from '@/lib/activity-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const MUTED  = C.dim;
 const BOLD = F.mono;
@@ -86,13 +86,7 @@ export default function ActivityReceiptScreen() {
   if (notFound) {
     return (
       <SafeAreaView style={s.container} edges={['top']}>
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-            <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-          </TouchableOpacity>
-          <Text style={s.title}>RECEIPT</Text>
-          <View style={{ width: 26 }} />
-        </View>
+        <ScreenHeader title="RECEIPT" />
         <Text style={s.empty}>Activity not found.</Text>
       </SafeAreaView>
     );
@@ -106,13 +100,7 @@ export default function ActivityReceiptScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-        </TouchableOpacity>
-        <Text style={s.title}>{type} RECEIPT</Text>
-        <View style={{ width: 26 }} />
-      </View>
+      <ScreenHeader title={`${type} RECEIPT`} />
 
       <ScrollView contentContainerStyle={s.content}>
         <ReceiptPrinter.Root stage={stage} feedMotion="stepped">
@@ -232,8 +220,6 @@ export default function ActivityReceiptScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 40, alignItems: 'center' },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim, paddingHorizontal: 16 },
 

@@ -17,9 +17,13 @@ export const TAB_ORDER: { name: string; label: string }[] = [
   { name: 'life',  label: 'LIFE'  },
 ];
 
+// Hidden tab routes light up the tab they belong to, so you never lose your place.
+const PARENT: Record<string, string> = { habits: 'life', activity: 'gym', progress: 'gym' };
+
 export function PuckTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const current = state.routes[state.index]?.name;
+  const lit = PARENT[current] ?? current;
   const go = (name: string) => {
     const route = state.routes.find(r => r.name === name);
     if (!route) return;
@@ -29,7 +33,7 @@ export function PuckTabBar({ state, navigation }: BottomTabBarProps) {
       navigation.navigate(name);
     }
   };
-  const tabs = TAB_ORDER.map(t => <Tab key={t.name} label={t.label} active={current === t.name} onPress={() => go(t.name)} />);
+  const tabs = TAB_ORDER.map(t => <Tab key={t.name} label={t.label} active={lit === t.name} onPress={() => go(t.name)} />);
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom - 6, 10) }]}>

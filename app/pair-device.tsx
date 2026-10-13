@@ -294,5 +294,5 @@ const styles = StyleSheet.create({
   btnText: { color: C.surface, fontFamily: F.dot, fontSize: 12, letterSpacing: 1 },
   errorText: { color: C.alert, fontFamily: F.mono, fontSize: 12 },
   doneText: { color: C.live, fontFamily: F.mono, fontSize: 13, lineHeight: 20 },
-  hint: { color: '#444', fontFamily: F.mono, fontSize: 11, lineHeight: 16 },
+  hint: { color: C.dim, fontFamily: F.mono, fontSize: 11, lineHeight: 16 },
 });

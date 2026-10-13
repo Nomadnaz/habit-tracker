@@ -28,6 +28,13 @@ const CARD   = C.surface;
 const BOLD = F.mono;
 const REG = F.mono;
 
+// What each companion looks after, in words (the type ids are internal).
+const AREA: Record<string, string> = {
+  habitCoach: 'Habits', life: 'Life and schedule', gym: 'Training', focus: 'Focus',
+  calorie: 'Food', activity: 'Runs and walks', sleep: 'Sleep', goals: 'Goals',
+  mood: 'Mood', medication: 'Meds', finance: 'Money', library: 'Library',
+};
+
 const ARROW = <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />;
 
 export default function Settings() {
@@ -89,6 +96,16 @@ export default function Settings() {
     }
   }
 
+  function confirmSignOut() {
+    Alert.alert('Sign out?', 'Your data stays on this phone and in your account.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: async () => {
+        await supabase.auth.signOut();
+        router.replace('/(auth)/login');
+      } },
+    ]);
+  }
+
   if (!loaded) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -132,7 +149,7 @@ export default function Settings() {
               key={type}
               index={i + 1}
               label={cfg.defaultName.toUpperCase()}
-              sub={type}
+              sub={AREA[type] ?? type}
               last={i === all.length - 1}
               right={ARROW}
               onPress={() => router.push({ pathname: '/settings/companion-persona', params: { companionType: type } })}
@@ -147,9 +164,12 @@ export default function Settings() {
             sub={exporting ? 'Preparing export…' : 'Your second brain as a .zip'}
             right={exporting ? <ActivityIndicator size="small" color={C.hot} /> : ARROW}
             onPress={exporting ? undefined : handleExport}
+            last
           />
-          <BoardRow index={2} label="PUCK DEVICE" sub="Bluetooth bridge to the puck" right={ARROW} onPress={() => router.push('/ble-bridge')} />
-          <BoardRow index={3} label="CYCLE TRACKING" sub="Private, off by default" right={ARROW} last onPress={() => router.push('/modals/cycle-tracking')} />
+        </Board>
+
+        <Board title="ACCOUNT">
+          <BoardRow index={1} label="SIGN OUT" right={<MaterialCommunityIcons name="logout" size={18} color={C.dim} />} last onPress={confirmSignOut} />
         </Board>
       </ScrollView>
     </SafeAreaView>

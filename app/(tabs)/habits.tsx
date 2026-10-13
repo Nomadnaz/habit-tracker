@@ -140,7 +140,7 @@ export default function HabitsScreen() {
             onPress={() => setSection(s)}
           >
             <Text style={[styles.segmentText, section === s && styles.segmentTextActive]}>
-              {s === 'habits' ? 'HABITS' : 'MEDICATION & SUPPLEMENTS'}
+              {s === 'habits' ? 'HABITS' : 'MEDS & SUPPLEMENTS'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -314,13 +314,10 @@ export default function HabitsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   segmentRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
-  segment: {
-    flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line,
-    alignItems: 'center',
-  },
+  segment: { flex: 1, minHeight: 40, paddingHorizontal: 6, borderRadius: 999, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   segmentActive: { backgroundColor: ORANGE, borderColor: C.hot },
-  segmentText: { fontFamily: REG, fontSize: 10, color: C.dim },
-  segmentTextActive: { color: C.surface },
+  segmentText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5 },
+  segmentTextActive: { color: C.onHot },
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 40 },
   card: {

@@ -7,10 +7,9 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { RouteLine } from '@/components/SummaryCard';
 import { ElevationGraph } from '@/components/ElevationGraph';
 import {
@@ -19,6 +18,7 @@ import {
 } from '@/lib/activity-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const BOLD = F.mono;
 const REG = F.mono;
 
@@ -33,7 +33,6 @@ function formatActivityDate(iso: string): string {
 }
 
 export default function ActivitySummaryScreen() {
-  const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string | string[] }>();
   const activityId = Array.isArray(id) ? (id[0] ?? '') : (id ?? '');
   const [activity, setActivity] = useState<Activity | null>(null);
@@ -47,13 +46,7 @@ export default function ActivitySummaryScreen() {
   if (notFound) {
     return (
       <SafeAreaView style={s.container} edges={['top']}>
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-            <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-          </TouchableOpacity>
-          <Text style={s.title}>ACTIVITY</Text>
-          <View style={{ width: 26 }} />
-        </View>
+        <ScreenHeader title="ACTIVITY" />
         <Text style={s.empty}>Activity not found.</Text>
       </SafeAreaView>
     );
@@ -65,13 +58,7 @@ export default function ActivitySummaryScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-        </TouchableOpacity>
-        <Text style={s.title}>{activity.type.toUpperCase()}</Text>
-        <View style={{ width: 26 }} />
-      </View>
+      <ScreenHeader title={activity.type.toUpperCase()} />
 
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.date}>{formatActivityDate(activity.startTime)}</Text>
@@ -121,8 +108,6 @@ export default function ActivitySummaryScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 40, alignItems: 'center' },
   date: { fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 0.5, marginBottom: 12, alignSelf: 'flex-start' },
 

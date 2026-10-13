@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: C.hot,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 77, 0, 0.06)',
+    backgroundColor: C.raised,
   },
   taskRow: {
     flexDirection: 'row',
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   taskLabel: {
     fontFamily: F.mono,
     fontSize: 12,
-    color: '#000000',
+    color: C.ink,
     lineHeight: 16,
   },
   taskMeta: {

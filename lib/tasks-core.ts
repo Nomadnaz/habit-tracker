@@ -29,8 +29,9 @@ export const AUTO_SCROLL_STEP_PX = 10;
 export const DELETE_ZONE_X = 152;
 export const COMPLETE_HOLD_MS = 450;
 export const COMPLETE_FADE_MS = 400;
-export const TASK_LABEL_COLOR_ACTIVE = '#000000';
-export const TASK_LABEL_COLOR_DONE = '#8C857B';
+// Dark theme: labels are ink, done labels drop to dim (and the row fades).
+export const TASK_LABEL_COLOR_ACTIVE = '#EDEDED';
+export const TASK_LABEL_COLOR_DONE = '#8A8A8A';
 export const TASK_ROW_DONE_OPACITY = 0.4;
 
 export const LIST_MOVE_SPRING_MS = 620;
@@ -146,10 +147,11 @@ export function buildTaskList(
   return list;
 }
 
+/** Position number beside a task: the top one is white, the rest step down to grey. */
 export function taskIndexColor(i: number): string {
-  if (i === 0) return '#FF4D00';
-  if (i === 1) return '#FF9A6B';
-  return '#C7C1B8';
+  if (i === 0) return '#FFFFFF';
+  if (i === 1) return '#8A8A8A';
+  return '#4A4A4A';
 }
 
 export function generateTaskId() {

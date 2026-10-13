@@ -20,7 +20,6 @@ import {
   getTargets, dailyTotals, todayKey, MEAL_TYPES,
   type Meal, type NutritionTargets,
 } from '@/lib/meals-data';
-import ChatScreen from '@/components/ChatScreen';
 
 import { C, F } from '@/lib/theme';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
@@ -51,7 +50,6 @@ export default function CalorieScreen() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [recent, setRecent] = useState<Meal[]>([]);
-  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     // Show local first so the screen is instant and works offline, exactly as
@@ -105,10 +103,7 @@ export default function CalorieScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScreenHeader title="FUEL"
-        right={<>
-          <HeaderIcon icon="history" label="History" onPress={() => router.push('/calorie/history')} />
-          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
-        </>}
+        right={<HeaderIcon icon="history" label="History" onPress={() => router.push('/calorie/history')} />}
       />
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -199,8 +194,6 @@ export default function CalorieScreen() {
         })}
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      <ChatScreen visible={chatOpen} onClose={() => setChatOpen(false)} companionType="calorie" onTasksUpdated={refresh} />
     </SafeAreaView>
   );
 }

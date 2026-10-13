@@ -1,31 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────
-// BODY PAGE — the fitness overview dashboard.
-// Visuals match the design mock; every number is read from lib/body-data.ts
-// (a local AsyncStorage store). Water + weight are fully interactive.
+// TRAIN — today's session, the week plan and strength. Every number is read
+// from lib/body-data.ts / lib/workout-data.ts (local AsyncStorage stores).
+// Water, weight, sleep and Apple Health live on BODY's vitals grid.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useEffect } from 'react';
-import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Modal, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import ChatScreen from '@/components/ChatScreen';
-import { Spark } from '@/components/Spark';
 
 import {
-  loadBodyData, addWater, logWeight, pullRemoteBody,
-  todaySteps, todayWaterMl, latestWeight, weightHistory,
-  goalStatus, formatSleep, refreshAppleHealthIfConnected,
+  loadBodyData, pullRemoteBody, todaySteps, refreshAppleHealthIfConnected,
   type BodyData,
 } from '@/lib/body-data';
-import {
-  connectAndSyncAppleHealth,
-  isAppleHealthSupported,
-} from '@/lib/apple-health';
 import {
   ensureSeeded,
   getBodyWorkoutPreview,
@@ -59,12 +48,7 @@ export default function BodyScreen() {
   const [data, setData] = useState<BodyData | null>(null);
   const [activeMovement, setActiveMovement] = useState<BodyMovement>('pull');
   const [workoutPreview, setWorkoutPreview] = useState<BodyWorkoutPreview | null>(null);
-  const [waterOpen, setWaterOpen]   = useState(false);
-  const [weightOpen, setWeightOpen] = useState(false);
-  const [weightInput, setWeightInput] = useState('');
-  const [healthSyncing, setHealthSyncing] = useState(false);
   const [gymPlan, setGymPlanState] = useState<GymPlan | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
   const refreshWorkoutPreview = useCallback(async (movement: BodyMovement) => {
     await ensureSeeded();
     setWorkoutPreview(await getBodyWorkoutPreview(movement));
@@ -109,12 +93,6 @@ export default function BodyScreen() {
 
   // Derived display values — all computed from the store, nothing hardcoded.
   const steps     = todaySteps(data);
-  const stepsPct  = Math.min(1, steps / data.stepsGoal);
-  const waterMl   = todayWaterMl(data);
-  const waterPct  = waterMl / data.waterGoalMl;
-  const weight    = latestWeight(data);
-  const proteinPct = data.proteinTodayG / data.proteinGoalG;
-  const sleepPct   = data.sleepMins != null ? data.sleepMins / (8 * 60) : null;
 
   const preview = workoutPreview;
 
@@ -124,39 +102,6 @@ export default function BodyScreen() {
       return;
     }
     router.push('/workouts');
-  }
-
-  async function quickWater(ml: number) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const d = await addWater(ml);
-    setData({ ...d });
-  }
-
-  async function handleAppleHealth() {
-    if (healthSyncing) return;
-    setHealthSyncing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const result = await connectAndSyncAppleHealth(56);
-    setHealthSyncing(false);
-    if (result.ok && result.data) {
-      setData(result.data);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return;
-    }
-    Alert.alert(
-      'Apple Health',
-      result.error ?? 'Could not connect to Apple Health.',
-    );
-  }
-
-  async function saveWeight() {
-    const kg = parseFloat(weightInput);
-    if (!kg || kg <= 0) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const d = await logWeight(kg);
-    setData({ ...d });
-    setWeightInput('');
-    setWeightOpen(false);
   }
 
   return (
@@ -169,14 +114,9 @@ export default function BodyScreen() {
             <Text style={styles.subtitle}>BUILD YOUR CHARACTER</Text>
             <Text style={styles.title}>TRAIN</Text>
           </View>
-          <View style={styles.headerIcons}>
-            <TouchableOpacity onPress={() => setChatOpen(true)} hitSlop={8} style={styles.headIcon}>
-              <MaterialCommunityIcons name="chat-processing-outline" size={18} color={C.dim} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/progress')} hitSlop={8} style={styles.headIcon}>
-              <MaterialCommunityIcons name="chart-bar" size={18} color={C.dim} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/progress')} hitSlop={6} style={styles.headIcon} accessibilityLabel="Progress">
+            <MaterialCommunityIcons name="chart-bar" size={19} color={C.ink} />
+          </TouchableOpacity>
         </View>
 
         {/* ── Record activity + log workout buttons ──────── */}
@@ -307,45 +247,13 @@ export default function BodyScreen() {
           })}
         </View>
 
-        {/* ── Stats strip ────────────────────────────────── */}
-        <View style={styles.statsBar}>
-          <Stat label="WORKOUTS" value={String(data.workoutsTotal)} sub="TOTAL" />
-          <View style={styles.statDivider} />
-          <Stat label="STREAK" value={String(data.streak)} sub="DAYS" />
-          <View style={styles.statDivider} />
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={0.7} onPress={() => router.push('/steps')}>
-            <Stat label="STEPS" value={formatBig(steps)} sub={`${Math.round(stepsPct * 100)}% OF GOAL`} />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.healthRow}>
-      {Platform.OS === 'ios' && (
-        <TouchableOpacity
-          style={styles.healthConnectBtn}
-          onPress={handleAppleHealth}
-          activeOpacity={0.85}
-          disabled={healthSyncing}
-        >
-          {healthSyncing ? (
-            <ActivityIndicator size="small" color={C.hot} />
-          ) : (
-            <MaterialCommunityIcons name="heart-pulse" size={14} color={C.hot} />
-          )}
-          <Text style={styles.healthConnectText}>
-            {data.appleHealthConnected ? 'SYNC APPLE HEALTH' : 'CONNECT APPLE HEALTH'}
+        {/* ── Totals: one tappable line (steps opens the steps screen) ── */}
+        <TouchableOpacity style={styles.statsLine} activeOpacity={0.7} onPress={() => router.push('/steps')}>
+          <Text style={styles.statsText} numberOfLines={1}>
+            <Text style={styles.statsVal}>{data.workoutsTotal}</Text> WORKOUTS   <Text style={styles.statsVal}>{data.streak}</Text> DAY STREAK   <Text style={styles.statsVal}>{formatBig(steps)}</Text> STEPS
           </Text>
+          <MaterialCommunityIcons name="chevron-right" size={16} color={C.dim} />
         </TouchableOpacity>
-      )}
-      {Platform.OS === 'ios' && !isAppleHealthSupported() && (
-        <Text style={styles.healthHint}>
-          Rebuild the iOS app (npx expo run:ios) to enable HealthKit — not available in Expo Go.
-        </Text>
-      )}
-      {data.appleHealthLastSync && (
-        <Text style={styles.healthSynced}>
-          Last sync {new Date(data.appleHealthLastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
-      )}
-        </View>
 
         {/* ── Strength (compact — full detail lives on /strength) ── */}
         <View style={styles.strengthHeader}>
@@ -355,13 +263,6 @@ export default function BodyScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.cardRow}>
-          <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => setWeightOpen(true)}>
-            <MaterialCommunityIcons name="scale-bathroom" size={22} color={C.ink} />
-            <Text style={styles.metricLabel}>WEIGHT</Text>
-            <Text style={styles.metricValue}>{weight.toFixed(1)}KG</Text>
-            <Spark points={weightHistory(data)} dots width={90} height={24} />
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => router.push('/strength')}>
             <MaterialCommunityIcons name="dumbbell" size={22} color={C.ink} />
             <Text style={styles.metricLabel}>TOP LIFT</Text>
@@ -389,99 +290,9 @@ export default function BodyScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Recovery ───────────────────────────────────── */}
-        <Text style={[styles.sectionLabel, styles.sectionLabelStandalone]}>RECOVERY</Text>
-        <View style={styles.recoveryCard}>
-          <TouchableOpacity style={styles.recoveryItem} activeOpacity={0.85} onPress={() => router.push('/modals/sleep-detail')}>
-            <MaterialCommunityIcons name="moon-waning-crescent" size={22} color={C.hot} />
-            <Text style={styles.recoveryValue}>{formatSleep(data.sleepMins)}</Text>
-            <Text style={styles.recoveryStatus}>{sleepPct != null ? goalStatus(sleepPct) : '—'}</Text>
-          </TouchableOpacity>
-          <View style={styles.statDivider} />
-          <TouchableOpacity style={styles.recoveryItem} activeOpacity={0.85} onPress={() => setWaterOpen(true)}>
-            <MaterialCommunityIcons name="water" size={22} color={C.hot} />
-            <Text style={styles.recoveryValue}>{(waterMl / 1000).toFixed(1)}L</Text>
-            <Text style={styles.recoveryStatus}>{goalStatus(waterPct)}</Text>
-          </TouchableOpacity>
-          <View style={styles.statDivider} />
-          <Recovery icon="shaker-outline" label="PROTEIN" value={`${data.proteinTodayG}G`} status={goalStatus(proteinPct)} />
-        </View>
-
       </ScrollView>
 
-      {/* ── Water bottom sheet ─────────────────────────── */}
-      <Modal visible={waterOpen} transparent animationType="fade" onRequestClose={() => setWaterOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setWaterOpen(false)}>
-          <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
-            <Text style={styles.sheetLabel}>ADD WATER</Text>
-            <Text style={styles.sheetTotal}>{(waterMl / 1000).toFixed(2)}L <Text style={styles.sheetTotalSub}>/ {(data.waterGoalMl / 1000).toFixed(1)}L</Text></Text>
-            <View style={styles.waterBtnRow}>
-              {[250, 500, 750].map(ml => (
-                <TouchableOpacity key={ml} style={styles.waterBtn} onPress={() => quickWater(ml)} activeOpacity={0.8}>
-                  <Text style={styles.waterBtnText}>+{ml}</Text>
-                  <Text style={styles.waterBtnUnit}>ML</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity style={styles.doneBtn} onPress={() => setWaterOpen(false)}>
-              <Text style={styles.doneBtnText}>DONE</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ── Weight bottom sheet ────────────────────────── */}
-      <Modal visible={weightOpen} transparent animationType="fade" onRequestClose={() => setWeightOpen(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <Pressable style={styles.backdrop} onPress={() => setWeightOpen(false)}>
-            <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
-              <Text style={styles.sheetLabel}>LOG WEIGHT</Text>
-              <Text style={styles.sheetTotal}>{weight.toFixed(1)}<Text style={styles.sheetTotalSub}> KG NOW</Text></Text>
-              <TextInput
-                style={styles.weightInput}
-                value={weightInput}
-                onChangeText={setWeightInput}
-                placeholder="ENTER KG"
-                placeholderTextColor={C.faint}
-                keyboardType="decimal-pad"
-                autoFocus
-              />
-              <TouchableOpacity style={styles.doneBtn} onPress={saveWeight}>
-                <Text style={styles.doneBtnText}>SAVE</Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <ChatScreen
-        visible={chatOpen}
-        onClose={() => setChatOpen(false)}
-        companionType="gym"
-        onTasksUpdated={() => loadBodyData().then(setData)}
-      />
     </SafeAreaView>
-  );
-}
-
-// ── Tiny presentational sub-components ───────────────────────────────────────
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statSub}>{sub}</Text>
-    </View>
-  );
-}
-
-function Recovery({ icon, label, value, status }: { icon: string; label: string; value: string; status: string }) {
-  return (
-    <View style={styles.recoveryItem}>
-      <MaterialCommunityIcons name={icon as any} size={22} color={C.hot} />
-      <Text style={styles.recoveryValue}>{value}</Text>
-      <Text style={styles.recoveryStatus}>{status}</Text>
-    </View>
   );
 }
 
@@ -494,129 +305,74 @@ const styles = StyleSheet.create({
   titleBlock: {},
   title: { fontFamily: F.dot, fontSize: 40, color: C.ink, letterSpacing: 2, marginTop: 2 },
   subtitle: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 3 },
-  headerIcons: { flexDirection: 'row', gap: 6, marginBottom: 4 },
-  headIcon: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
+  headIcon: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
 
   // Stats bar
-  actionRow: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginTop: 2, marginBottom: 20 },
-  recordBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.hot, borderRadius: 999, paddingVertical: 14 },
-  logWorkoutBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, paddingVertical: 14 },
-  logWorkoutText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
-  statsBar: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 20, paddingVertical: 4 },
-  stat: { flex: 1, alignItems: 'center' },
-  statDivider: { width: 1, backgroundColor: C.line },
-  statLabel: { fontFamily: F.mono, fontSize: 9, color: C.dim, letterSpacing: 1 },
-  statValue: { fontFamily: NUM_FONT, fontSize: 26, color: C.hot, marginVertical: 4 },
-  statSub: { fontFamily: F.mono, fontSize: 9, color: C.dim, letterSpacing: 1 },
+  actionRow: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 2, marginBottom: 18 },
+  recordBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.hot, borderRadius: 999, minHeight: 46 },
+  logWorkoutBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, minHeight: 46 },
+  statsLine: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 18, paddingHorizontal: 14, minHeight: 46, borderWidth: 1, borderColor: C.line, borderRadius: 16, backgroundColor: C.bg },
+  statsText: { flex: 1, fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5 },
+  statsVal: { fontSize: 14, color: C.ink },
+  logWorkoutText: { fontFamily: F.dot, fontSize: 11, color: C.onHot, letterSpacing: 2 },
 
-  sectionLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
-  healthRow: { paddingHorizontal: 20, marginTop: -8, marginBottom: 24, gap: 6 },
-  sectionLabelStandalone: { paddingHorizontal: 20, marginBottom: 12 },
+  sectionLabel: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3 },
+  sectionLabelStandalone: { paddingHorizontal: 20, marginBottom: 8 },
 
   plannerRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 18, gap: 4 },
   plannerCol: { flex: 1, alignItems: 'center', gap: 4 },
-  plannerDayLabel: { fontFamily: NUM_FONT, fontSize: 8, color: C.dim },
+  plannerDayLabel: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1 },
   plannerChip: {
-    width: '100%', paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: C.line,
+    width: '100%', minHeight: 40, justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: C.line,
     alignItems: 'center', backgroundColor: C.surface,
   },
   plannerChipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   plannerChipRest: { backgroundColor: FAINT, borderColor: C.line },
-  plannerChipCheat: { backgroundColor: '#C98A1B', borderColor: '#C98A1B' },
-  plannerChipText: { fontFamily: NUM_FONT, fontSize: 7, color: C.dim },
-  plannerChipTextActive: { color: C.surface },
+  plannerChipCheat: { backgroundColor: C.signal, borderColor: C.signal },
+  plannerChipText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 0.5 },
+  plannerChipTextActive: { color: C.onHot },
 
-  healthConnectBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: C.hot,
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  healthConnectText: {
-    fontFamily: F.mono,
-    fontSize: 9,
-    color: C.hot,
-    letterSpacing: 0.5,
-  },
-  healthHint: {
-    fontFamily: F.mono,
-    fontSize: 8,
-    color: C.dim,
-    marginTop: 6,
-    lineHeight: 11,
-    maxWidth: 200,
-  },
-  healthSynced: {
-    fontFamily: F.mono,
-    fontSize: 8,
-    color: C.faint,
-    marginTop: 4,
-  },
 
-  viewLinkText: { fontFamily: F.mono, fontSize: 9, color: C.hot, letterSpacing: 1 },
+  viewLinkText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1.5, paddingVertical: 12, paddingLeft: 12 },
 
 
   // Pills
   pillRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 6, marginBottom: 16 },
-  pill: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 6, paddingVertical: 8, alignItems: 'center', backgroundColor: C.surface },
+  pill: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 999, minHeight: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: C.surface },
   pillActive: { backgroundColor: ORANGE, borderColor: C.hot },
-  pillText: { fontFamily: F.mono, fontSize: 9, color: C.dim, letterSpacing: 1 },
-  pillTextActive: { color: C.surface },
+  pillText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1 },
+  pillTextActive: { color: C.onHot },
 
   // Workout card
-  workoutCard: { marginHorizontal: 16, marginBottom: 20, backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14 },
+  workoutCard: { marginHorizontal: 16, marginBottom: 20, backgroundColor: C.bg, borderRadius: 16, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, paddingBottom: 6 },
   workoutHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   workoutTitle: { fontFamily: F.dot, fontSize: 15, color: C.hot, letterSpacing: 1 },
-  exerciseCount: { fontFamily: F.mono, fontSize: 9, color: C.dim, marginTop: 4, marginBottom: 8, letterSpacing: 1 },
+  exerciseCount: { fontFamily: F.dot, fontSize: 9, color: C.dim, marginTop: -6, marginBottom: 4, letterSpacing: 1.5 },
   exerciseRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   exerciseRowBorder: { borderTopWidth: 1, borderTopColor: C.line },
   exerciseIcon: { marginRight: 12, width: 30 },
-  exerciseName: { fontFamily: F.mono, fontSize: 11, color: C.ink, flex: 1 },
+  exerciseName: { fontFamily: F.mono, fontSize: 13, color: C.ink, flex: 1 },
   exerciseMeta: { marginRight: 10, alignItems: 'flex-end', gap: 4 },
-  setText: { fontFamily: F.mono, fontSize: 10, color: C.ink, lineHeight: 15, textAlign: 'right' },
+  setText: { fontFamily: F.mono, fontSize: 12, color: C.ink, lineHeight: 15, textAlign: 'right' },
   setTextPb: { color: ORANGE },
   pbMetaText: { fontFamily: F.mono, fontSize: 9, color: C.dim, textAlign: 'right', letterSpacing: 0.5 },
   pbBadge: { backgroundColor: ORANGE, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3, alignSelf: 'flex-end' },
   pbBadgeText: { fontFamily: F.mono, fontSize: 9, color: C.onHot },
-  moreRow: { borderTopWidth: 1, borderTopColor: C.line, paddingTop: 12, marginTop: 2, alignItems: 'center' },
-  moreText: { fontFamily: F.mono, fontSize: 10, color: C.hot, letterSpacing: 1 },
-  emptyTemplate: { fontFamily: F.mono, fontSize: 10, color: C.dim, marginTop: 12, lineHeight: 15 },
+  moreRow: { borderTopWidth: 1, borderTopColor: C.line, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  moreText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1.5 },
+  emptyTemplate: { fontFamily: F.mono, fontSize: 12, color: C.dim, marginTop: 4, marginBottom: 10, lineHeight: 17 },
 
   // Strength + metric cards
-  strengthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
+  strengthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 20, paddingRight: 16 },
   cardRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 16 },
 
-  metricCard: { flex: 1, backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 10, minHeight: 120 },
-  metricLabel: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginTop: 6, letterSpacing: 1 },
-  metricValue: { fontFamily: NUM_FONT, fontSize: 15, color: C.ink, marginTop: 4, marginBottom: 4 },
-  metricSub: { fontFamily: NUM_FONT, fontSize: 12, color: C.hot },
-  metricSubTiny: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginTop: 4 },
+  metricCard: { flex: 1, backgroundColor: C.bg, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12, gap: 4 },
+  metricLabel: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5, marginTop: 4 },
+  metricValue: { fontFamily: F.num, fontSize: 20, color: C.ink },
+  metricSub: { fontFamily: F.mono, fontSize: 11, color: C.dim },
+  metricSubTiny: { fontFamily: F.mono, fontSize: 11, color: C.dim },
 
-  // Recovery — wrapped in a card like every other section
-  recoveryCard: { flexDirection: 'row', marginHorizontal: 16, paddingVertical: 16, paddingHorizontal: 8, alignItems: 'center', backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line },
-  recoveryItem: { flex: 1, alignItems: 'center', gap: 6 },
-  recoveryValue: { fontFamily: NUM_FONT, fontSize: 16, color: C.hot },
-  recoveryStatus: { fontFamily: F.mono, fontSize: 9, color: C.dim, letterSpacing: 1 },
 
-  // Bottom sheets
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 40 },
-  sheet: { width: '100%', backgroundColor: C.surface, borderRadius: 16, padding: 22, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 10 },
-  sheetLabel: { fontFamily: F.mono, fontSize: 10, color: C.hot, letterSpacing: 1, marginBottom: 10 },
-  sheetTotal: { fontFamily: NUM_FONT, fontSize: 28, color: C.ink, marginBottom: 18 },
-  sheetTotalSub: { fontFamily: F.mono, fontSize: 12, color: C.dim },
-  waterBtnRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
-  waterBtn: { flex: 1, backgroundColor: C.raised, borderWidth: 1.5, borderColor: C.hot, borderRadius: 10, paddingVertical: 16, alignItems: 'center' },
-  waterBtnText: { fontFamily: NUM_FONT, fontSize: 16, color: C.hot },
-  waterBtnUnit: { fontFamily: F.mono, fontSize: 9, color: C.hot, marginTop: 2 },
-  weightInput: { fontFamily: NUM_FONT, fontSize: 18, color: C.ink, borderBottomWidth: 2, borderBottomColor: C.line, paddingVertical: 10, marginBottom: 20 },
-  doneBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  doneBtnText: { fontFamily: F.mono, fontSize: 12, color: C.onHot, letterSpacing: 1 },
   empty: { fontFamily: F.mono, fontSize: 12, color: C.dim, paddingVertical: 12 },
   liftCard: { flex: 1, backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 10 },
   liftName: { fontFamily: F.mono, fontSize: 8, color: C.dim, marginTop: 6, letterSpacing: 1 },

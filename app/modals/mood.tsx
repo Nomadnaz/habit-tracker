@@ -13,13 +13,11 @@ import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { getRecentMoodLogs, getTodayMood, logMood, pullRemoteMood, TRIGGERS, type MoodLog } from '@/lib/mood-data';
-import ChatScreen from '@/components/ChatScreen';
 
 import { C, F } from '@/lib/theme';
-import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const CARD   = C.surface;
-const BOLD = F.mono;
 const REG = F.mono;
 
 export default function MoodModal() {
@@ -28,7 +26,6 @@ export default function MoodModal() {
   const [triggers, setTriggers] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [recent, setRecent] = useState<MoodLog[]>([]);
-  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     await pullRemoteMood(); // voice-logged moods are written server-side
@@ -52,9 +49,6 @@ export default function MoodModal() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="MOOD" close
-        right={<>
-          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
-        </>}
       />
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -85,24 +79,18 @@ export default function MoodModal() {
           <TextInput style={styles.input} placeholder="Note (optional)" placeholderTextColor={C.dim} value={note} onChangeText={setNote} multiline />
 
           <TouchableOpacity style={styles.saveBtn} onPress={save}>
-            <Text style={styles.saveBtnText}>SAVE TODAY'S MOOD</Text>
+            <Text style={styles.saveBtnText}>SAVE TODAY</Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.sectionLabel}>LAST 14 DAYS</Text>
+        {recent.length === 0 && <Text style={styles.emptyText}>No entries yet. Save today's to start the chart.</Text>}
         <View style={styles.sparkRow}>
           {recent.map(r => (
             <View key={r.date} style={[styles.sparkBar, { height: 8 + r.moodScore * 3 }]} />
           ))}
         </View>
       </ScrollView>
-
-      <ChatScreen
-        visible={chatOpen}
-        onClose={() => setChatOpen(false)}
-        companionType="mood"
-        onTasksUpdated={refresh}
-      />
     </SafeAreaView>
   );
 }
@@ -110,21 +98,22 @@ export default function MoodModal() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
-  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
-  label: { fontFamily: BOLD, fontSize: 12, color: C.ink },
+  card: { backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
+  label: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2, marginTop: 4 },
   scaleRow: { flexDirection: 'row', gap: 4 },
-  scaleDot: { width: 20, height: 20, borderRadius: 4, backgroundColor: C.line },
+  scaleDot: { flex: 1, height: 40, borderRadius: 8, backgroundColor: C.line },
   scaleDotActive: { backgroundColor: ORANGE },
   scaleDotStress: { backgroundColor: C.alert },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line },
+  chip: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: C.line },
   chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
-  chipText: { fontFamily: REG, fontSize: 12, color: C.dim, textTransform: 'capitalize' },
-  chipTextActive: { color: C.surface, fontFamily: BOLD },
+  chipText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5, textTransform: 'uppercase' },
+  chipTextActive: { color: C.onHot },
   input: { borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: C.ink, minHeight: 60, textAlignVertical: 'top' },
-  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
-  sectionLabel: { fontFamily: BOLD, fontSize: 12, color: C.dim },
+  saveBtn: { backgroundColor: ORANGE, borderRadius: 999, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  saveBtnText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
+  sectionLabel: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3, marginTop: 6 },
   sparkRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 40 },
   sparkBar: { flex: 1, backgroundColor: C.hot, borderRadius: 2 },
+  emptyText: { fontFamily: F.mono, fontSize: 12, color: C.dim },
 });

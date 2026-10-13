@@ -456,7 +456,7 @@ const hs = StyleSheet.create({
 
 const hm = StyleSheet.create({
   headerRow: { flexDirection: 'row', marginBottom: 4 },
-  headerLetter: { width: SQ + 3, textAlign: 'center', fontFamily: REG, fontSize: 8, color: C.faint },
+  headerLetter: { width: SQ + 3, textAlign: 'center', fontFamily: REG, fontSize: 10, color: C.faint },
   row: { flexDirection: 'row' },
 });
 
@@ -490,7 +490,7 @@ const s = StyleSheet.create({
   pinSummit: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.line },
   pinStalk: { width: 1.5, height: 12, backgroundColor: C.hot },
   milestoneWrap: { position: 'absolute', width: 48, alignItems: 'center' },
-  milestoneLabel: { fontFamily: BOLD, fontSize: 8, letterSpacing: 0.5, marginBottom: 2 },
+  milestoneLabel: { fontFamily: BOLD, fontSize: 10, letterSpacing: 0.5, marginBottom: 2 },
   milestoneStalk: { width: 1.5, height: 14 },
   milestoneDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: C.line },
   tooltip: { position: 'absolute', width: 124, backgroundColor: C.surface, borderRadius: 8, borderWidth: 1, borderColor: C.line, padding: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 6 },
@@ -498,14 +498,14 @@ const s = StyleSheet.create({
   tooltipRow: { fontFamily: REG, fontSize: 9, color: C.dim, marginBottom: 2 },
   tooltipBadge: { alignSelf: 'flex-start', backgroundColor: C.hot, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 4 },
   tooltipBadgeMuted: { backgroundColor: C.faint },
-  tooltipBadgeText: { fontFamily: BOLD, fontSize: 8, color: C.onHot, letterSpacing: 0.5 },
+  tooltipBadgeText: { fontFamily: BOLD, fontSize: 10, color: C.onHot, letterSpacing: 0.5 },
 
   pillsRow: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: C.line, marginTop: 12, paddingTop: 12 },
   pill: { flex: 1, alignItems: 'center' },
   pillDivider: { width: 1, height: 32, backgroundColor: C.line },
-  pillLabel: { fontFamily: REG, fontSize: 8, color: C.dim, letterSpacing: 0.5, marginBottom: 4 },
+  pillLabel: { fontFamily: REG, fontSize: 10, color: C.dim, letterSpacing: 0.5, marginBottom: 4 },
   pillValue: { fontFamily: NUM, fontSize: 20, color: C.hot },
-  pillUnit: { fontFamily: REG, fontSize: 8, color: C.dim, marginTop: 2, letterSpacing: 1 },
+  pillUnit: { fontFamily: REG, fontSize: 10, color: C.dim, marginTop: 2, letterSpacing: 1 },
 
   // Run button
   runBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: C.hot, marginHorizontal: 16, borderRadius: 12, paddingVertical: 16 },
@@ -528,11 +528,11 @@ const s = StyleSheet.create({
   recentTopRight: { flexDirection: 'row', gap: 12 },
   recentMini: { alignItems: 'flex-end' },
   recentMiniVal: { fontFamily: NUM, fontSize: 16, color: C.ink },
-  recentMiniLbl: { fontFamily: REG, fontSize: 8, color: C.dim, marginTop: 2 },
+  recentMiniLbl: { fontFamily: REG, fontSize: 10, color: C.dim, marginTop: 2 },
   recentFooter: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.line, marginTop: 12, paddingTop: 12 },
   recentStatItem: { flex: 1, alignItems: 'center', gap: 3 },
   recentStatVal: { fontFamily: NUM, fontSize: 11, color: C.ink },
-  recentStatLbl: { fontFamily: REG, fontSize: 8, color: C.dim, letterSpacing: 0.5 },
+  recentStatLbl: { fontFamily: REG, fontSize: 10, color: C.dim, letterSpacing: 0.5 },
 
   // Week + heatmap
   weekRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 20, gap: 16 },
@@ -541,12 +541,12 @@ const s = StyleSheet.create({
   barChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 96, marginTop: 12 },
   barCol: { alignItems: 'center', flex: 1, justifyContent: 'flex-end' },
   bar: { width: 6, backgroundColor: C.hot, borderRadius: 1 },
-  barLabel: { fontFamily: REG, fontSize: 8, color: C.dim, marginTop: 6 },
+  barLabel: { fontFamily: REG, fontSize: 10, color: C.dim, marginTop: 6 },
   barTip: { backgroundColor: INK, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2, marginBottom: 4 },
-  barTipText: { fontFamily: BOLD, fontSize: 8, color: C.onHot },
+  barTipText: { fontFamily: BOLD, fontSize: 10, color: C.onHot },
   legend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  legendText: { fontFamily: REG, fontSize: 8, color: C.dim },
+  legendText: { fontFamily: REG, fontSize: 10, color: C.dim },
 
   // Goals
   goalsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 14 },
@@ -559,5 +559,5 @@ const s = StyleSheet.create({
   goalValue: { fontFamily: NUM, fontSize: 13, color: C.hot, marginTop: 3 },
   goalTrack: { height: 6, backgroundColor: C.surface, borderRadius: 3, marginTop: 6, overflow: 'hidden' },
   goalFill: { height: 6, backgroundColor: C.hot, borderRadius: 3 },
-  goalEnds: { fontFamily: REG, fontSize: 8, color: C.dim, textAlign: 'right', marginTop: 4, letterSpacing: 0.5 },
+  goalEnds: { fontFamily: REG, fontSize: 10, color: C.dim, textAlign: 'right', marginTop: 4, letterSpacing: 0.5 },
 });

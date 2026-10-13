@@ -33,8 +33,8 @@ const MONTH_NAMES = [
 ];
 const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-const MONTHS_BACK = 6;
-const MONTHS_FORWARD = 18;
+const MONTHS_BACK = 3;
+const MONTHS_FORWARD = 12;
 const SCROLL_HORIZONTAL_PAD = 16;
 const YEAR_STICKY_OFFSET = 72;
 
@@ -67,7 +67,7 @@ export default function CalendarScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const cellWidth = Math.floor((screenWidth - SCROLL_HORIZONTAL_PAD * 2) / 7);
-  const cellHeight = Math.max(56, Math.floor(cellWidth * 1.05));
+  const cellHeight = Math.max(46, Math.floor(cellWidth * 0.9));
 
   const today = useMemo(() => {
     const d = new Date();
@@ -153,11 +153,8 @@ export default function CalendarScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
 
-      <ScreenHeader title="CALENDAR" close />
-
-      <View style={styles.yearBar}>
-        <Text style={styles.yearText}>{visibleYear}</Text>
-      </View>
+      {/* The year in the title follows the scroll. */}
+      <ScreenHeader title={`CALENDAR ${visibleYear}`} close />
 
       <View style={styles.dowRow}>
         {DAY_LABELS.map(d => (
@@ -217,24 +214,11 @@ export default function CalendarScreen() {
                       <Text style={[styles.dayNum, todayDay && styles.dayNumToday]}>
                         {day}
                       </Text>
-                      {count > 0 && (
-                        <View
-                          style={[
-                            styles.taskBadge,
-                            allDone && styles.taskBadgeDone,
-                            todayDay && styles.taskBadgeToday,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.taskBadgeText,
-                              todayDay && styles.taskBadgeTextToday,
-                            ]}
-                          >
-                            {count}
-                          </Text>
-                        </View>
-                      )}
+                      {/* A dot under the number: grey = tasks planned, green = all done. */}
+                      <View style={[
+                        styles.taskDot,
+                        count > 0 && { backgroundColor: allDone ? C.live : todayDay ? C.onHot : C.dim },
+                      ]} />
                     </TouchableOpacity>
                   );
                 })}
@@ -249,36 +233,9 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: C.surface,
-  },
-  yearBar: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: C.line,
-  },
-  yearText: {
-    fontFamily: F.dot,
-    fontSize: 36,
-    color: C.hot,
-    letterSpacing: 2,
-  },
-  dowRow: {
-    flexDirection: 'row',
-    paddingHorizontal: SCROLL_HORIZONTAL_PAD,
-    marginBottom: 8,
-    paddingTop: 10,
-    paddingBottom: 8,
-  },
-  dowLabel: {
-    textAlign: 'center',
-    fontFamily: F.mono,
-    fontSize: 10,
-    color: C.faint,
-    letterSpacing: 1,
-  },
+  container: { flex: 1, backgroundColor: C.bg },
+  dowRow: { flexDirection: 'row', paddingHorizontal: SCROLL_HORIZONTAL_PAD, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: C.line },
+  dowLabel: { textAlign: 'center', fontFamily: F.dot, fontSize: 9, color: C.faint, letterSpacing: 1 },
   scroll: {
     flex: 1,
   },
@@ -286,74 +243,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: SCROLL_HORIZONTAL_PAD,
     paddingBottom: 40,
   },
-  monthHeading: {
-    fontFamily: F.dot,
-    fontSize: 24,
-    color: C.ink,
-    letterSpacing: 2,
-    marginTop: 28,
-    marginBottom: 12,
-    paddingHorizontal: 2,
-  },
-  monthHeadingFirst: {
-    marginTop: 8,
-  },
+  monthHeading: { fontFamily: F.dot, fontSize: 16, color: C.ink, letterSpacing: 2, marginTop: 22, marginBottom: 8, paddingHorizontal: 4 },
+  monthHeadingFirst: { marginTop: 12 },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  cell: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    overflow: 'visible',
-  },
+  cell: { alignItems: 'center', justifyContent: 'center', borderRadius: 12, gap: 5 },
   cellToday: {
     backgroundColor: C.hot,
   },
-  dayNum: {
-    fontFamily: F.dot,
-    fontSize: 22,
-    color: C.ink,
-    letterSpacing: 1,
-    lineHeight: 22,
-    textAlign: 'center',
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-  },
+  dayNum: { fontFamily: F.dot, fontSize: 17, color: C.ink, letterSpacing: 1, textAlign: 'center' },
   dayNumToday: {
     color: C.onHot,
   },
-  taskBadge: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-    backgroundColor: C.hot,
-    borderRadius: 8,
-    minWidth: 14,
-    height: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-    zIndex: 1,
-  },
-  taskBadgeDone: {
-    backgroundColor: C.live,
-  },
-  taskBadgeToday: {
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 77, 0, 0.35)',
-  },
-  taskBadgeText: {
-    fontFamily: F.mono,
-    fontSize: 8,
-    color: C.onHot,
-    lineHeight: 9,
-    includeFontPadding: false,
-  },
-  taskBadgeTextToday: {
-    color: C.hot,
-  },
+  taskDot: { width: 4, height: 4, borderRadius: 2 },
 });

@@ -1178,7 +1178,7 @@ const styles = StyleSheet.create({
   },
   strikeText: {
     fontFamily: F.mono,
-    fontSize: 7,
+    fontSize: 9,
     letterSpacing: 1,
   },
   strikeTextWarn: { color: C.hot },
@@ -1370,7 +1370,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   strikeBox: {
-    backgroundColor: 'rgba(255, 77, 0, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 2,
     borderColor: C.hot,
     borderRadius: 8,

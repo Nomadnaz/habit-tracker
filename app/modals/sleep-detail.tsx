@@ -18,10 +18,9 @@ import {
   type SleepLog, type PhoneLog,
 } from '@/lib/sleep-data';
 import { toDateKey } from '@/lib/dateKey';
-import ChatScreen from '@/components/ChatScreen';
 
 import { C, F } from '@/lib/theme';
-import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const GREEN  = C.live;
 const RED    = C.alert;
@@ -60,7 +59,6 @@ export default function SleepDetailModal() {
   const [phoneDownTime, setPhoneDownTime] = useState('');
   const [recentPhone, setRecentPhone] = useState<PhoneLog[]>([]);
   const [challengeStreak, setChallengeStreak] = useState(0);
-  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     await pullRemoteSleep(); // voice-logged sleep is written server-side
@@ -99,9 +97,6 @@ export default function SleepDetailModal() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="SLEEP" close
-        right={<>
-          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
-        </>}
       />
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -166,10 +161,10 @@ export default function SleepDetailModal() {
           <Text style={styles.sub}>Quality</Text>
           <View style={styles.qualityRow}>
             {[1, 2, 3, 4, 5].map(n => (
-              <TouchableOpacity key={n} onPress={() => setQuality(n)}>
+              <TouchableOpacity key={n} onPress={() => setQuality(n)} style={styles.star}>
                 <MaterialCommunityIcons
                   name={n <= quality ? 'star' : 'star-outline'}
-                  size={26}
+                  size={28}
                   color={C.hot}
                 />
               </TouchableOpacity>
@@ -193,13 +188,6 @@ export default function SleepDetailModal() {
           )}
         </View>
       </ScrollView>
-
-      <ChatScreen
-        visible={chatOpen}
-        onClose={() => setChatOpen(false)}
-        companionType="sleep"
-        onTasksUpdated={refresh}
-      />
     </SafeAreaView>
   );
 }
@@ -224,7 +212,8 @@ const styles = StyleSheet.create({
   smallBtnOutlineText: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   resultPill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   resultPillText: { fontFamily: BOLD, fontSize: 11, color: C.onHot },
-  qualityRow: { flexDirection: 'row', gap: 6 },
+  qualityRow: { flexDirection: 'row', gap: 2 },
+  star: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim },

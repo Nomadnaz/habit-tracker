@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: C.hot,
     borderRadius: 4,
-    backgroundColor: 'rgba(255, 77, 0, 0.06)',
+    backgroundColor: C.raised,
   },
   addRow: {
     borderTopWidth: 1,

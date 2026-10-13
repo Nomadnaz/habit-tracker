@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { bleBridge, type BridgeState } from '@/lib/ble-bridge';
 
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const COMPANION_TYPES = [
@@ -121,7 +122,7 @@ export default function BleBridgeScreen() {
           style={[styles.btn, isActive && styles.btnDisconnect]}
           onPress={isActive ? handleDisconnect : handleConnect}
         >
-          <Text style={styles.btnText}>{isActive ? 'DISCONNECT' : 'CONNECT TO DEVICE'}</Text>
+          <Text style={[styles.btnText, isActive && { color: C.ink }]}>{isActive ? 'DISCONNECT' : 'CONNECT TO DEVICE'}</Text>
         </TouchableOpacity>
 
         {/* Last interaction */}
@@ -155,13 +156,13 @@ export default function BleBridgeScreen() {
 
         {!isActive && (
           <Text style={styles.hint}>
-            Make sure CompanionHUD is powered on and within Bluetooth range.
-            This requires a dev build — not Expo Go.
+            Make sure the puck is switched on and within Bluetooth range.
           </Text>
         )}
 
-        <TouchableOpacity onPress={() => router.push('/pair-device')}>
-          <Text style={styles.linkText}>SET UP STANDALONE WI-FI →</Text>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push('/pair-device')}>
+          <Text style={styles.linkText}>SET UP STANDALONE WI-FI</Text>
+          <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -176,27 +177,19 @@ const styles = StyleSheet.create({
   statusText: { fontFamily: F.mono, fontSize: 12 },
   errorText: { color: C.alert, fontFamily: F.mono, fontSize: 12 },
   section: { gap: 8 },
-  label: { color: C.dim, fontFamily: F.mono, fontSize: 10, letterSpacing: 1 },
+  label: { color: C.dim, fontFamily: F.dot, fontSize: 10, letterSpacing: 2 },
   companionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 4,
-    paddingHorizontal: 12, paddingVertical: 6,
-  },
+  chip: { borderWidth: 1, borderColor: C.line, borderRadius: 999, paddingHorizontal: 14, minHeight: 40, justifyContent: 'center' },
   chipActive: { borderColor: C.hot, backgroundColor: C.raised },
-  chipText: { color: C.dim, fontFamily: F.mono, fontSize: 11 },
+  chipText: { color: C.dim, fontFamily: F.dot, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' },
   chipTextActive: { color: C.hot },
-  btn: {
-    backgroundColor: C.hot, borderRadius: 4,
-    paddingVertical: 14, alignItems: 'center',
-  },
+  btn: { backgroundColor: C.hot, borderRadius: 999, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   btnDisconnect: { backgroundColor: C.raised, borderWidth: 1, borderColor: C.hot },
   btnText: { color: C.onHot, fontFamily: F.dot, fontSize: 12, letterSpacing: 1 },
-  bubble: {
-    backgroundColor: C.raised, borderRadius: 4, borderWidth: 1,
-    borderColor: C.line, padding: 12,
-  },
+  bubble: { backgroundColor: C.raised, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 12 },
   bubbleAi: { borderColor: C.hot, backgroundColor: C.surface },
   bubbleText: { color: C.ink, fontFamily: F.mono, fontSize: 12, lineHeight: 18 },
-  hint: { color: C.faint, fontFamily: F.mono, fontSize: 11, lineHeight: 16 },
-  linkText: { color: C.hot, fontFamily: F.mono, fontSize: 11, letterSpacing: 1 },
+  hint: { color: C.dim, fontFamily: F.mono, fontSize: 12, lineHeight: 17 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 14, borderWidth: 1, borderColor: C.line, borderRadius: 14 },
+  linkText: { flex: 1, color: C.ink, fontFamily: F.dot, fontSize: 11, letterSpacing: 1.5 },
 });

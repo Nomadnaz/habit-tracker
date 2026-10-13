@@ -17,6 +17,7 @@ import { estimateMealFromPhoto } from '@/lib/foodVision';
 import type { MealType } from '@/lib/meals-data';
 
 import { C, F } from '@/lib/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const BOLD = F.mono;
 const REG = F.mono;
@@ -87,13 +88,7 @@ export default function CaptureScreen() {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <MaterialCommunityIcons name="chevron-left" size={26} color={C.hot} />
-        </TouchableOpacity>
-        <Text style={s.title}>SNAP A MEAL</Text>
-        <View style={{ width: 26 }} />
-      </View>
+      <ScreenHeader title="SNAP A MEAL" />
 
       <View style={s.body}>
         <MaterialCommunityIcons name="camera-outline" size={72} color={C.hot} />
@@ -132,8 +127,6 @@ export default function CaptureScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  title: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
   hint: { fontFamily: REG, fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: 8, lineHeight: 19 },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 50, borderRadius: 12 },

@@ -21,7 +21,6 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
-import ChatScreen from '@/components/ChatScreen';
 import { RouteLine } from '@/components/SummaryCard';
 import { startBackgroundLocation, stopBackgroundLocation, drainBackgroundWaypoints, mergeWaypoints } from '@/lib/locationTask';
 
@@ -48,7 +47,6 @@ export default function ActivityScreen() {
   const router = useRouter();
   const [type, setType] = useState<ActivityType>('run');
   const [recording, setRecording] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -117,10 +115,7 @@ export default function ActivityScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="ACTIVITY"
-        right={<>
-          <HeaderIcon icon="history" label="History" onPress={() => router.push('/activity-history')} />
-          <HeaderIcon icon="chat-processing-outline" label="Ask" onPress={() => setChatOpen(true)} />
-        </>}
+        right={<HeaderIcon icon="history" label="History" onPress={() => router.push('/activity-history')} />}
       />
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -164,13 +159,6 @@ export default function ActivityScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      <ChatScreen
-        visible={chatOpen}
-        onClose={() => setChatOpen(false)}
-        companionType="activity"
-        onTasksUpdated={() => {}}
-      />
     </SafeAreaView>
   );
 }
