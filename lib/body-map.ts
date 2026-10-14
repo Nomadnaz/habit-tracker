@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Body map — the muscles on the BODY tab and the user's annotations on them.
 //
-// The figure itself is the 3D point cloud in lib/body-cloud.ts; its MUSCLES
+// The figure itself is the anatomical mesh in lib/body-mesh.ts; its MUSCLES
 // list (side-specific, e.g. 'quad.vm.l') is what gets annotated here.
 //
 // Annotations are local-only (AsyncStorage @body_map) — nothing server-side
@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MUSCLES, type Muscle } from '@/lib/body-cloud';
+import { MUSCLES, type Muscle } from '@/lib/body-mesh';
 
 export type Region = Muscle;
 export const REGIONS: Region[] = MUSCLES;

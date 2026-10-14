@@ -209,6 +209,8 @@ export default function BodyScreen() {
                 onPress={() => router.push('/modals/cycle-tracking')} />
             </Board>
 
+            <Text style={styles.credit}>Anatomy model: Z-Anatomy (CC BY-SA 4.0), from BodyParts3D © DBCLS (CC BY 4.0).</Text>
+
             <WaterSheet visible={sheet === 'water'} data={body} onData={setBody} onClose={() => setSheet(null)} />
             <WeightSheet visible={sheet === 'weight'} data={body} onData={setBody} onClose={() => setSheet(null)} />
           </>
@@ -472,6 +474,7 @@ const styles = StyleSheet.create({
   viewTextOn: { color: C.onHot },
 
   hint: { fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: 1, textAlign: 'center', marginTop: 2 },
+  credit: { fontFamily: F.mono, fontSize: 9, color: C.faint, textAlign: 'center', marginHorizontal: 24, marginTop: 16, lineHeight: 13 },
   legend: { gap: 8, paddingHorizontal: 16, paddingVertical: 14 },
   legendChip: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: C.line, borderRadius: 999, paddingHorizontal: 14, minHeight: 38 },
   legendText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 1.5 },

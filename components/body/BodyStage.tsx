@@ -1,75 +1,63 @@
-// The BODY tab's stage: a 3D point-cloud figure (lib/body-cloud.ts) you can
-// turn and zoom, where every muscle is its own tappable region.
+// The BODY tab's stage: the anatomical figure (lib/body-mesh.ts) drawn on
+// the GPU, which you can turn and zoom, where every muscle is tappable.
 //   drag sideways → spin (with momentum)      pinch → zoom (1–4×)
 //   two fingers   → pan while zoomed          drag up/down while zoomed → pan
 //   tap a muscle  → fly to it                 tap empty space → back out
 // Selecting a muscle (tap, or from the TARGETS list) eases the camera round
-// and in until it fills the top of the stage, lights it up in a wave from
-// its centre, then types its name into a callout and fills its recovery
-// battery.
-// Rendering: each frame projects the cloud in JS and draws it as a handful
-// of SVG paths, one per (colour, brightness) bucket, each point a round-
-// capped zero-length stroke. A coarse screen-space depth buffer dims points
-// hidden behind nearer ones (an arm in front of the ribs), and points facing
-// away are drawn faint, so the figure reads solid but still see-through.
-// While the figure is moving only an even sample of the cloud is drawn (the
-// cloud is pre-shuffled, so any prefix is one); the full cloud lands as soon
-// as it's still.
+// and in until it fills the top of the stage, fills it in solid from its
+// centre outwards, then types its name into a callout and charges its
+// recovery battery.
+// Look: muscles are drawn as a dot-matrix halftone — a fixed screen grid of
+// dots sized by how much light the surface catches, like the puck's
+// display — with a faint rim on the edges. The selected muscle is drawn
+// solid and lit, so its real shape reads at a glance. Marked muscles take
+// their category's colour.
+// Rendering is plain WebGL through expo-gl: one shader, one draw per
+// muscle, redrawn only when something changes. React only re-renders for
+// the callout.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import Svg, { Path, Polyline, Rect } from 'react-native-svg';
+import Svg, { Polyline, Rect } from 'react-native-svg';
+import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F, numFace } from '@/lib/theme';
-import { MUSCLES, MUSCLE_INDEX, decodeCloud, muscleFrames } from '@/lib/body-cloud';
-import { BODY_CLOUD } from '@/lib/body-cloud-data';
+import { MUSCLES, MUSCLE_INDEX, decodeBodyMesh, raycast, type Part } from '@/lib/body-mesh';
 import type { BodyMap, Tone } from '@/lib/body-map';
 
 export const TONE: Record<Tone, string> = { hot: C.hot, signal: C.signal, live: C.live, dim: C.dim, alert: C.alert };
-const TONES = Object.keys(TONE) as Tone[];
 
 export type Facing = 'front' | 'back';
 
 /** Battery colour for a recovery percentage. */
 export const batteryTone = (pct: number) => (pct >= 80 ? C.live : pct >= 40 ? C.ink : C.alert);
 
-const CLOUD = decodeCloud(BODY_CLOUD);
-const FRAMES = muscleFrames(CLOUD);
+const MESH = decodeBodyMesh();
+// Golden-ratio steps, so neighbouring muscles land on well-separated shifts.
+const PHASE = MUSCLES.map((_, i) => [(i * 0.618034) % 1, (i * 0.381966 + 0.5) % 1] as const);
 
 const PITCH = 0.1;          // camera looks slightly down, rad
-const DIST = 520;           // perspective distance, cm
-const CENTER_Y = 93;        // world height at the middle of the stage at 1×
-const FIG_H = 192;          // world height that fills the stage at 1×
+const DIST = 520;           // camera distance, cm
+const CENTER_Y = 90;        // world height at the middle of the stage at 1×
+const FIG_H = 186;          // world height that fills the stage at 1×
 const MAX_ZOOM = 4;
 const SPIN = 0.011;         // rad per px of drag
-const LIGHT = (() => { const l = [-0.35, 0.45, 0.82]; const n = Math.hypot(...l); return l.map(v => v / n); })();
-const CELL = 5;             // depth-buffer cell, px
-const BUDGET = 5200;        // points drawn per frame while moving
 const FOCUS = 0.36;         // a selected muscle settles this far down the stage — clear of the panel
 const FOCUS_X = 0.4;        // …and this far across, leaving the right for its callout
-const FLOOR = Array.from({ length: 64 }, (_, i) => {
-  const a = (i / 64) * Math.PI * 2;
-  return [Math.cos(a) * 30, 0, Math.sin(a) * 20] as const;
-});
+const CELL = 4.2;           // halftone cell, pt
+const LIGHT = (() => { const l = [-0.35, 0.45, 0.82]; const n = Math.hypot(...l); return l.map(v => v / n); })();
 
 // Selection timeline, ms after the tap.
 const FLY_MS = 760;               // camera move
-const WAVE = [120, 720] as const; // highlight spreading out from the centre
+const WAVE = [120, 760] as const; // solid fill spreading out from the centre
 const TYPE = [620, 980] as const; // name typed into the callout
 const FILL = [860, 1500] as const; // battery charging up to its level
-
-// Colour buckets: 0 idle, 1..5 a category tone, 6 selected, 7 the wave front.
-const N_TONES = 8;
-const LEVELS = 5; // 0 = facing away / hidden, 1–4 = lit
-const IDLE_A = [0.07, 0.3, 0.5, 0.7, 0.92];
-const TONE_A = [0.15, 0.55, 0.75, 0.9, 1];
-const SEL_A = [0.3, 0.75, 0.9, 1, 1];
 
 type Cam = { yaw: number; zoom: number; x: number; y: number };
 const HOME: Cam = { yaw: 0, zoom: 1, x: 0, y: CENTER_Y };
 type Tween = { from: Cam; to: Cam; t0: number; dur: number };
-type Sel = { mi: number; t0: number; idx: Int32Array; nd: Float32Array };
+type V3 = [number, number, number];
 
 interface Props {
   width: number;
@@ -91,6 +79,106 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const easeInOut = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 const easeOut = (u: number) => 1 - Math.pow(1 - u, 3);
 const phase = (t: number, [a, b]: readonly [number, number]) => clamp01((t - a) / (b - a));
+const rgb = (hex: string): V3 => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255) as V3;
+
+/** World → camera rotation (yaw about y, then the fixed pitch), as rows. */
+function rotation(yaw: number): [V3, V3, V3] {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(PITCH), sp = Math.sin(PITCH);
+  return [[cy, 0, sy], [sp * sy, cp, -sp * cy], [-cp * sy, sp, cp * cy]];
+}
+const dot3 = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+// ── shaders ──────────────────────────────────────────────────────────────
+
+const VS = `
+attribute vec3 aPos;
+attribute vec3 aNrm;
+uniform mat4 uMVP;
+uniform mat3 uRot;
+varying vec3 vN;
+varying vec3 vW;
+void main() {
+  vN = uRot * aNrm;
+  vW = aPos;
+  gl_Position = uMVP * vec4(aPos, 1.0);
+}`;
+
+const FS = `
+precision highp float;
+varying vec3 vN;
+varying vec3 vW;
+uniform vec3 uCol;     // dot colour: ink or the muscle's category
+uniform float uAmt;    // dot strength
+uniform float uSel;    // 1 on the selected muscle
+uniform vec3 uSelC;    // its centre, cm
+uniform float uWave;   // solid fill radius from that centre, cm
+uniform float uCell;   // halftone cell, device px
+uniform vec2 uPhase;   // per-muscle shift of the dot grid, in cells
+uniform vec3 uLight;
+void main() {
+  vec3 n = normalize(vN);
+  if (!gl_FrontFacing) n = -n;
+  float diff = max(dot(n, uLight), 0.0);
+  float rim = pow(1.0 - max(n.z, 0.0), 2.5);
+  float lum = 0.06 + 0.94 * diff;
+  // Each muscle's grid is shifted a little, so where two meet the dots
+  // fall out of step and the boundary shows as a seam.
+  vec2 g = fract(gl_FragCoord.xy / uCell + uPhase) - 0.5;
+  float r = 0.48 * sqrt(lum);
+  float dots = 1.0 - smoothstep(r - 0.1, r + 0.1, length(g));
+  vec3 col = vec3(0.025) + uCol * (dots * uAmt + rim * 0.2 * uAmt);
+  if (uSel > 0.5) {
+    float d = distance(vW, uSelC);
+    float lit = 1.0 - smoothstep(uWave - 0.8, uWave, d);
+    vec3 solid = vec3(0.3) + vec3(0.7) * diff + vec3(0.3) * rim;
+    col = mix(col, solid, lit);
+    col += vec3(1.0 - smoothstep(0.0, 1.4, abs(d - uWave))) * step(uWave, 500.0);
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+type GLState = {
+  gl: ExpoWebGLRenderingContext;
+  aPos: number; aNrm: number;
+  u: Record<string, WebGLUniformLocation | null>;
+};
+
+function setupGL(gl: ExpoWebGLRenderingContext): GLState {
+  const sh = (type: number, src: string) => {
+    const s = gl.createShader(type)!;
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(`body shader: ${gl.getShaderInfoLog(s)}`);
+    return s;
+  };
+  const prog = gl.createProgram()!;
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(`body program: ${gl.getProgramInfoLog(prog)}`);
+  gl.useProgram(prog);
+
+  // Interleaved position + normal, and the part-local indices.
+  const NV = MESH.pos.length / 3;
+  const inter = new Float32Array(NV * 6);
+  for (let i = 0; i < NV; i++) {
+    inter.set(MESH.pos.subarray(i * 3, i * 3 + 3), i * 6);
+    inter.set(MESH.nrm.subarray(i * 3, i * 3 + 3), i * 6 + 3);
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, inter, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, MESH.idx, gl.STATIC_DRAW);
+
+  const aPos = gl.getAttribLocation(prog, 'aPos'), aNrm = gl.getAttribLocation(prog, 'aNrm');
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aNrm);
+  const u: GLState['u'] = {};
+  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uSel', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight']) u[name] = gl.getUniformLocation(prog, name);
+  gl.enable(gl.DEPTH_TEST);
+  gl.clearColor(0, 0, 0, 1);
+  return { gl, aPos, aNrm, u };
+}
 
 export function BodyStage({ width: W, height: H, map, facing, selected, filter, battery, onSelect, onFacing, onZoomed }: Props) {
   const cam = useRef<Cam>({ ...HOME });
@@ -98,12 +186,9 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
   const spin = useRef(0);               // rad/s of momentum
   const raf = useRef<number | null>(null);
   const last = useRef(0);
-  const moving = useRef(false);         // camera animating this frame
-  const touching = useRef(false);       // a gesture is in progress
-  const sel = useRef<Sel | null>(null);
-  const [frame, setFrame] = useState(0);   // every animation frame (callout, battery)
-  const [scene, setScene] = useState(0);   // only when the cloud itself must be redrawn
-  const sceneSig = useRef('');
+  const glRef = useRef<GLState | null>(null);
+  const selT0 = useRef(0);
+  const [, setFrame] = useState(0);     // callout re-render
   const [zoomed, setZoomed] = useState(false);
   const facingRef = useRef<Facing>(facing);
   const zoomedRef = useRef(false);
@@ -113,8 +198,77 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
   props.current = { onSelect, onFacing, onZoomed };
 
   const base = (H * 0.94) / FIG_H; // px per cm at 1×
+  const selPart: Part | undefined = selected ? MESH.byMuscle[MUSCLE_INDEX[selected]] : undefined;
 
-  // ── animation loop: momentum + tweens + selection, one render per frame ─
+  // Per-muscle dot colour and strength.
+  const catById = useMemo(() => Object.fromEntries(map.categories.map(c => [c.id, c])), [map.categories]);
+  const look = useMemo(() => {
+    const ink = rgb(C.ink);
+    return MUSCLES.map(m => {
+      const mk = map.marks[m.id];
+      const cat = mk && (!filter || mk.category === filter) ? catById[mk.category] : undefined;
+      return cat ? { col: rgb(TONE[cat.tone]), amt: 1 } : { col: ink, amt: selected ? 0.42 : 0.8 };
+    });
+  }, [map.marks, filter, catById, selected]);
+
+  // Everything the draw needs that React owns, for the animation loop.
+  const live = useRef({ look, selPart, W, H, base });
+  live.current = { look, selPart, W, H, base };
+
+  // ── drawing ────────────────────────────────────────────────────────────
+  const draw = () => {
+    const S = glRef.current;
+    if (!S) return;
+    const { gl, u } = S;
+    const { look: lk, selPart: sp, W: w, H: h, base: b } = live.current;
+    const c = cam.current;
+    const k = b * c.zoom;
+    const R = rotation(c.yaw);
+    const near = 200, far = 900;
+    const A = -(far + near) / (far - near), B = (-2 * far * near) / (far - near);
+    const px = (2 * k * DIST) / w, py = (2 * k * DIST) / h;
+    const t: V3 = [c.x, c.y, DIST];
+    // clip = P · (R·p − t), column-major.
+    const m = new Float32Array(16);
+    for (let col = 0; col < 3; col++) {
+      m[col * 4] = px * R[0][col];
+      m[col * 4 + 1] = py * R[1][col];
+      m[col * 4 + 2] = A * R[2][col];
+      m[col * 4 + 3] = -R[2][col];
+    }
+    m[12] = -px * t[0]; m[13] = -py * t[1]; m[14] = -A * t[2] + B; m[15] = t[2];
+    const rot = new Float32Array([R[0][0], R[1][0], R[2][0], R[0][1], R[1][1], R[2][1], R[0][2], R[1][2], R[2][2]]);
+
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.uniformMatrix4fv(u.uMVP, false, m);
+    gl.uniformMatrix3fv(u.uRot, false, rot);
+    gl.uniform1f(u.uCell, CELL * (gl.drawingBufferWidth / w));
+    gl.uniform3f(u.uLight, LIGHT[0], LIGHT[1], LIGHT[2]);
+    const st = Date.now() - selT0.current;
+    const wave = sp ? (st >= WAVE[1] ? 1e4 : sp.r * 1.05 * easeOut(phase(st, WAVE))) : 0;
+    if (sp) gl.uniform3f(u.uSelC, sp.c[0], sp.c[1], sp.c[2]);
+    gl.uniform1f(u.uWave, wave);
+    for (const p of MESH.parts) {
+      const l = lk[p.mi];
+      gl.uniform3f(u.uCol, l.col[0], l.col[1], l.col[2]);
+      gl.uniform1f(u.uAmt, l.amt);
+      gl.uniform1f(u.uSel, p === sp ? 1 : 0);
+      gl.uniform2f(u.uPhase, PHASE[p.mi][0], PHASE[p.mi][1]);
+      gl.vertexAttribPointer(S.aPos, 3, gl.FLOAT, false, 24, p.vStart * 24);
+      gl.vertexAttribPointer(S.aNrm, 3, gl.FLOAT, false, 24, p.vStart * 24 + 12);
+      gl.drawElements(gl.TRIANGLES, p.iCount, gl.UNSIGNED_SHORT, p.iStart * 2);
+    }
+    gl.flush();
+    gl.endFrameEXP?.();
+  };
+
+  const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
+    glRef.current = setupGL(gl);
+    draw();
+  };
+
+  // ── animation loop: momentum + tweens + selection ──────────────────────
   const kick = () => {
     if (raf.current != null) return;
     last.current = Date.now();
@@ -143,19 +297,16 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
       c.y = tw.from.y + (tw.to.y - tw.from.y) * e;
       if (u >= 1) tween.current = null; else more = true;
     }
-    moving.current = more;
-    const s = sel.current;
-    if (s && now - s.t0 < FILL[1] + 40) more = true; // the wave / callout are still playing
+    if (live.current.selPart && now - selT0.current < FILL[1] + 40) more = true; // fill / callout still playing
     settle();
-    // Redraw the cloud only if the camera, the wave or the level of detail
-    // changed — the callout's typing and battery fill don't need it.
-    const wave = s ? Math.min(1, (now - s.t0) / WAVE[1]) : 0;
-    const sig = `${c.yaw}|${c.zoom}|${c.x}|${c.y}|${wave}|${more && moving.current}|${touching.current}`;
-    if (sig !== sceneSig.current) { sceneSig.current = sig; setScene(n => n + 1); }
-    setFrame(f => f + 1);
+    draw();
+    if (live.current.selPart) setFrame(f => f + 1); // the callout follows the muscle
     if (more) { last.current = now; raf.current = requestAnimationFrame(step); }
   };
   useEffect(() => () => { if (raf.current != null) cancelAnimationFrame(raf.current); }, []);
+
+  // Colours / size changed → redraw once.
+  useEffect(() => { draw(); }, [look, W, H]);
 
   const fly = (to: Cam, dur = FLY_MS) => {
     const c = cam.current;
@@ -187,173 +338,41 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
   useEffect(() => {
     const had = prevSel.current;
     prevSel.current = selected;
-    const mi = selected ? MUSCLE_INDEX[selected] : undefined;
-    const f = mi != null ? FRAMES[mi] : undefined;
-    if (!selected || mi == null || !f || !f.count) {
-      sel.current = null;
+    if (!selPart) {
       if (had) fly({ ...HOME, yaw: cam.current.yaw }, 620);
+      else draw();
       return;
     }
-
-    // Its points, by distance from the centre — the order the wave lights them.
-    const idx: number[] = [];
-    for (let i = 0; i < CLOUD.n; i++) if (CLOUD.m[i] === mi) idx.push(i);
-    const nd = new Float32Array(idx.length);
-    idx.forEach((i, j) => {
-      nd[j] = Math.hypot(CLOUD.x[i] - f.c[0], CLOUD.y[i] - f.c[1], CLOUD.z[i] - f.c[2]) / (f.r || 1);
-    });
-    sel.current = { mi, t0: Date.now(), idx: Int32Array.from(idx), nd };
-
-    // Face it, zoom until it spans about a third of the stage, and park its
-    // centre at FOCUS so the panel below doesn't cover it.
-    const yaw = Math.atan2(-f.n[0], f.n[2]);
-    const zoom = Math.min(2.5, Math.max(1.6, 34 / Math.max(6, f.r)));
-    const cy = Math.cos(yaw), sy = Math.sin(yaw);
-    const x1 = f.c[0] * cy + f.c[2] * sy;
-    const z1 = -f.c[0] * sy + f.c[2] * cy;
-    const y2 = f.c[1] * Math.cos(PITCH) - z1 * Math.sin(PITCH);
-    const z2 = f.c[1] * Math.sin(PITCH) + z1 * Math.cos(PITCH);
-    const pp = DIST / (DIST - z2);
-    const kz = base * zoom * pp;
-    fly({ yaw, zoom, x: x1 + (W * (0.5 - FOCUS_X)) / kz, y: y2 - (H * (0.5 - FOCUS)) / kz });
+    selT0.current = Date.now();
+    // Turn to the side that shows most of it, zoom until it spans about a
+    // third of the stage, and park its centre at FOCUS — clear of the panel.
+    const { yaw, c: ctr, r } = selPart;
+    const zoom = Math.min(2.6, Math.max(1.6, 34 / Math.max(6, r)));
+    const R = rotation(yaw);
+    const e: V3 = [dot3(R[0], ctr), dot3(R[1], ctr), dot3(R[2], ctr)];
+    const kz = base * zoom * (DIST / (DIST - e[2]));
+    fly({ yaw, zoom, x: e[0] + (W * (0.5 - FOCUS_X)) / kz, y: e[1] - (H * (0.5 - FOCUS)) / kz });
   }, [selected]);
 
-  // ── projection ─────────────────────────────────────────────────────────
-  const proj = useRef({
-    sx: new Float32Array(CLOUD.n), sy: new Float32Array(CLOUD.n), z: new Float32Array(CLOUD.n),
-    facing: new Float32Array(CLOUD.n), lum: new Float32Array(CLOUD.n), vis: new Uint8Array(CLOUD.n),
-    lev: new Uint8Array(CLOUD.n), tone: new Uint8Array(CLOUD.n), k: base,
-  });
-
-  const catById = useMemo(() => Object.fromEntries(map.categories.map(c => [c.id, c])), [map.categories]);
-  // Muscle index → colour bucket for its marked category (0 = none).
-  const toneOf = useMemo(() => {
-    const out = new Int8Array(MUSCLES.length);
-    MUSCLES.forEach((m, i) => {
-      const mk = map.marks[m.id];
-      if (!mk || (filter && mk.category !== filter)) return;
-      const t = catById[mk.category]?.tone;
-      if (t) out[i] = 1 + TONES.indexOf(t);
-    });
-    return out;
-  }, [map.marks, filter, catById]);
-
-  const drawn = useMemo(() => {
-    const now = Date.now();
+  // ── screen ↔ world ─────────────────────────────────────────────────────
+  const project = (p: V3) => {
     const c = cam.current;
+    const R = rotation(c.yaw);
     const k = base * c.zoom;
-    const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(PITCH), sp = Math.sin(PITCH);
-    const P = proj.current;
-    P.k = k;
-    const gw = Math.ceil(W / CELL) + 1, gh = Math.ceil(H / CELL) + 1;
-    const zbuf = new Float32Array(gw * gh).fill(-1e9);
-    const { facing: facingArr, lum, lev, tone } = P;
-
-    for (let i = 0; i < CLOUD.n; i++) {
-      const x = CLOUD.x[i], y = CLOUD.y[i], z = CLOUD.z[i];
-      const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
-      const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
-      const pp = DIST / (DIST - z2);
-      const X = W / 2 + (x1 - c.x) * k * pp, Y = H / 2 - (y2 - c.y) * k * pp;
-      P.sx[i] = X; P.sy[i] = Y; P.z[i] = z2;
-      const nx = CLOUD.nx[i], ny = CLOUD.ny[i], nz = CLOUD.nz[i];
-      const n1x = nx * cy + nz * sy, n1z = -nx * sy + nz * cy;
-      const n2y = ny * cp - n1z * sp, n2z = ny * sp + n1z * cp;
-      facingArr[i] = n2z;
-      lum[i] = Math.max(0, n1x * LIGHT[0] + n2y * LIGHT[1] + n2z * LIGHT[2]);
-      tone[i] = CLOUD.m[i] >= 0 ? toneOf[CLOUD.m[i]] : 0;
-      if (n2z > 0 && X >= 0 && X < W && Y >= 0 && Y < H) {
-        const cell = Math.floor(Y / CELL) * gw + Math.floor(X / CELL);
-        if (z2 > zbuf[cell]) zbuf[cell] = z2;
-      }
-    }
-
-    // The selection: lit out to the wave front, the front itself brightest.
-    const s = sel.current;
-    const st = s ? now - s.t0 : 0;
-    if (s) {
-      const p = easeOut(phase(st, WAVE)) * 1.15;
-      for (let j = 0; j < s.idx.length; j++) {
-        const d = s.nd[j];
-        if (d <= p) tone[s.idx[j]] = p < 1.15 && d > p - 0.14 ? 7 : 6;
-      }
-    }
-
-    // Brightness level per point, and how many would be drawn.
-    let shown = 0;
-    for (let i = 0; i < CLOUD.n; i++) {
-      const X = P.sx[i], Y = P.sy[i];
-      if (X < -4 || X > W + 4 || Y < -4 || Y > H + 4) { P.vis[i] = 0; lev[i] = 255; continue; }
-      let level: number;
-      if (facingArr[i] <= 0.02) level = 0;
-      else {
-        const cell = Math.floor(Math.min(H - 1, Math.max(0, Y)) / CELL) * gw + Math.floor(Math.min(W - 1, Math.max(0, X)) / CELL);
-        const L = lum[i];
-        level = P.z[i] < zbuf[cell] - 3 ? 0 : L < 0.22 ? 1 : L < 0.45 ? 2 : L < 0.68 ? 3 : 4;
-      }
-      P.vis[i] = level > 0 ? 1 : 0;
-      // The far side is a faint hint — a third of it is plenty.
-      if (level === 0 && tone[i] === 0 && i % 3) { lev[i] = 255; continue; }
-      lev[i] = level;
-      shown++;
-    }
-
-    // Moving → draw a prefix (an even sample) of the shuffled cloud.
-    const lod = moving.current || touching.current;
-    const limit = lod && shown > BUDGET ? Math.floor(CLOUD.n * (BUDGET / shown)) : CLOUD.n;
-    const parts: string[][] = Array.from({ length: N_TONES * LEVELS }, () => []);
-    for (let i = 0; i < CLOUD.n; i++) {
-      const level = lev[i];
-      if (level === 255 || (i >= limit && tone[i] < 6)) continue;
-      parts[tone[i] * LEVELS + level].push(`M${Math.round(P.sx[i] * 10) / 10} ${Math.round(P.sy[i] * 10) / 10}h.01`);
-    }
-
-    // Floor ring.
-    const floor: string[] = [];
-    for (const [x, y, z] of FLOOR) {
-      const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
-      const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
-      const pp = DIST / (DIST - z2);
-      floor.push(`M${(W / 2 + (x1 - c.x) * k * pp).toFixed(1)} ${(H / 2 - (y2 - c.y) * k * pp).toFixed(1)}h.01`);
-    }
-
-    // Callout for the selection: its visible points' centre.
-    let callout: { x: number; y: number } | null = null;
-    if (s) {
-      let ax = 0, ay = 0, n = 0;
-      for (let j = 0; j < s.idx.length; j++) {
-        const i = s.idx[j];
-        if (P.vis[i]) { ax += P.sx[i]; ay += P.sy[i]; n++; }
-      }
-      // Only while some of it faces the camera — a leader into the far side
-      // of the body points at nothing you can see.
-      if (n >= 3) callout = { x: ax / n, y: ay / n };
-    }
-
-    const dot = Math.min(6, Math.max(1.5, k * 0.64)) * (limit < CLOUD.n ? Math.min(1.4, Math.sqrt(CLOUD.n / limit) * 0.85) : 1);
-    return { parts, floor: floor.join(''), callout, dot };
-  }, [scene, toneOf, W, H, base, selected]);
-
-  // ── hit test ───────────────────────────────────────────────────────────
+    const pp = DIST / (DIST - dot3(R[2], p));
+    return { x: W / 2 + (dot3(R[0], p) - c.x) * k * pp, y: H / 2 - (dot3(R[1], p) - c.y) * k * pp };
+  };
+  const rayAt = (sx: number, sy: number): { o: V3; d: V3 } => {
+    const c = cam.current;
+    const R = rotation(c.yaw);
+    const k = base * c.zoom;
+    const toWorld = (v: V3): V3 => [0, 1, 2].map(i => R[0][i] * v[0] + R[1][i] * v[1] + R[2][i] * v[2]) as V3;
+    return { o: toWorld([c.x, c.y, DIST]), d: toWorld([(sx - W / 2) / (k * DIST), -(sy - H / 2) / (k * DIST), -1]) };
+  };
   const pick = (x: number, y: number): string | null => {
-    const P = proj.current;
-    const R = Math.max(14, P.k * 2.2);
-    let bestZ = -1e9;
-    const near: number[] = [];
-    for (let i = 0; i < CLOUD.n; i++) {
-      if (!P.vis[i] || CLOUD.m[i] < 0) continue;
-      const d = Math.hypot(P.sx[i] - x, P.sy[i] - y);
-      if (d > R) continue;
-      near.push(i);
-      if (P.z[i] > bestZ) bestZ = P.z[i];
-    }
-    let best = -1, bestD = 1e9;
-    for (const i of near) {
-      if (P.z[i] < bestZ - 4) continue; // something nearer is in the way
-      const d = Math.hypot(P.sx[i] - x, P.sy[i] - y);
-      if (d < bestD) { bestD = d; best = i; }
-    }
-    return best >= 0 ? MUSCLES[CLOUD.m[best]].id : null;
+    const { o, d } = rayAt(x, y);
+    const hit = raycast(MESH, o, d);
+    return hit ? MUSCLES[hit.mi].id : null;
   };
   const pickRef = useRef(pick);
   pickRef.current = pick;
@@ -362,10 +381,9 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
   const gesture = useMemo(() => {
     const start = { yaw: 0, zoom: 1, x: 0, y: 0 };
     const grab = () => {
-      tween.current = null; spin.current = 0; touching.current = true;
+      tween.current = null; spin.current = 0;
       Object.assign(start, cam.current);
     };
-    const release = () => { touching.current = false; kick(); };
     const clampPan = () => {
       const c = cam.current;
       // Keep the figure on screen; at 1× it snaps back to centre.
@@ -384,8 +402,7 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
         if (c.zoom > 1.02) { c.y = start.y + e.translationY / (base * c.zoom); clampPan(); }
         kick();
       })
-      .onEnd(e => { spin.current = Math.max(-12, Math.min(12, e.velocityX * SPIN)); })
-      .onFinalize(release);
+      .onEnd(e => { spin.current = Math.max(-12, Math.min(12, e.velocityX * SPIN)); kick(); });
     if (!zoomed) spinPan.failOffsetY([-12, 12]);
     else spinPan.activeOffsetY([-6, 6]);
 
@@ -404,8 +421,7 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
       })
       .onEnd(() => {
         if (cam.current.zoom < 1.05) fly({ ...cam.current, zoom: 1, x: 0, y: CENTER_Y }, 300);
-      })
-      .onFinalize(release);
+      });
 
     const twoPan = Gesture.Pan()
       .minPointers(2)
@@ -416,8 +432,7 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
         c.y = start.y + e.translationY / (base * c.zoom);
         clampPan();
         kick();
-      })
-      .onFinalize(release);
+      });
 
     const tap = Gesture.Tap()
       .maxDuration(300)
@@ -434,18 +449,19 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
 
   const reset = () => fly({ ...HOME, yaw: cam.current.yaw }, 620);
 
-  const colourOf = (tone: number) => tone === 0 ? C.ink : tone >= 6 ? C.hot : TONE[TONES[tone - 1]];
-  const alphaOf = (tone: number, level: number) =>
-    tone === 0 ? IDLE_A[level] * (selected ? 0.5 : 1) : tone === 7 ? 1 : tone === 6 ? SEL_A[level] : TONE_A[level];
-  const sizeOf = (tone: number, level: number) =>
-    drawn.dot * (level === 0 ? 0.75 : level === 1 ? 0.88 : 1) * (tone === 7 ? 1.9 : tone === 6 ? 1.2 : 1);
-
+  // ── callout ────────────────────────────────────────────────────────────
   const muscle = selected ? MUSCLES[MUSCLE_INDEX[selected]] : null;
   const mark = selected ? map.marks[selected] : undefined;
   const cat = mark ? catById[mark.category] : undefined;
-  const co = drawn.callout;
-  void frame; // re-rendered every frame for the callout's timeline
-  const st = sel.current ? Date.now() - sel.current.t0 : 0;
+  let co: { x: number; y: number } | null = null;
+  if (selPart) {
+    // Only while you can see it — a leader into the far side of the body
+    // points at nothing.
+    const at = project(selPart.c);
+    const { o, d } = rayAt(at.x, at.y);
+    if (raycast(MESH, o, d) === selPart) co = at;
+  }
+  const st = Date.now() - selT0.current;
   const typed = muscle ? muscle.name.slice(0, Math.ceil(muscle.name.length * phase(st, TYPE))) : '';
   const showLabel = !!(co && muscle && st >= TYPE[0]);
   const labelIn = easeOut(phase(st, [TYPE[0], TYPE[0] + 220]));
@@ -455,39 +471,25 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
   const LABEL_H = battery != null ? 64 : 42;
   const ly = co ? Math.min(H - LABEL_H - 6, Math.max(6, co.y - LABEL_H / 2)) : 0;
   const lx = labelLeft ? 10 : W - LABEL_W - 10;
-  // Leader grows from the muscle out to the label.
-  const lead = labelIn;
   const ex = labelLeft ? lx + LABEL_W : lx, ey = ly + 20;
 
   return (
     <View style={{ width: W, height: H }}>
       <GestureDetector gesture={gesture}>
         <View style={StyleSheet.absoluteFill} collapsable={false}>
-          <Svg width={W} height={H}>
-            <Rect x={0} y={0} width={W} height={H} fill={C.bg} />
-            <Path d={drawn.floor} stroke={C.faint} strokeWidth={drawn.dot * 0.8} strokeLinecap="round" />
-            {drawn.parts.map((p, b) => p.length > 0 && (
-              <Path
-                key={b}
-                d={p.join('')}
-                stroke={colourOf(Math.floor(b / LEVELS))}
-                strokeOpacity={alphaOf(Math.floor(b / LEVELS), b % LEVELS)}
-                strokeWidth={sizeOf(Math.floor(b / LEVELS), b % LEVELS)}
-                strokeLinecap="round"
-              />
-            ))}
-            {co && showLabel && (
-              <>
-                <Polyline
-                  points={`${co.x},${co.y} ${co.x + ((labelLeft ? ex + 8 : ex - 8) - co.x) * lead},${co.y + (ey - co.y) * lead}${lead >= 1 ? ` ${ex},${ey}` : ''}`}
-                  fill="none" stroke={C.hot} strokeWidth={1} strokeOpacity={0.8}
-                />
-                <Rect x={co.x - 3} y={co.y - 3} width={6} height={6} fill={C.hot} />
-              </>
-            )}
-          </Svg>
+          <GLView style={{ width: W, height: H }} onContextCreate={onContextCreate} msaaSamples={4} />
         </View>
       </GestureDetector>
+
+      {co && showLabel && (
+        <Svg width={W} height={H} style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Polyline
+            points={`${co.x},${co.y} ${co.x + ((labelLeft ? ex + 8 : ex - 8) - co.x) * labelIn},${co.y + (ey - co.y) * labelIn}${labelIn >= 1 ? ` ${ex},${ey}` : ''}`}
+            fill="none" stroke={C.hot} strokeWidth={1} strokeOpacity={0.8}
+          />
+          <Rect x={co.x - 3} y={co.y - 3} width={6} height={6} fill={C.hot} />
+        </Svg>
+      )}
 
       {showLabel && muscle && (
         <View
