@@ -341,11 +341,11 @@ function mulberry32(seed: number) {
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** Builds the cloud. `spacing` is the rough distance between points, cm. */
-export function buildCloud(spacing = 1.6): Cloud {
+export function buildCloud(spacing = 0.95): Cloud {
   const tubes = buildTubes();
   const frames = tubes.map(frameOf);
   const rand = mulberry32(7);
-  const SEAM = 1.0; // cm either side of a label boundary left empty
+  const SEAM = 0.75; // cm either side of a label boundary left empty
 
   type Raw = { ti: number; t: number; th: number; label: string };
   const raw: Raw[] = [];
@@ -436,6 +436,13 @@ export function buildCloud(spacing = 1.6): Cloud {
     return add(P, mul(radial, amp * Math.sqrt(k)));
   };
 
+  // Shuffle, so any prefix of the cloud is an even sample of the whole body
+  // — the stage draws a prefix while the figure is moving.
+  for (let i = keep.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [keep[i], keep[j]] = [keep[j], keep[i]];
+  }
+
   const n = keep.length;
   const cloud: Cloud = {
     n,
@@ -522,9 +529,10 @@ export function decodeCloud(b64: string): Cloud {
   return c;
 }
 
-/** Per muscle: centroid and the direction it faces (mean normal). */
+/** Per muscle: centroid, the direction it faces (mean normal), and its
+ *  extent — the farthest of its points from the centroid, cm. */
 export function muscleFrames(c: Cloud) {
-  const out = MUSCLES.map(() => ({ c: [0, 0, 0] as V3, n: [0, 0, 0] as V3, count: 0 }));
+  const out = MUSCLES.map(() => ({ c: [0, 0, 0] as V3, n: [0, 0, 0] as V3, count: 0, r: 0 }));
   for (let i = 0; i < c.n; i++) {
     const o = out[c.m[i]];
     if (!o) continue;
@@ -532,5 +540,10 @@ export function muscleFrames(c: Cloud) {
     o.n[0] += c.nx[i]; o.n[1] += c.ny[i]; o.n[2] += c.nz[i];
     o.count++;
   }
-  return out.map(o => ({ c: mul(o.c, 1 / Math.max(1, o.count)), n: norm(o.n), count: o.count }));
+  const res = out.map(o => ({ c: mul(o.c, 1 / Math.max(1, o.count)), n: norm(o.n), count: o.count, r: 0 }));
+  for (let i = 0; i < c.n; i++) {
+    const o = res[c.m[i]];
+    if (o) o.r = Math.max(o.r, Math.hypot(c.x[i] - o.c[0], c.y[i] - o.c[1], c.z[i] - o.c[2]));
+  }
+  return res;
 }

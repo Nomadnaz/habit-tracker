@@ -1,0 +1,155 @@
+// ─────────────────────────────────────────────────────────────────────────
+// Muscle recovery — which of the BODY tab's muscles an exercise works, and
+// how recovered each muscle is from recent training, as a 0–100 "battery".
+//
+// Pure: sessions come in (lib/workout-data.ts getTrainingSessions), numbers
+// go out. Ids here are muscle ids without the side ('quad.vl'); training is
+// assumed bilateral, so both sides read the same.
+//
+// The model, deliberately simple:
+//   · each session drains a muscle by depth = min(1, sets × share / 4)
+//     (four full sets empties it; a secondary mover gets a fraction)
+//   · it recharges linearly over the muscle's recovery time — 72h for big
+//     movers, 48h medium, 36h small — stretched or shortened by volume
+//   · drains from sessions close together stack
+// ─────────────────────────────────────────────────────────────────────────
+
+import type { MuscleGroup } from './workout-data';
+
+export type Session = {
+  exerciseId: string;
+  name: string;
+  muscleGroups: MuscleGroup[];
+  date: string;       // YYYY-MM-DD
+  at: number;         // ms — logged_at, or the evening of `date` for a done-log entry
+  sets: number;
+  weightKg: number;   // best set
+  reps: number | null;
+  measured: boolean;  // real logged sets (exercise_sets) vs. the template's plan
+};
+
+export type Hit = { session: Session; share: number };
+
+export type MuscleStatus = {
+  pct: number;              // 0–100
+  readyAt: number | null;   // ms when it's back to 100, null if it already is
+  lastAt: number | null;    // most recent session that worked it
+  hits: Hit[];              // newest first
+};
+
+// Base recovery hours. Muscles not listed (head, joints, hands, feet) aren't
+// trained directly and have no battery.
+const BASE_H: Record<string, number> = {
+  'quad.rf': 72, 'quad.vl': 72, 'quad.vm': 72, 'ham.bf': 72, 'ham.st': 72, 'glute.max': 72,
+  erector: 72, lat: 72, 'pec.upper': 72, 'pec.lower': 72,
+  'delt.front': 48, 'delt.side': 48, 'delt.rear': 48, 'traps.upper': 48, 'traps.mid': 48, 'traps.lower': 48,
+  cuff: 48, biceps: 48, brachialis: 48, 'triceps.lat': 48, 'triceps.long': 48, adductor: 48,
+  'glute.med': 48, hipflex: 48, serratus: 48,
+  brachiorad: 36, 'forearm.flex': 36, 'forearm.ext': 36, 'gastro.lat': 36, 'gastro.med': 36,
+  soleus: 36, tib: 36, peroneal: 36, 'abs.upper': 36, 'abs.lower': 36, oblique: 36,
+};
+
+export const hasBattery = (baseId: string) => baseId in BASE_H;
+
+/** 'quad.vl.l' → 'quad.vl'; 'abs.upper' stays. */
+export const baseOf = (muscleId: string) => muscleId.replace(/\.[lr]$/, '');
+
+type Share = Record<string, number>;
+const TRI = { 'triceps.lat': 1, 'triceps.long': 1 };
+const QUADS = { 'quad.rf': 1, 'quad.vl': 1, 'quad.vm': 1 };
+const HAMS = { 'ham.bf': 1, 'ham.st': 1 };
+const CALVES = { 'gastro.lat': 1, 'gastro.med': 1, soleus: 0.8 };
+const scale = (s: Share, k: number): Share => Object.fromEntries(Object.entries(s).map(([m, v]) => [m, v * k]));
+
+// Exercise name → muscles worked, first match wins. Checked before the
+// coarse muscle-group fallback so "INCLINE DB PRESS" lands on the upper
+// chest and "FACE PULL" on the rear delt rather than "chest" / "shoulders".
+const RULES: [RegExp, Share][] = [
+  [/LEG CURL|HAM(STRING)? CURL|NORDIC/, { ...HAMS, ...scale(CALVES, 0.3) }],
+  [/LEG EXT/, QUADS],
+  [/CALF/, CALVES],
+  [/HAMMER/, { brachiorad: 1, brachialis: 1, biceps: 0.6, 'forearm.ext': 0.3 }],
+  [/WRIST|FOREARM|GRIP/, { 'forearm.flex': 1, 'forearm.ext': 0.8, brachiorad: 0.5 }],
+  [/CURL/, { biceps: 1, brachialis: 0.7, 'forearm.flex': 0.4 }],
+  [/FACE PULL|REAR DELT|REVERSE (FLY|PEC)/, { 'delt.rear': 1, 'traps.mid': 0.7, cuff: 0.7, 'traps.lower': 0.3 }],
+  [/\bDIPS?\b|DECLINE/, { 'pec.lower': 1, 'pec.upper': 0.3, ...scale(TRI, 0.7), 'delt.front': 0.4 }],
+  [/PUSHDOWN|PUSH DOWN|TRICEP|SKULL|CLOSE GRIP|KICKBACK/, TRI],
+  [/INCLINE/, { 'pec.upper': 1, 'pec.lower': 0.4, 'delt.front': 0.7, ...scale(TRI, 0.4) }],
+  [/BENCH|CHEST PRESS|PUSH ?UP|PRESS UP/, { 'pec.lower': 1, 'pec.upper': 0.7, 'delt.front': 0.6, ...scale(TRI, 0.5) }],
+  [/FLY|FLYE|PEC DECK|CROSSOVER/, { 'pec.lower': 1, 'pec.upper': 0.8, 'delt.front': 0.3 }],
+  [/LATERAL|SIDE RAISE|UPRIGHT/, { 'delt.side': 1, 'traps.upper': 0.4, 'delt.front': 0.2 }],
+  [/FRONT RAISE/, { 'delt.front': 1, 'pec.upper': 0.3 }],
+  [/\bOHP\b|OVERHEAD|SHOULDER PRESS|MILITARY|ARNOLD/, { 'delt.front': 1, 'delt.side': 0.6, ...scale(TRI, 0.5), 'traps.upper': 0.3 }],
+  [/SHRUG/, { 'traps.upper': 1, 'traps.mid': 0.4, 'forearm.flex': 0.3 }],
+  [/PULL ?DOWN|PULL ?UP|\bCHIN(S|-?UPS?)?\b/, { lat: 1, biceps: 0.5, brachialis: 0.4, 'traps.lower': 0.5, 'delt.rear': 0.3 }],
+  [/\bROWS?\b/, { lat: 0.8, 'traps.mid': 1, 'delt.rear': 0.6, 'traps.lower': 0.4, biceps: 0.4, erector: 0.3 }],
+  [/ROMANIAN|RDL|STIFF|GOOD MORNING/, { ...HAMS, 'glute.max': 0.8, erector: 0.6 }],
+  [/DEADLIFT/, { erector: 1, 'glute.max': 0.9, ...scale(HAMS, 0.7), 'quad.vl': 0.4, 'quad.vm': 0.4, 'traps.upper': 0.5, lat: 0.4, 'forearm.flex': 0.5 }],
+  [/HIP THRUST|GLUTE BRIDGE|GLUTE KICK/, { 'glute.max': 1, 'glute.med': 0.5, ...scale(HAMS, 0.4) }],
+  [/ABDUCT/, { 'glute.med': 1 }],
+  [/ADDUCT/, { adductor: 1 }],
+  [/SQUAT|LEG PRESS|LUNGE|SPLIT|STEP ?UP|HACK/, { ...QUADS, 'quad.rf': 0.8, 'glute.max': 0.7, adductor: 0.5, ...scale(HAMS, 0.2) }],
+  [/TWIST|WOODCHOP|SIDE PLANK/, { oblique: 1, 'abs.upper': 0.4 }],
+  [/CRUNCH|SIT ?UP|PLANK|LEG RAISE|\bABS?\b/, { 'abs.upper': 1, 'abs.lower': 0.8, oblique: 0.4 }],
+];
+
+const GROUPS: Record<MuscleGroup, Share> = {
+  chest: { 'pec.upper': 1, 'pec.lower': 1 },
+  back: { lat: 1, 'traps.mid': 0.8, 'traps.lower': 0.6, 'delt.rear': 0.4, erector: 0.3 },
+  lats: { lat: 1 },
+  'upper back': { 'traps.mid': 1, 'traps.lower': 0.8, cuff: 0.6, 'delt.rear': 0.6 },
+  traps: { 'traps.upper': 1, 'traps.mid': 0.6 },
+  shoulders: { 'delt.front': 1, 'delt.side': 1, 'delt.rear': 0.6 },
+  biceps: { biceps: 1, brachialis: 0.7 },
+  triceps: TRI,
+  forearms: { brachiorad: 1, 'forearm.flex': 1, 'forearm.ext': 1 },
+  quads: QUADS,
+  hamstrings: HAMS,
+  glutes: { 'glute.max': 1, 'glute.med': 0.6 },
+  calves: CALVES,
+  abs: { 'abs.upper': 1, 'abs.lower': 1 },
+  'lower back': { erector: 1 },
+  'hip flexors': { hipflex: 1 },
+  core: { 'abs.upper': 1, 'abs.lower': 1, oblique: 0.8, serratus: 0.5 },
+  cardio: {},
+};
+
+/** Muscles (no side) an exercise works, each 0–1. */
+export function musclesFor(name: string, groups: MuscleGroup[]): Share {
+  const n = ` ${name.toUpperCase()} `;
+  for (const [re, share] of RULES) if (re.test(n)) return share;
+  // Fallback: the first listed group is the prime mover.
+  const out: Share = {};
+  groups.forEach((g, i) => {
+    for (const [m, v] of Object.entries(GROUPS[g] ?? {})) out[m] = Math.max(out[m] ?? 0, v * (i === 0 ? 1 : 0.7));
+  });
+  return out;
+}
+
+const H = 3_600_000;
+
+export function muscleStatus(baseId: string, sessions: Session[], now: number): MuscleStatus {
+  const base = BASE_H[baseId];
+  const hits: Hit[] = [];
+  let drained = 0;
+  let readyAt: number | null = null;
+  for (const s of sessions) {
+    const share = musclesFor(s.name, s.muscleGroups)[baseId] ?? 0;
+    if (share <= 0 || s.at > now) continue;
+    hits.push({ session: s, share });
+    if (!base) continue;
+    const stim = s.sets * share;
+    const need = base * Math.min(1.3, Math.max(0.6, 0.6 + stim / 8)) * H;
+    const left = 1 - (now - s.at) / need;
+    if (left <= 0) continue;
+    drained += Math.min(1, stim / 4) * left;
+    readyAt = Math.max(readyAt ?? 0, s.at + need);
+  }
+  hits.sort((a, b) => b.session.at - a.session.at);
+  return {
+    pct: Math.round(100 * (1 - Math.min(1, drained))),
+    readyAt,
+    lastAt: hits[0]?.session.at ?? null,
+    hits,
+  };
+}

@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 import { toDateKey } from './dateKey';
 import { postWrite } from './postWrite';
 import { withStorageLock } from './storageLock';
+import type { Session } from './muscle-recovery';
 
 // Get the logged-in user's ID (null if not signed in).
 async function uid(): Promise<string | null> {
@@ -465,6 +466,62 @@ export async function getSetsForDay(exerciseId: string, date: string): Promise<S
     id: r.id, weightKg: r.weight_kg, reps: r.reps, romCm: r.rom_cm,
     peakVelocityMps: r.peak_velocity_mps, source: r.source,
   }));
+}
+
+// ── Training history (BODY tab recovery) ──────────────────────────────────
+// One Session per exercise per day over the last `days`: real sets from
+// exercise_sets where there are any, otherwise the template's planned sets
+// for each workout ticked done. Feeds lib/muscle-recovery.ts.
+
+export async function getTrainingSessions(days = 21): Promise<Session[]> {
+  const since = toDateKey(new Date(Date.now() - days * 86_400_000));
+  const [exercises, junctions, done] = await Promise.all([getExercises(), getJunctions(), getDoneLog()]);
+  const byId = Object.fromEntries(exercises.map(e => [e.id, e]));
+  const out = new Map<string, Session>();
+  // A ticked workout has no time of day — call it 6pm, or now if that's later.
+  const evening = (date: string) => {
+    const [y, m, d] = date.split('-').map(Number);
+    return Math.min(Date.now(), new Date(y, m - 1, d, 18).getTime());
+  };
+
+  for (const e of done) {
+    if (e.date < since || !/^\d{4}-\d\d-\d\d$/.test(e.date)) continue;
+    for (const j of junctions) {
+      const ex = j.templateId === e.templateId ? byId[j.exerciseId] : undefined;
+      if (!ex) continue;
+      const reps = parseInt(ex.reps, 10);
+      out.set(`${ex.id}|${e.date}`, {
+        exerciseId: ex.id, name: ex.name, muscleGroups: ex.muscleGroups, date: e.date, at: evening(e.date),
+        sets: ex.sets, weightKg: ex.weightKg, reps: Number.isFinite(reps) ? reps : null, measured: false,
+      });
+    }
+  }
+
+  const { data } = await supabase
+    .from('exercise_sets')
+    .select('exercise_id, date, weight_kg, reps, estimated_1rm_kg, logged_at')
+    .gte('date', since);
+  const measured = new Map<string, Session & { best: number }>();
+  for (const r of data ?? []) {
+    const ex = byId[r.exercise_id];
+    if (!ex) continue;
+    const key = `${ex.id}|${r.date}`;
+    const at = new Date(r.logged_at).getTime();
+    const cur = measured.get(key);
+    if (!cur) {
+      measured.set(key, {
+        exerciseId: ex.id, name: ex.name, muscleGroups: ex.muscleGroups, date: r.date, at,
+        sets: 1, weightKg: r.weight_kg, reps: r.reps, measured: true, best: r.estimated_1rm_kg,
+      });
+      continue;
+    }
+    cur.sets++;
+    cur.at = Math.max(cur.at, at);
+    if (r.estimated_1rm_kg > cur.best) Object.assign(cur, { best: r.estimated_1rm_kg, weightKg: r.weight_kg, reps: r.reps });
+  }
+  for (const [key, { best: _best, ...s }] of measured) out.set(key, s);
+
+  return [...out.values()].sort((a, b) => b.at - a.at);
 }
 
 // ── Gym plan (PPL day planner, task 025) ────────────────────────────────────

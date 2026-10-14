@@ -22,7 +22,10 @@ import {
   REGIONS, REGION_BY_ID, loadBodyMap, saveBodyMap,
   type BodyMap, type Category, type Tone,
 } from '@/lib/body-map';
-import { BodyStage, TONE, type Facing } from '@/components/body/BodyStage';
+import { BodyStage, Battery, TONE, batteryTone, type Facing } from '@/components/body/BodyStage';
+import { getTrainingSessions } from '@/lib/workout-data';
+import { baseOf, hasBattery, muscleStatus, type Hit, type MuscleStatus, type Session } from '@/lib/muscle-recovery';
+import { toDateKey } from '@/lib/dateKey';
 import { Board, BoardRow } from '@/components/Board';
 import { WaterSheet, WeightSheet } from '@/components/BodyLogSheets';
 import {
@@ -50,6 +53,7 @@ export default function BodyScreen() {
   const [vitals, setVitals] = useState<Vitals>({ kcal: 0, kcalGoal: 0, mood: null });
   const [sheet, setSheet] = useState<'water' | 'weight' | null>(null);
   const [healthSyncing, setHealthSyncing] = useState(false);
+  const [sessions, setSessions] = useState<Session[]>([]);
 
   useEffect(() => { loadBodyMap().then(setMap); }, []);
 
@@ -62,6 +66,7 @@ export default function BodyScreen() {
     });
     void Promise.all([getMealsForDate(todayKey()), getTargets(), getTodayMood()]).then(([meals, t, mood]) =>
       setVitals({ kcal: dailyTotals(meals).calories, kcalGoal: t.calories, mood: mood?.moodScore ?? null }));
+    void getTrainingSessions().then(setSessions).catch(() => {});
   }, []));
 
   async function syncAppleHealth() {
@@ -100,6 +105,10 @@ export default function BodyScreen() {
 
   if (!map) return <SafeAreaView style={styles.safe} />;
 
+  const selBase = selected ? baseOf(selected) : null;
+  const status = selBase ? muscleStatus(selBase, sessions, Date.now()) : null;
+  const battery = selBase && status && hasBattery(selBase) ? status.pct : null;
+
   const stageH = Math.min(580, Math.round(width * 1.36));
   const counts = Object.values(map.marks).reduce<Record<string, number>>((a, m) => ({ ...a, [m.category]: (a[m.category] ?? 0) + 1 }), {});
   const targets = REGIONS.filter(r => map.marks[r.id]).sort((a, b) =>
@@ -107,7 +116,7 @@ export default function BodyScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: selected ? 300 : 40 }} showsVerticalScrollIndicator={false} scrollEnabled={!stageZoomed}>
+      <ScrollView contentContainerStyle={{ paddingBottom: selected ? 440 : 40 }} showsVerticalScrollIndicator={false} scrollEnabled={!stageZoomed}>
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>{`${targets.length} TARGETS · ${REGIONS.length} MUSCLES`}</Text>
@@ -139,6 +148,7 @@ export default function BodyScreen() {
           facing={side}
           selected={selected}
           filter={filter}
+          battery={battery}
           onSelect={setSelected}
           onFacing={setSide}
           onZoomed={setStageZoomed}
@@ -208,6 +218,8 @@ export default function BodyScreen() {
       <AssignPanel
         map={map}
         regionId={selected}
+        status={status}
+        battery={battery}
         onAssign={assign}
         onNote={(id, note) => update(m => m.marks[id] ? { ...m, marks: { ...m.marks, [id]: { ...m.marks[id], note } } } : m)}
         onClose={() => setSelected(null)}
@@ -244,8 +256,8 @@ function Vital({ i, label, value, sub, onPress }: { i: number; label: string; va
 
 // ── floating assign panel ────────────────────────────────────────────────
 
-function AssignPanel({ map, regionId, onAssign, onNote, onClose, onNewCategory }: {
-  map: BodyMap; regionId: string | null;
+function AssignPanel({ map, regionId, status, battery, onAssign, onNote, onClose, onNewCategory }: {
+  map: BodyMap; regionId: string | null; status: MuscleStatus | null; battery: number | null;
   onAssign: (id: string, cat: string) => void; onNote: (id: string, note: string) => void;
   onClose: () => void; onNewCategory: () => void;
 }) {
@@ -281,6 +293,8 @@ function AssignPanel({ map, regionId, onAssign, onNote, onClose, onNewCategory }
           </Pressable>
         </View>
 
+        {status && battery != null && <Recovery status={status} battery={battery} />}
+
         <Text style={styles.panelLabel}>TARGET</Text>
         <View style={styles.catWrap}>
           {map.categories.map(c => {
@@ -311,6 +325,82 @@ function AssignPanel({ map, regionId, onAssign, onNote, onClose, onNewCategory }
         )}
       </Animated.View>
     </KeyboardAvoidingView>
+  );
+}
+
+// ── recovery: battery, last worked, recent exercises ─────────────────────
+
+const DAY = 86_400_000;
+const WEEKDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+function daysAgo(at: number) {
+  const a = new Date(at), b = new Date();
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.round((midnight(b) - midnight(a)) / DAY);
+}
+function agoText(at: number) {
+  const d = daysAgo(at);
+  return d <= 0 ? 'TODAY' : d === 1 ? 'YESTERDAY' : `${d} DAYS AGO`;
+}
+function readyText(readyAt: number | null) {
+  if (readyAt == null || readyAt <= Date.now()) return 'NOW';
+  const h = Math.ceil((readyAt - Date.now()) / 3_600_000);
+  return h < 36 ? `IN ${h}H` : `IN ${Math.round(h / 24)} DAYS`;
+}
+function dayTag(s: Session) {
+  if (s.date === toDateKey(new Date())) return 'TODAY';
+  const [y, m, d] = s.date.split('-').map(Number);
+  return `${WEEKDAY[new Date(y, m - 1, d).getDay()]} ${d}`;
+}
+
+function Recovery({ status, battery }: { status: MuscleStatus; battery: number }) {
+  // One row per exercise: its latest session, and how many in the window.
+  const recent: (Hit & { times: number })[] = [];
+  for (const h of status.hits) {
+    const row = recent.find(r => r.session.exerciseId === h.session.exerciseId);
+    if (row) row.times++;
+    else recent.push({ ...h, times: 1 });
+  }
+  recent.splice(4);
+  return (
+    <View style={styles.rec}>
+      <View style={styles.recTop}>
+        <View>
+          <Text style={styles.panelLabelTight}>RECOVERY</Text>
+          <Battery pct={battery} cells={12} cellW={8} cellH={14} />
+        </View>
+        <View style={styles.recFacts}>
+          <View style={styles.recFact}>
+            <Text style={styles.recFactLabel}>LAST WORKED</Text>
+            <Text style={styles.recFactValue}>{status.lastAt ? agoText(status.lastAt) : 'NOT RECENTLY'}</Text>
+          </View>
+          <View style={styles.recFact}>
+            <Text style={styles.recFactLabel}>READY</Text>
+            <Text style={[styles.recFactValue, { color: batteryTone(battery) }]}>{readyText(status.readyAt)}</Text>
+          </View>
+        </View>
+      </View>
+
+      <Text style={styles.panelLabel}>RECENT EXERCISES</Text>
+      {recent.length === 0 ? (
+        <Text style={styles.recEmpty}>Nothing in the last 3 weeks has worked this.</Text>
+      ) : recent.map(({ session: s, share, times }) => (
+        <View key={s.exerciseId} style={styles.recRow}>
+          <View style={[styles.recShare, { opacity: 0.35 + share * 0.65 }]} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.recName} numberOfLines={1}>{s.name}</Text>
+            <Text style={styles.recDetail} numberOfLines={1}>
+              {s.measured
+                ? `${s.sets} ${s.sets === 1 ? 'set' : 'sets'} · best ${s.weightKg}kg × ${s.reps ?? '?'}`
+                : `${s.sets} × ${s.reps ?? '?'} @ ${s.weightKg}kg · planned`}
+              {times > 1 ? ` · ${times}× in 3 wks` : ''}
+              {share < 0.95 ? ' · assist' : ''}
+            </Text>
+          </View>
+          <Text style={styles.recDay}>{dayTag(s)}</Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -407,6 +497,19 @@ const styles = StyleSheet.create({
   panelEyebrow: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2 },
   panelTitle: { fontFamily: F.dot, fontSize: 22, color: C.ink, letterSpacing: 1, marginTop: 3 },
   panelLabel: { fontFamily: F.dot, fontSize: 9, color: C.faint, letterSpacing: 2, marginTop: 14, marginBottom: 8 },
+  panelLabelTight: { fontFamily: F.dot, fontSize: 9, color: C.faint, letterSpacing: 2, marginBottom: 2 },
+  rec: { marginTop: 12 },
+  recTop: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.line },
+  recFacts: { flexDirection: 'row', gap: 14 },
+  recFact: { alignItems: 'flex-end' },
+  recFactLabel: { fontFamily: F.dot, fontSize: 8, color: C.faint, letterSpacing: 1.5 },
+  recFactValue: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1, marginTop: 4 },
+  recEmpty: { fontFamily: F.mono, fontSize: 12, color: C.dim },
+  recRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  recShare: { width: 3, alignSelf: 'stretch', backgroundColor: C.hot, borderRadius: 2 },
+  recName: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
+  recDetail: { fontFamily: F.mono, fontSize: 11, color: C.dim, marginTop: 2 },
+  recDay: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5 },
   catWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   cat: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   catText: { fontFamily: F.dot, fontSize: 11, color: C.ink, letterSpacing: 1.5 },
