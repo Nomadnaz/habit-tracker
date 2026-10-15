@@ -51,7 +51,7 @@ const FOCUS = 0.36;         // a selected muscle settles this far down the stage
 const FOCUS_X = 0.4;        // …and this far across, leaving the right for its callout
 const CELL = 4.2;           // halftone cell, pt
 const ZONE_FOCUS = 0.42;    // a framed zone settles this far down the stage
-const IDLE_SPIN = 0.12;     // rad/s when left alone (~50s a turn)
+const IDLE_SPIN = 0.26;     // rad/s when left alone (~24s a turn)
 const IDLE_DELAY = 1500;    // ms after the last touch before it starts
 const LIGHT = (() => { const l = [-0.35, 0.45, 0.82]; const n = Math.hypot(...l); return l.map(v => v / n); })();
 
