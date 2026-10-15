@@ -134,6 +134,9 @@ export default function BodyScreen() {
   const status = selBase ? muscleStatus(selBase, sessions, Date.now()) : null;
   const battery = selBase && status && hasBattery(selBase) ? status.pct : null;
   const batteryOf = (id: string) => (hasBattery(baseOf(id)) ? muscleStatus(baseOf(id), sessions, Date.now()).pct : null);
+  // A framed zone's battery: the average of its muscles that have one.
+  const zonePcts = zone ? ZONE_BY_ID[zone].muscles.map(batteryOf).filter((p): p is number => p != null) : [];
+  const zoneBattery = zonePcts.length ? Math.round(zonePcts.reduce((a, b) => a + b, 0) / zonePcts.length) : null;
 
   const stageH = Math.min(580, Math.round(width * 1.36));
   const counts = Object.values(map.marks).reduce<Record<string, number>>((a, m) => ({ ...a, [m.category]: (a[m.category] ?? 0) + 1 }), {});
@@ -176,7 +179,7 @@ export default function BodyScreen() {
           selected={selected}
           filter={filter}
           active={focused}
-          battery={battery}
+          battery={selected ? battery : zoneBattery}
           onPick={pick}
           onHome={home}
           onFacing={setSide}

@@ -69,7 +69,22 @@ type V3 = [number, number, number];
 // Each zone's extent, and the turn that shows it — null where its muscles
 // face different ways (a thigh: quads front, hamstrings back), in which
 // case it turns to whichever muscle you tapped.
-type ZoneView = { lo: V3; hi: V3; c: V3; r: number; yaw: number | null; members: Set<number> };
+type ZoneView = { lo: V3; hi: V3; c: V3; r: number; yaw: number | null; members: Set<number>; anchors: V3[] };
+
+// Points a callout can hang from: the centre first, then a spread of the
+// part's own vertices, nearest the centre first — so a muscle whose centre
+// is hidden (the abs' falls in the gap down the middle) still gets one.
+function anchorsOf(p: Part): V3[] {
+  const step = Math.max(1, Math.floor(p.vCount / 24));
+  const vs: V3[] = [];
+  for (let i = 0; i < p.vCount; i += step) {
+    const k = (p.vStart + i) * 3;
+    vs.push([MESH.pos[k], MESH.pos[k + 1], MESH.pos[k + 2]]);
+  }
+  const d = (v: V3) => Math.hypot(v[0] - p.c[0], v[1] - p.c[1], v[2] - p.c[2]);
+  return [p.c, ...vs.sort((a, b) => d(a) - d(b))];
+}
+const ANCHORS = new Map(MESH.parts.map(p => [p, anchorsOf(p)]));
 const ZONE_VIEW: Record<string, ZoneView> = Object.fromEntries(ZONES.map(z => {
   const parts = z.muscles.map(id => MESH.byMuscle[MUSCLE_INDEX[id]]).filter((p): p is Part => !!p);
   const lo: V3 = [1e9, 1e9, 1e9], hi: V3 = [-1e9, -1e9, -1e9];
@@ -82,7 +97,11 @@ const ZONE_VIEW: Record<string, ZoneView> = Object.fromEntries(ZONES.map(z => {
   const c: V3 = [0, 1, 2].map(k => (lo[k] + hi[k]) / 2) as V3;
   const r = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
   const yaw = sw && Math.hypot(sx, sy) / sw > 0.6 ? Math.atan2(sy, sx) : null;
-  return [z.id, { lo, hi, c, r, yaw, members: new Set(parts.map(p => p.mi)) }];
+  // A zone's callout hangs from its centre, else the centre of whichever
+  // of its muscles is nearest that.
+  const d = (v: V3) => Math.hypot(v[0] - c[0], v[1] - c[1], v[2] - c[2]);
+  const anchors = [c, ...parts.map(p => p.c).sort((a, b) => d(a) - d(b))];
+  return [z.id, { lo, hi, c, r, yaw, members: new Set(parts.map(p => p.mi)), anchors }];
 }));
 
 interface Props {
@@ -96,7 +115,7 @@ interface Props {
   filter: string | null;
   /** False while the tab is out of sight — stops the idle turn. */
   active: boolean;
-  /** Recovery 0–100 of the selected muscle; null when it has none (joints, head). */
+  /** Recovery 0–100 of the selected muscle, or the zone's average; null when there's none (joints, head). */
   battery: number | null;
   /** A tap on the figure: the muscle under the finger, or null for empty space. */
   onPick: (id: string | null) => void;
@@ -223,6 +242,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   const last = useRef(0);
   const glRef = useRef<GLState | null>(null);
   const selT0 = useRef(0);              // when the current zone / muscle was picked
+  const anchorAt = useRef(0);           // which of its anchors the callout last hung from
   const hint = useRef<string | null>(null); // the muscle that led into the zone
   const lastInput = useRef(0);
   const held = useRef(false);          // a finger is on the figure
@@ -361,7 +381,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     if ((L.selPart || L.zv) && now - selT0.current < FILL[1] + 40) more = true; // ring / fill / callout still playing
     settle();
     draw();
-    if (live.current.selPart) setFrame(f => f + 1); // the callout follows the muscle
+    if (live.current.selPart || live.current.zv) setFrame(f => f + 1); // the callout follows the muscle / zone
     if (more) { last.current = now; raf.current = requestAnimationFrame(step); }
   };
   useEffect(() => () => { if (raf.current != null) cancelAnimationFrame(raf.current); }, []);
@@ -404,6 +424,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     const had = prevZone.current;
     prevZone.current = zone;
     selT0.current = Date.now();
+    anchorAt.current = 0;
     if (selected) hint.current = selected;
     if (!selPart) {
       if (zv) {
@@ -423,7 +444,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     fly({ yaw, zoom, x: e[0] + (W * (0.5 - FOCUS_X)) / kz, y: e[1] - (H * (0.5 - FOCUS)) / kz });
   }, [zone, selected]);
 
-  // Fit a zone's box into the middle of the stage, above its panel.
+  // Fit a zone's box into the stage, above its panel and left of its callout.
   const frameZone = (z: ZoneView, yaw: number): Cam => {
     const R = rotation(yaw);
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
@@ -432,8 +453,9 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
       const ex = dot3(R[0], p), ey = dot3(R[1], p);
       x0 = Math.min(x0, ex); x1 = Math.max(x1, ex); y0 = Math.min(y0, ey); y1 = Math.max(y1, ey);
     }
-    const zoom = Math.min(3, Math.max(1, Math.min((W * 0.82) / (x1 - x0), (H * 0.6) / (y1 - y0)) / base));
-    return { yaw, zoom, x: (x0 + x1) / 2, y: (y0 + y1) / 2 - (H * (0.5 - ZONE_FOCUS)) / (base * zoom) };
+    const zoom = Math.min(3, Math.max(1, Math.min((W * 0.72) / (x1 - x0), (H * 0.6) / (y1 - y0)) / base));
+    const k = base * zoom;
+    return { yaw, zoom, x: (x0 + x1) / 2 + (W * (0.5 - FOCUS_X)) / k, y: (y0 + y1) / 2 - (H * (0.5 - ZONE_FOCUS)) / k };
   };
 
   // ── screen ↔ world ─────────────────────────────────────────────────────
@@ -543,20 +565,31 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   const reset = () => fly({ ...HOME, yaw: cam.current.yaw }, 620);
 
   // ── callout ────────────────────────────────────────────────────────────
+  // For a picked muscle, or a framed zone (its name, and the average
+  // battery of its muscles).
   const muscle = selected ? MUSCLES[MUSCLE_INDEX[selected]] : null;
+  const zoneDef = !muscle && zone ? ZONE_BY_ID[zone] : null;
+  const title = muscle?.name ?? zoneDef?.name ?? '';
   const mark = selected ? map.marks[selected] : undefined;
   const cat = mark ? catById[mark.category] : undefined;
+  const tag = cat ? cat.name : muscle ? muscle.group : zoneDef ? `AVERAGE · ${zoneDef.muscles.length} MUSCLES` : '';
+  // Only while you can see it — a leader into the far side of the body
+  // points at nothing. Tries the anchor that worked last frame first.
   let co: { x: number; y: number } | null = null;
-  if (selPart) {
-    // Only while you can see it — a leader into the far side of the body
-    // points at nothing.
-    const at = project(selPart.c);
-    const { o, d } = rayAt(at.x, at.y);
-    if (raycast(MESH, o, d) === selPart) co = at;
+  const anchors = selPart ? ANCHORS.get(selPart)! : zoneDef && zv ? zv.anchors : null;
+  if (anchors) {
+    const ok = (h: Part | null) => !!h && (selPart ? h === selPart : zv!.members.has(h.mi));
+    const tries = [anchorAt.current, ...anchors.keys()].filter((i, n, a) => i < anchors.length && a.indexOf(i) === n).slice(0, 12);
+    for (const i of tries) {
+      const at = project(anchors[i]);
+      if (at.x < 0 || at.x > W || at.y < 0 || at.y > H) continue;
+      const { o, d } = rayAt(at.x, at.y);
+      if (ok(raycast(MESH, o, d))) { co = at; anchorAt.current = i; break; }
+    }
   }
   const st = Date.now() - selT0.current;
-  const typed = muscle ? muscle.name.slice(0, Math.ceil(muscle.name.length * phase(st, TYPE))) : '';
-  const showLabel = !!(co && muscle && st >= TYPE[0]);
+  const typed = title.slice(0, Math.ceil(title.length * phase(st, TYPE)));
+  const showLabel = !!(co && title && st >= TYPE[0]);
   const labelIn = easeOut(phase(st, [TYPE[0], TYPE[0] + 220]));
   const charge = battery != null ? Math.round(battery * easeOut(phase(st, FILL))) : null;
   const labelLeft = co ? co.x > W * 0.6 : false; // right of the muscle unless that's off-stage
@@ -588,14 +621,14 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
         </View>
       )}
 
-      {showLabel && muscle && (
+      {showLabel && (
         <View
           style={[styles.label, { left: lx, top: ly, width: LABEL_W, height: LABEL_H, opacity: labelIn, transform: [{ translateX: (labelLeft ? -8 : 8) * (1 - labelIn) }] }]}
           pointerEvents="none"
         >
           <View style={styles.labelTag}>
             <View style={[styles.labelSwatch, { backgroundColor: cat ? TONE[cat.tone] : C.faint }]} />
-            <Text style={[styles.labelCat, cat && { color: TONE[cat.tone] }]} numberOfLines={1}>{cat ? cat.name : muscle.group}</Text>
+            <Text style={[styles.labelCat, cat && { color: TONE[cat.tone] }]} numberOfLines={1}>{tag}</Text>
           </View>
           <Text style={styles.labelName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{typed}</Text>
           {charge != null && battery != null && <Battery pct={charge} tone={batteryTone(battery)} />}
