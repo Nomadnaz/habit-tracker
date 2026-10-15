@@ -82,6 +82,37 @@ export const MUSCLES: Muscle[] = [
 ];
 export const MUSCLE_INDEX: Record<string, number> = Object.fromEntries(MUSCLES.map((m, i) => [m.id, i]));
 
+// ── zones ────────────────────────────────────────────────────────────────
+// Tapping the figure first zooms to the zone a muscle sits in (the whole
+// chest, one thigh), then to the muscle itself. Zones across the midline
+// take both sides; limbs are one side each.
+
+export interface Zone { id: string; name: string; muscles: string[] }
+
+const ZONE_DEFS: [id: string, name: string, muscles: string[], bothSides: boolean][] = [
+  ['head', 'HEAD AND NECK', ['head', 'neck'], true],
+  ['chest', 'CHEST', ['pec.upper', 'pec.lower'], true],
+  ['core', 'CORE', ['abs.upper', 'abs.lower', 'oblique', 'serratus'], true],
+  ['upperback', 'UPPER BACK', ['traps.upper', 'traps.mid', 'traps.lower', 'cuff', 'teres'], true],
+  ['back', 'LATS AND LOWER BACK', ['lat', 'erector'], true],
+  ['hips', 'HIPS AND GLUTES', ['glute.max', 'glute.med', 'hipflex', 'tfl'], true],
+  ['shoulder', 'SHOULDER', ['delt.front', 'delt.side', 'delt.rear'], false],
+  ['arm', 'UPPER ARM', ['biceps', 'brachialis', 'triceps.lat', 'triceps.long', 'elbow'], false],
+  ['forearm', 'FOREARM', ['brachiorad', 'forearm.flex', 'forearm.ext', 'wrist', 'hand'], false],
+  ['thigh', 'THIGH', ['quad.rf', 'quad.vl', 'quad.vm', 'sartorius', 'adductor', 'ham.bf', 'ham.st', 'knee'], false],
+  ['leg', 'LOWER LEG', ['tib', 'shin', 'peroneal', 'gastro.lat', 'gastro.med', 'soleus', 'ankle', 'foot'], false],
+];
+
+const withSides = (ids: string[], sides: Side[]) =>
+  ids.flatMap(id => (MUSCLE_INDEX[id] != null ? [id] : sides.map(s => `${id}.${s}`)));
+
+export const ZONES: Zone[] = ZONE_DEFS.flatMap(([id, name, muscles, both]) => both
+  ? [{ id, name, muscles: withSides(muscles, ['l', 'r']) }]
+  : (['l', 'r'] as Side[]).map(s => ({ id: `${id}.${s}`, name: `${s.toUpperCase()} ${name}`, muscles: withSides(muscles, [s]) })));
+export const ZONE_BY_ID: Record<string, Zone> = Object.fromEntries(ZONES.map(z => [z.id, z]));
+/** Muscle id → the zone it sits in. */
+export const ZONE_OF: Record<string, string> = Object.fromEntries(ZONES.flatMap(z => z.muscles.map(m => [m, z.id])));
+
 // ── mesh ─────────────────────────────────────────────────────────────────
 
 export interface Part {

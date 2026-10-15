@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { musclesFor, muscleStatus, type Session } from './muscle-recovery';
+import { musclesFor, muscleStatus, byExercise, suggestionsFor, type Session } from './muscle-recovery';
 
 const H = 3_600_000;
 const NOW = 1_000 * H;
@@ -51,5 +51,29 @@ describe('name rules use whole words', () => {
     expect(musclesFor('NARROW STANCE SQUAT', ['quads'])['traps.mid']).toBeUndefined();
     expect(musclesFor('CHIN UPS', ['lats'])['lat']).toBe(1);
     expect(musclesFor('BARBELL ROW', ['back'])['traps.mid']).toBe(1);
+  });
+});
+
+describe('GO list', () => {
+  it('names the small movers too', () => {
+    expect(musclesFor('CABLE EXTERNAL ROTATION', [])['cuff']).toBe(1);
+    expect(musclesFor('SCAPULAR PUSH UP', [])['serratus']).toBe(1);
+    expect(musclesFor('HANGING KNEE RAISE', [])['hipflex']).toBe(1);
+    expect(musclesFor('BACK EXTENSION', [])['erector']).toBe(1);
+    expect(musclesFor('TIBIALIS RAISE', [])['tib']).toBe(1);
+  });
+  it('groups recent sessions per exercise, newest first', () => {
+    const hits = muscleStatus('pec.lower', [s('BENCH PRESS', 100), s('CABLE FLY', 50), s('BENCH PRESS', 10)], NOW).hits;
+    const rows = byExercise(hits);
+    expect(rows.map(r => [r.session.name, r.times])).toEqual([['BENCH PRESS', 2], ['CABLE FLY', 1]]);
+    expect(rows[0].session.at).toBe(NOW - 10 * H);
+  });
+  it('suggests what you have not done, own exercises among them, best fit first', () => {
+    const hits = muscleStatus('pec.lower', [s('BENCH PRESS', 10)], NOW).hits;
+    const out = suggestionsFor('pec.lower', hits, [{ name: 'Machine Fly', muscleGroups: ['chest'] }]);
+    expect(out.some(x => x.name === 'BENCH PRESS')).toBe(false);
+    expect(out.find(x => x.name === 'Machine Fly')).toMatchObject({ share: 1, mine: true });
+    expect(out.every((x, i) => i === 0 || out[i - 1].share >= x.share)).toBe(true);
+    expect(out.some(x => x.name === 'LEG PRESS')).toBe(false);
   });
 });

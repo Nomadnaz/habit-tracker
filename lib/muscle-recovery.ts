@@ -69,6 +69,12 @@ const RULES: [RegExp, Share][] = [
   [/LEG EXT/, QUADS],
   [/CALF/, CALVES],
   [/HAMMER/, { brachiorad: 1, brachialis: 1, biceps: 0.6, 'forearm.ext': 0.3 }],
+  [/EXTERNAL ROT|INTERNAL ROT|CUBAN/, { cuff: 1, 'delt.rear': 0.3 }],
+  [/\bY[ -]RAISE/, { 'traps.lower': 1, 'traps.mid': 0.6, 'delt.rear': 0.4 }],
+  [/SERRATUS|SCAP(ULAR)? PUSH/, { serratus: 1, 'delt.front': 0.3 }],
+  [/TIB(IALIS)? RAISE|TOE RAISE/, { tib: 1, shin: 0.6 }],
+  [/KNEE RAISE|HIP FLEX/, { hipflex: 1, 'abs.lower': 0.6, tfl: 0.4, sartorius: 0.3 }],
+  [/BACK EXT|HYPEREXT|SUPERMAN/, { erector: 1, 'glute.max': 0.5, ...scale(HAMS, 0.4) }],
   [/WRIST|FOREARM|GRIP/, { 'forearm.flex': 1, 'forearm.ext': 0.8, brachiorad: 0.5 }],
   [/CURL/, { biceps: 1, brachialis: 0.7, 'forearm.flex': 0.4 }],
   [/FACE PULL|REAR DELT|REVERSE (FLY|PEC)/, { 'delt.rear': 1, 'traps.mid': 0.7, cuff: 0.7, 'traps.lower': 0.3 }],
@@ -124,6 +130,67 @@ export function musclesFor(name: string, groups: MuscleGroup[]): Share {
     for (const [m, v] of Object.entries(GROUPS[g] ?? {})) out[m] = Math.max(out[m] ?? 0, v * (i === 0 ? 1 : 0.7));
   });
   return out;
+}
+
+// ── exercises for a muscle (the panel's GO list) ─────────────────────────
+
+/** Common lifts, offered under RECOMMENDED. Names go through the same
+ *  RULES as logged sessions; `groups` only matter where no rule matches. */
+const CATALOGUE: [string, MuscleGroup[]][] = [
+  ['BENCH PRESS', ['chest']], ['DUMBBELL BENCH PRESS', ['chest']], ['INCLINE DB PRESS', ['chest']],
+  ['INCLINE BENCH PRESS', ['chest']], ['DECLINE BENCH PRESS', ['chest']], ['MACHINE CHEST PRESS', ['chest']],
+  ['PUSH UP', ['chest']], ['CHEST DIPS', ['chest']], ['CABLE FLY', ['chest']], ['PEC DECK', ['chest']],
+  ['OVERHEAD PRESS', ['shoulders']], ['SEATED DB SHOULDER PRESS', ['shoulders']], ['ARNOLD PRESS', ['shoulders']],
+  ['LATERAL RAISE', ['shoulders']], ['CABLE LATERAL RAISE', ['shoulders']], ['UPRIGHT ROW', ['shoulders']],
+  ['FRONT RAISE', ['shoulders']], ['REAR DELT FLY', ['shoulders']], ['FACE PULL', ['shoulders']],
+  ['REVERSE PEC DECK', ['shoulders']], ['EXTERNAL ROTATION', ['upper back']], ['Y RAISE', ['upper back']],
+  ['PULL UP', ['lats']], ['CHIN UP', ['lats']], ['LAT PULLDOWN', ['lats']], ['STRAIGHT ARM PULLDOWN', ['lats']],
+  ['BARBELL ROW', ['back']], ['SEATED CABLE ROW', ['back']], ['CHEST SUPPORTED ROW', ['upper back']],
+  ['SINGLE ARM DB ROW', ['back']], ['SHRUG', ['traps']], ['DEADLIFT', ['back']], ['BACK EXTENSION', ['lower back']],
+  ['BARBELL CURL', ['biceps']], ['INCLINE DB CURL', ['biceps']], ['PREACHER CURL', ['biceps']], ['HAMMER CURL', ['biceps']],
+  ['TRICEP PUSHDOWN', ['triceps']], ['OVERHEAD TRICEP EXTENSION', ['triceps']], ['SKULL CRUSHER', ['triceps']],
+  ['CLOSE GRIP BENCH PRESS', ['triceps']], ['WRIST CURL', ['forearms']], ['REVERSE WRIST CURL', ['forearms']],
+  ['FARMER CARRY', ['forearms', 'traps']],
+  ['CABLE CRUNCH', ['abs']], ['HANGING LEG RAISE', ['abs']], ['AB WHEEL', ['abs']], ['PLANK', ['core']],
+  ['RUSSIAN TWIST', ['core']], ['CABLE WOODCHOP', ['core']], ['SIDE PLANK', ['core']], ['SERRATUS PUNCH', ['core']],
+  ['HANGING KNEE RAISE', ['hip flexors']],
+  ['BACK SQUAT', ['quads']], ['FRONT SQUAT', ['quads']], ['HACK SQUAT', ['quads']], ['LEG PRESS', ['quads']],
+  ['BULGARIAN SPLIT SQUAT', ['quads']], ['WALKING LUNGE', ['quads']], ['STEP UP', ['quads']], ['LEG EXTENSION', ['quads']],
+  ['LYING LEG CURL', ['hamstrings']], ['SEATED LEG CURL', ['hamstrings']], ['NORDIC CURL', ['hamstrings']],
+  ['ROMANIAN DEADLIFT', ['hamstrings']], ['GOOD MORNING', ['hamstrings']],
+  ['HIP THRUST', ['glutes']], ['GLUTE BRIDGE', ['glutes']], ['HIP ABDUCTION', ['glutes']], ['HIP ADDUCTION', ['glutes']],
+  ['STANDING CALF RAISE', ['calves']], ['SEATED CALF RAISE', ['calves']], ['TIBIALIS RAISE', ['calves']],
+];
+
+export type RecentExercise = Hit & { times: number };
+export type Suggestion = { name: string; share: number; mine: boolean };
+
+/** One row per exercise — its latest session, and how many in the window. */
+export function byExercise(hits: Hit[]): RecentExercise[] {
+  const out: RecentExercise[] = [];
+  for (const h of hits) {
+    const row = out.find(r => r.session.exerciseId === h.session.exerciseId);
+    if (row) row.times++;
+    else out.push({ ...h, times: 1 });
+  }
+  return out;
+}
+
+/** What else works `baseId`: the user's own exercises and the catalogue,
+ *  minus what they've done recently, best fit first. */
+export function suggestionsFor(baseId: string, recent: Hit[], library: { name: string; muscleGroups: MuscleGroup[] }[]): Suggestion[] {
+  const seen = new Set(recent.map(h => h.session.name.toUpperCase()));
+  const out: Suggestion[] = [];
+  const add = (name: string, groups: MuscleGroup[], mine: boolean) => {
+    const key = name.toUpperCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    const share = musclesFor(name, groups)[baseId] ?? 0;
+    if (share >= 0.3) out.push({ name, share, mine });
+  };
+  for (const e of library) add(e.name, e.muscleGroups, true);
+  for (const [name, groups] of CATALOGUE) add(name, groups, false);
+  return out.sort((a, b) => b.share - a.share || Number(b.mine) - Number(a.mine));
 }
 
 const H = 3_600_000;

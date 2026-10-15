@@ -2,11 +2,14 @@
 // the GPU, which you can turn and zoom, where every muscle is tappable.
 //   drag sideways → spin (with momentum)      pinch → zoom (1–4×)
 //   two fingers   → pan while zoomed          drag up/down while zoomed → pan
-//   tap a muscle  → fly to it                 tap empty space → back out
-// Selecting a muscle (tap, or from the TARGETS list) eases the camera round
-// and in until it fills the top of the stage, fills it in solid from its
-// centre outwards, then types its name into a callout and charges its
-// recovery battery.
+//   tap a muscle  → fly to its zone, then to the muscle
+//   tap empty space → back out one level
+// Left alone at the whole figure, it turns slowly by itself.
+// Tapping the figure first frames the muscle's zone (the whole chest, one
+// thigh): the rest of the body dims and a ring sweeps over the zone. A
+// second tap inside it picks the muscle: the camera eases in until it fills
+// the top of the stage, fills it in solid from its centre outwards, then
+// types its name into a callout and charges its recovery battery.
 // Look: muscles are drawn as a dot-matrix halftone — a fixed screen grid of
 // dots sized by how much light the surface catches, like the puck's
 // display — with a faint rim on the edges. The selected muscle is drawn
@@ -23,7 +26,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F, numFace } from '@/lib/theme';
-import { MUSCLES, MUSCLE_INDEX, decodeBodyMesh, raycast, type Part } from '@/lib/body-mesh';
+import { MUSCLES, MUSCLE_INDEX, ZONES, ZONE_BY_ID, decodeBodyMesh, raycast, type Part } from '@/lib/body-mesh';
 import type { BodyMap, Tone } from '@/lib/body-map';
 
 export const TONE: Record<Tone, string> = { hot: C.hot, signal: C.signal, live: C.live, dim: C.dim, alert: C.alert };
@@ -36,6 +39,7 @@ export const batteryTone = (pct: number) => (pct >= 80 ? C.live : pct >= 40 ? C.
 const MESH = decodeBodyMesh();
 // Golden-ratio steps, so neighbouring muscles land on well-separated shifts.
 const PHASE = MUSCLES.map((_, i) => [(i * 0.618034) % 1, (i * 0.381966 + 0.5) % 1] as const);
+const ZONE_PHASE = [0.5, 0.5] as const; // one grid over a whole zone, so it reads as one shape
 
 const PITCH = 0.1;          // camera looks slightly down, rad
 const DIST = 520;           // camera distance, cm
@@ -46,6 +50,9 @@ const SPIN = 0.011;         // rad per px of drag
 const FOCUS = 0.36;         // a selected muscle settles this far down the stage — clear of the panel
 const FOCUS_X = 0.4;        // …and this far across, leaving the right for its callout
 const CELL = 4.2;           // halftone cell, pt
+const ZONE_FOCUS = 0.42;    // a framed zone settles this far down the stage
+const IDLE_SPIN = 0.12;     // rad/s when left alone (~50s a turn)
+const IDLE_DELAY = 1500;    // ms after the last touch before it starts
 const LIGHT = (() => { const l = [-0.35, 0.45, 0.82]; const n = Math.hypot(...l); return l.map(v => v / n); })();
 
 // Selection timeline, ms after the tap.
@@ -59,16 +66,42 @@ const HOME: Cam = { yaw: 0, zoom: 1, x: 0, y: CENTER_Y };
 type Tween = { from: Cam; to: Cam; t0: number; dur: number };
 type V3 = [number, number, number];
 
+// Each zone's extent, and the turn that shows it — null where its muscles
+// face different ways (a thigh: quads front, hamstrings back), in which
+// case it turns to whichever muscle you tapped.
+type ZoneView = { lo: V3; hi: V3; c: V3; r: number; yaw: number | null; members: Set<number> };
+const ZONE_VIEW: Record<string, ZoneView> = Object.fromEntries(ZONES.map(z => {
+  const parts = z.muscles.map(id => MESH.byMuscle[MUSCLE_INDEX[id]]).filter((p): p is Part => !!p);
+  const lo: V3 = [1e9, 1e9, 1e9], hi: V3 = [-1e9, -1e9, -1e9];
+  let sx = 0, sy = 0, sw = 0;
+  for (const p of parts) {
+    for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p.lo[k]); hi[k] = Math.max(hi[k], p.hi[k]); }
+    const w = p.r * p.r;
+    sx += w * Math.cos(p.yaw); sy += w * Math.sin(p.yaw); sw += w;
+  }
+  const c: V3 = [0, 1, 2].map(k => (lo[k] + hi[k]) / 2) as V3;
+  const r = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
+  const yaw = sw && Math.hypot(sx, sy) / sw > 0.6 ? Math.atan2(sy, sx) : null;
+  return [z.id, { lo, hi, c, r, yaw, members: new Set(parts.map(p => p.mi)) }];
+}));
+
 interface Props {
   width: number;
   height: number;
   map: BodyMap;
   facing: Facing;
+  /** Zone being framed (lib/body-mesh ZONES); `selected` is always inside it. */
+  zone: string | null;
   selected: string | null;
   filter: string | null;
+  /** False while the tab is out of sight — stops the idle turn. */
+  active: boolean;
   /** Recovery 0–100 of the selected muscle; null when it has none (joints, head). */
   battery: number | null;
-  onSelect: (id: string | null) => void;
+  /** A tap on the figure: the muscle under the finger, or null for empty space. */
+  onPick: (id: string | null) => void;
+  /** Back out to the whole figure. */
+  onHome: () => void;
   onFacing: (f: Facing) => void;
   /** True while zoomed in, so the page can stop scrolling under the finger. */
   onZoomed: (zoomed: boolean) => void;
@@ -109,9 +142,9 @@ varying vec3 vN;
 varying vec3 vW;
 uniform vec3 uCol;     // dot colour: ink or the muscle's category
 uniform float uAmt;    // dot strength
-uniform float uSel;    // 1 on the selected muscle
-uniform vec3 uSelC;    // its centre, cm
-uniform float uWave;   // solid fill radius from that centre, cm
+uniform float uMode;   // 1 = ring sweeping over (framed zone), 2 = ring + solid fill (selected muscle)
+uniform vec3 uSelC;    // where the ring starts, cm
+uniform float uWave;   // ring radius from there, cm
 uniform float uCell;   // halftone cell, device px
 uniform vec2 uPhase;   // per-muscle shift of the dot grid, in cells
 uniform vec3 uLight;
@@ -127,11 +160,13 @@ void main() {
   float r = 0.48 * sqrt(lum);
   float dots = 1.0 - smoothstep(r - 0.1, r + 0.1, length(g));
   vec3 col = vec3(0.025) + uCol * (dots * uAmt + rim * 0.2 * uAmt);
-  if (uSel > 0.5) {
+  if (uMode > 0.5) {
     float d = distance(vW, uSelC);
-    float lit = 1.0 - smoothstep(uWave - 0.8, uWave, d);
-    vec3 solid = vec3(0.3) + vec3(0.7) * diff + vec3(0.3) * rim;
-    col = mix(col, solid, lit);
+    if (uMode > 1.5) {
+      float lit = 1.0 - smoothstep(uWave - 0.8, uWave, d);
+      vec3 solid = vec3(0.3) + vec3(0.7) * diff + vec3(0.3) * rim;
+      col = mix(col, solid, lit);
+    }
     col += vec3(1.0 - smoothstep(0.0, 1.4, abs(d - uWave))) * step(uWave, 500.0);
   }
   gl_FragColor = vec4(col, 1.0);
@@ -174,53 +209,66 @@ function setupGL(gl: ExpoWebGLRenderingContext): GLState {
   gl.enableVertexAttribArray(aPos);
   gl.enableVertexAttribArray(aNrm);
   const u: GLState['u'] = {};
-  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uSel', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight']) u[name] = gl.getUniformLocation(prog, name);
+  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uMode', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight']) u[name] = gl.getUniformLocation(prog, name);
   gl.enable(gl.DEPTH_TEST);
   gl.clearColor(0, 0, 0, 1);
   return { gl, aPos, aNrm, u };
 }
 
-export function BodyStage({ width: W, height: H, map, facing, selected, filter, battery, onSelect, onFacing, onZoomed }: Props) {
+export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed }: Props) {
   const cam = useRef<Cam>({ ...HOME });
   const tween = useRef<Tween | null>(null);
   const spin = useRef(0);               // rad/s of momentum
   const raf = useRef<number | null>(null);
   const last = useRef(0);
   const glRef = useRef<GLState | null>(null);
-  const selT0 = useRef(0);
+  const selT0 = useRef(0);              // when the current zone / muscle was picked
+  const hint = useRef<string | null>(null); // the muscle that led into the zone
+  const lastInput = useRef(0);
+  const held = useRef(false);          // a finger is on the figure
+  const idleDir = useRef(1);
   const [, setFrame] = useState(0);     // callout re-render
   const [zoomed, setZoomed] = useState(false);
   const facingRef = useRef<Facing>(facing);
   const zoomedRef = useRef(false);
 
   // Latest props for the gesture callbacks (they're built once).
-  const props = useRef({ onSelect, onFacing, onZoomed });
-  props.current = { onSelect, onFacing, onZoomed };
+  const props = useRef({ onPick, onFacing, onZoomed });
+  props.current = { onPick, onFacing, onZoomed };
 
   const base = (H * 0.94) / FIG_H; // px per cm at 1×
   const selPart: Part | undefined = selected ? MESH.byMuscle[MUSCLE_INDEX[selected]] : undefined;
+  const zv: ZoneView | undefined = zone ? ZONE_VIEW[zone] : undefined;
 
-  // Per-muscle dot colour and strength.
+  // Per-muscle dot colour, strength, grid shift and highlight. Framing a
+  // zone dims everything outside it; inside, the zone is one shape until a
+  // muscle is picked, then that muscle fills solid and its neighbours step
+  // back.
   const catById = useMemo(() => Object.fromEntries(map.categories.map(c => [c.id, c])), [map.categories]);
   const look = useMemo(() => {
     const ink = rgb(C.ink);
-    return MUSCLES.map(m => {
+    return MUSCLES.map((m, i) => {
       const mk = map.marks[m.id];
       const cat = mk && (!filter || mk.category === filter) ? catById[mk.category] : undefined;
-      return cat ? { col: rgb(TONE[cat.tone]), amt: 1 } : { col: ink, amt: selected ? 0.42 : 0.8 };
+      const col = cat ? rgb(TONE[cat.tone]) : ink;
+      const full = cat ? 1 : 0.8;
+      if (!zv) return { col, amt: full, phase: PHASE[i], mode: 0 };
+      if (!zv.members.has(i)) return { col, amt: full * 0.16, phase: PHASE[i], mode: 0 };
+      if (!selected) return { col, amt: 1, phase: ZONE_PHASE, mode: 1 };
+      return m.id === selected ? { col, amt: 1, phase: PHASE[i], mode: 2 } : { col, amt: full * 0.6, phase: PHASE[i], mode: 0 };
     });
-  }, [map.marks, filter, catById, selected]);
+  }, [map.marks, filter, catById, selected, zv]);
 
   // Everything the draw needs that React owns, for the animation loop.
-  const live = useRef({ look, selPart, W, H, base });
-  live.current = { look, selPart, W, H, base };
+  const live = useRef({ look, selPart, zv, active, W, H, base });
+  live.current = { look, selPart, zv, active, W, H, base };
 
   // ── drawing ────────────────────────────────────────────────────────────
   const draw = () => {
     const S = glRef.current;
     if (!S) return;
     const { gl, u } = S;
-    const { look: lk, selPart: sp, W: w, H: h, base: b } = live.current;
+    const { look: lk, selPart: sp, zv: z, W: w, H: h, base: b } = live.current;
     const c = cam.current;
     const k = b * c.zoom;
     const R = rotation(c.yaw);
@@ -245,16 +293,18 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
     gl.uniformMatrix3fv(u.uRot, false, rot);
     gl.uniform1f(u.uCell, CELL * (gl.drawingBufferWidth / w));
     gl.uniform3f(u.uLight, LIGHT[0], LIGHT[1], LIGHT[2]);
+    // The ring starts from the muscle's centre, or the zone's.
     const st = Date.now() - selT0.current;
-    const wave = sp ? (st >= WAVE[1] ? 1e4 : sp.r * 1.05 * easeOut(phase(st, WAVE))) : 0;
-    if (sp) gl.uniform3f(u.uSelC, sp.c[0], sp.c[1], sp.c[2]);
+    const from = sp ?? z;
+    const wave = from ? (st >= WAVE[1] ? 1e4 : from.r * 1.05 * easeOut(phase(st, WAVE))) : 0;
+    if (from) gl.uniform3f(u.uSelC, from.c[0], from.c[1], from.c[2]);
     gl.uniform1f(u.uWave, wave);
     for (const p of MESH.parts) {
       const l = lk[p.mi];
       gl.uniform3f(u.uCol, l.col[0], l.col[1], l.col[2]);
       gl.uniform1f(u.uAmt, l.amt);
-      gl.uniform1f(u.uSel, p === sp ? 1 : 0);
-      gl.uniform2f(u.uPhase, PHASE[p.mi][0], PHASE[p.mi][1]);
+      gl.uniform1f(u.uMode, l.mode);
+      gl.uniform2f(u.uPhase, l.phase[0], l.phase[1]);
       gl.vertexAttribPointer(S.aPos, 3, gl.FLOAT, false, 24, p.vStart * 24);
       gl.vertexAttribPointer(S.aNrm, 3, gl.FLOAT, false, 24, p.vStart * 24 + 12);
       gl.drawElements(gl.TRIANGLES, p.iCount, gl.UNSIGNED_SHORT, p.iStart * 2);
@@ -266,9 +316,10 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
     glRef.current = setupGL(gl);
     draw();
+    kick();
   };
 
-  // ── animation loop: momentum + tweens + selection ──────────────────────
+  // ── animation loop: momentum + tweens + selection + idle turn ─────────
   const kick = () => {
     if (raf.current != null) return;
     last.current = Date.now();
@@ -285,7 +336,10 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
       c.yaw += spin.current * dt;
       spin.current *= Math.pow(0.04, dt); // ~96% of the speed gone after 1s
       more = true;
-    } else spin.current = 0;
+    } else {
+      if (spin.current) idleDir.current = Math.sign(spin.current); // keep turning the way it was flicked
+      spin.current = 0;
+    }
     const tw = tween.current;
     if (tw) {
       const u = clamp01((now - tw.t0) / tw.dur);
@@ -297,7 +351,14 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
       c.y = tw.from.y + (tw.to.y - tw.from.y) * e;
       if (u >= 1) tween.current = null; else more = true;
     }
-    if (live.current.selPart && now - selT0.current < FILL[1] + 40) more = true; // fill / callout still playing
+    // Left alone at the whole figure, it turns slowly, easing in.
+    const L = live.current;
+    const touching = held.current && now - lastInput.current < 10_000;
+    if (L.active && !L.zv && !tw && !spin.current && c.zoom <= 1.02 && !touching) {
+      c.yaw += IDLE_SPIN * idleDir.current * clamp01((now - lastInput.current - IDLE_DELAY) / 1200) * dt;
+      more = true;
+    }
+    if ((L.selPart || L.zv) && now - selT0.current < FILL[1] + 40) more = true; // ring / fill / callout still playing
     settle();
     draw();
     if (live.current.selPart) setFrame(f => f + 1); // the callout follows the muscle
@@ -308,10 +369,14 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
   // Colours / size changed → redraw once.
   useEffect(() => { draw(); }, [look, W, H]);
 
+  // Back on the tab → pick the idle turn up again.
+  useEffect(() => { if (active) { lastInput.current = Date.now(); kick(); } }, [active]);
+
   const fly = (to: Cam, dur = FLY_MS) => {
     const c = cam.current;
     tween.current = { from: { ...c }, to: { ...to, yaw: c.yaw + wrapAngle(to.yaw - c.yaw) }, t0: Date.now(), dur };
     spin.current = 0;
+    lastInput.current = Date.now();
     kick();
   };
 
@@ -332,18 +397,22 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
     fly({ ...(tween.current?.to ?? c), yaw: facing === 'front' ? 0 : Math.PI }, 600);
   }, [facing]);
 
-  // Selecting a muscle (tap or TARGETS list) flies to it; clearing the
-  // selection backs out to the whole figure.
-  const prevSel = useRef<string | null>(null);
+  // Framing a zone or picking a muscle (tap or TARGETS list) flies to it;
+  // clearing both backs out to the whole figure.
+  const prevZone = useRef<string | null>(null);
   useEffect(() => {
-    const had = prevSel.current;
-    prevSel.current = selected;
+    const had = prevZone.current;
+    prevZone.current = zone;
+    selT0.current = Date.now();
+    if (selected) hint.current = selected;
     if (!selPart) {
-      if (had) fly({ ...HOME, yaw: cam.current.yaw }, 620);
+      if (zv) {
+        const hp = hint.current ? MESH.byMuscle[MUSCLE_INDEX[hint.current]] : undefined;
+        fly(frameZone(zv, zv.yaw ?? hp?.yaw ?? cam.current.yaw));
+      } else if (had) fly({ ...HOME, yaw: cam.current.yaw }, 620);
       else draw();
       return;
     }
-    selT0.current = Date.now();
     // Turn to the side that shows most of it, zoom until it spans about a
     // third of the stage, and park its centre at FOCUS — clear of the panel.
     const { yaw, c: ctr, r } = selPart;
@@ -352,7 +421,20 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
     const e: V3 = [dot3(R[0], ctr), dot3(R[1], ctr), dot3(R[2], ctr)];
     const kz = base * zoom * (DIST / (DIST - e[2]));
     fly({ yaw, zoom, x: e[0] + (W * (0.5 - FOCUS_X)) / kz, y: e[1] - (H * (0.5 - FOCUS)) / kz });
-  }, [selected]);
+  }, [zone, selected]);
+
+  // Fit a zone's box into the middle of the stage, above its panel.
+  const frameZone = (z: ZoneView, yaw: number): Cam => {
+    const R = rotation(yaw);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (let i = 0; i < 8; i++) {
+      const p: V3 = [i & 1 ? z.hi[0] : z.lo[0], i & 2 ? z.hi[1] : z.lo[1], i & 4 ? z.hi[2] : z.lo[2]];
+      const ex = dot3(R[0], p), ey = dot3(R[1], p);
+      x0 = Math.min(x0, ex); x1 = Math.max(x1, ex); y0 = Math.min(y0, ey); y1 = Math.max(y1, ey);
+    }
+    const zoom = Math.min(3, Math.max(1, Math.min((W * 0.82) / (x1 - x0), (H * 0.6) / (y1 - y0)) / base));
+    return { yaw, zoom, x: (x0 + x1) / 2, y: (y0 + y1) / 2 - (H * (0.5 - ZONE_FOCUS)) / (base * zoom) };
+  };
 
   // ── screen ↔ world ─────────────────────────────────────────────────────
   const project = (p: V3) => {
@@ -384,6 +466,17 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
       tween.current = null; spin.current = 0;
       Object.assign(start, cam.current);
     };
+    // A finger on the figure holds the idle turn. A watcher alongside the
+    // real gestures, since a pan that loses to a tap never hears the lift.
+    const hold = (on: boolean) => {
+      held.current = on;
+      lastInput.current = Date.now();
+      if (!on) kick();
+    };
+    const watch = Gesture.Manual()
+      .onTouchesDown(() => hold(true))
+      .onTouchesUp(() => hold(false))
+      .onTouchesCancelled(() => hold(false));
     const clampPan = () => {
       const c = cam.current;
       // Keep the figure on screen; at 1× it snaps back to centre.
@@ -440,11 +533,11 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
       .onEnd((e, ok) => {
         if (!ok) return;
         const id = pickRef.current(e.x, e.y);
-        if (id) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        props.current.onSelect(id);
+        if (id) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); hint.current = id; }
+        props.current.onPick(id);
       });
 
-    return Gesture.Race(Gesture.Simultaneous(pinch, twoPan), spinPan, tap);
+    return Gesture.Simultaneous(watch, Gesture.Race(Gesture.Simultaneous(pinch, twoPan), spinPan, tap));
   }, [zoomed, W, H, base]);
 
   const reset = () => fly({ ...HOME, yaw: cam.current.yaw }, 620);
@@ -482,13 +575,17 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
       </GestureDetector>
 
       {co && showLabel && (
-        <Svg width={W} height={H} style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Polyline
-            points={`${co.x},${co.y} ${co.x + ((labelLeft ? ex + 8 : ex - 8) - co.x) * labelIn},${co.y + (ey - co.y) * labelIn}${labelIn >= 1 ? ` ${ex},${ey}` : ''}`}
-            fill="none" stroke={C.hot} strokeWidth={1} strokeOpacity={0.8}
-          />
-          <Rect x={co.x - 3} y={co.y - 3} width={6} height={6} fill={C.hot} />
-        </Svg>
+        // The View, not the Svg, takes pointerEvents: an Svg root on iOS
+        // still swallows touches, which locked the figure on one muscle.
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Svg width={W} height={H}>
+            <Polyline
+              points={`${co.x},${co.y} ${co.x + ((labelLeft ? ex + 8 : ex - 8) - co.x) * labelIn},${co.y + (ey - co.y) * labelIn}${labelIn >= 1 ? ` ${ex},${ey}` : ''}`}
+              fill="none" stroke={C.hot} strokeWidth={1} strokeOpacity={0.8}
+            />
+            <Rect x={co.x - 3} y={co.y - 3} width={6} height={6} fill={C.hot} />
+          </Svg>
+        </View>
       )}
 
       {showLabel && muscle && (
@@ -506,7 +603,7 @@ export function BodyStage({ width: W, height: H, map, facing, selected, filter, 
       )}
 
       {zoomed && (
-        <Pressable onPress={selected ? () => onSelect(null) : reset} style={styles.reset} hitSlop={8} accessibilityLabel="Reset view">
+        <Pressable onPress={zone ? onHome : reset} style={styles.reset} hitSlop={8} accessibilityLabel="Reset view">
           <MaterialCommunityIcons name="fit-to-screen-outline" size={18} color={C.ink} />
         </Pressable>
       )}

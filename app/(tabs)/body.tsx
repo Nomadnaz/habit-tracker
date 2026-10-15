@@ -3,9 +3,11 @@
 // steps, water, weight). Water and weight log right here via
 // components/BodyLogSheets.tsx; the rest open their own screens.
 //
-// Spin the figure, pinch in, tap a muscle → a floating panel assigns it a
-// target category and a note. Categories are the user's own (rename,
-// recolour, add, delete). Everything persists locally via lib/body-map.ts.
+// Spin the figure, pinch in, tap a zone (the chest, a thigh) → a strip of
+// its muscles; tap a muscle → a floating panel with its recovery, a GOAL
+// (one of the user's categories — rename, recolour, add, delete) and GO,
+// the exercises that work it. Everything persists locally via
+// lib/body-map.ts.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -23,8 +25,11 @@ import {
   type BodyMap, type Category, type Tone,
 } from '@/lib/body-map';
 import { BodyStage, Battery, TONE, batteryTone, type Facing } from '@/components/body/BodyStage';
-import { getTrainingSessions } from '@/lib/workout-data';
-import { baseOf, hasBattery, muscleStatus, type Hit, type MuscleStatus, type Session } from '@/lib/muscle-recovery';
+import { ZONE_BY_ID, ZONE_OF, type Zone } from '@/lib/body-mesh';
+import { getExercises, getTrainingSessions, type Exercise } from '@/lib/workout-data';
+import {
+  baseOf, byExercise, hasBattery, muscleStatus, suggestionsFor, type MuscleStatus, type Session,
+} from '@/lib/muscle-recovery';
 import { toDateKey } from '@/lib/dateKey';
 import { Board, BoardRow } from '@/components/Board';
 import { WaterSheet, WeightSheet } from '@/components/BodyLogSheets';
@@ -44,7 +49,11 @@ export default function BodyScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [map, setMap] = useState<BodyMap | null>(null);
+  const [zone, setZone] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [focused, setFocused] = useState(true);
+  const [going, setGoing] = useState(false);
+  const [library, setLibrary] = useState<Exercise[]>([]);
   const [filter, setFilter] = useState<string | null>(null);
   const [side, setSide] = useState<Facing>('front');
   const [stageZoomed, setStageZoomed] = useState(false);
@@ -67,6 +76,9 @@ export default function BodyScreen() {
     void Promise.all([getMealsForDate(todayKey()), getTargets(), getTodayMood()]).then(([meals, t, mood]) =>
       setVitals({ kcal: dailyTotals(meals).calories, kcalGoal: t.calories, mood: mood?.moodScore ?? null }));
     void getTrainingSessions().then(setSessions).catch(() => {});
+    void getExercises().then(setLibrary);
+    setFocused(true);
+    return () => setFocused(false);
   }, []));
 
   async function syncAppleHealth() {
@@ -87,10 +99,23 @@ export default function BodyScreen() {
     });
   }, []);
 
-  const select = (id: string | null) => {
-    if (id) Haptics.selectionAsync();
+  // From the TARGETS list or the zone strip: straight to the muscle.
+  const select = (id: string) => {
+    Haptics.selectionAsync();
+    setZone(ZONE_OF[id]);
     setSelected(id);
   };
+
+  // A tap on the figure: a muscle outside the framed zone frames its zone,
+  // one inside picks it; empty space backs out one level.
+  const pick = (id: string | null) => {
+    if (!id) {
+      if (selected) setSelected(null);
+      else setZone(null);
+    } else if (ZONE_OF[id] === zone) setSelected(id);
+    else { setSelected(null); setZone(ZONE_OF[id]); }
+  };
+  const home = () => { setSelected(null); setZone(null); };
 
   const assign = (regionId: string, categoryId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -108,6 +133,7 @@ export default function BodyScreen() {
   const selBase = selected ? baseOf(selected) : null;
   const status = selBase ? muscleStatus(selBase, sessions, Date.now()) : null;
   const battery = selBase && status && hasBattery(selBase) ? status.pct : null;
+  const batteryOf = (id: string) => (hasBattery(baseOf(id)) ? muscleStatus(baseOf(id), sessions, Date.now()).pct : null);
 
   const stageH = Math.min(580, Math.round(width * 1.36));
   const counts = Object.values(map.marks).reduce<Record<string, number>>((a, m) => ({ ...a, [m.category]: (a[m.category] ?? 0) + 1 }), {});
@@ -116,7 +142,7 @@ export default function BodyScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: selected ? 440 : 40 }} showsVerticalScrollIndicator={false} scrollEnabled={!stageZoomed}>
+      <ScrollView contentContainerStyle={{ paddingBottom: selected ? 440 : zone ? 200 : 40 }} showsVerticalScrollIndicator={false} scrollEnabled={!stageZoomed}>
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>{`${targets.length} TARGETS · ${REGIONS.length} MUSCLES`}</Text>
@@ -146,15 +172,18 @@ export default function BodyScreen() {
           height={stageH}
           map={map}
           facing={side}
+          zone={zone}
           selected={selected}
           filter={filter}
+          active={focused}
           battery={battery}
-          onSelect={setSelected}
+          onPick={pick}
+          onHome={home}
           onFacing={setSide}
           onZoomed={setStageZoomed}
         />
 
-        <Text style={styles.hint}>DRAG TO SPIN · PINCH TO ZOOM · TAP A MUSCLE</Text>
+        <Text style={styles.hint}>DRAG TO SPIN · PINCH TO ZOOM · TAP TO ZOOM IN</Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.legend}>
           {map.categories.map(c => {
@@ -185,47 +214,59 @@ export default function BodyScreen() {
 
         {body && (
           <>
-            <Text style={styles.sectionTitle}>VITALS</Text>
-            <View style={styles.vitals}>
-              <Vital i={0} label="CALORIES" value={String(vitals.kcal)} sub={vitals.kcalGoal ? `OF ${vitals.kcalGoal}` : 'KCAL'} onPress={() => router.push('/calorie')} />
-              <Vital i={1} label="SLEEP" value={body.sleepMins != null ? formatSleep(body.sleepMins) : '—'} sub="LAST NIGHT" onPress={() => router.push('/modals/sleep-detail')} />
-              <Vital i={2} label="MOOD" value={vitals.mood != null ? `${vitals.mood}/10` : '—'} sub={vitals.mood != null ? 'TODAY' : 'TAP TO LOG'} onPress={() => router.push('/modals/mood')} />
-              <Vital i={3} label="STEPS" value={todaySteps(body).toLocaleString()} sub={`OF ${body.stepsGoal.toLocaleString()}`} onPress={() => router.push('/steps')} />
-              <Vital i={4} label="WATER" value={`${(todayWaterMl(body) / 1000).toFixed(1)}L`} sub="TAP TO ADD" onPress={() => setSheet('water')} />
-              <Vital i={5} label="WEIGHT" value={latestWeight(body) > 0 ? latestWeight(body).toFixed(1) : '—'} sub="KG · TAP TO LOG" onPress={() => setSheet('weight')} />
-            </View>
+              <Text style={styles.sectionTitle}>VITALS</Text>
+              <View style={styles.vitals}>
+                <Vital i={0} label="CALORIES" value={String(vitals.kcal)} sub={vitals.kcalGoal ? `OF ${vitals.kcalGoal}` : 'KCAL'} onPress={() => router.push('/calorie')} />
+                <Vital i={1} label="SLEEP" value={body.sleepMins != null ? formatSleep(body.sleepMins) : '—'} sub="LAST NIGHT" onPress={() => router.push('/modals/sleep-detail')} />
+                <Vital i={2} label="MOOD" value={vitals.mood != null ? `${vitals.mood}/10` : '—'} sub={vitals.mood != null ? 'TODAY' : 'TAP TO LOG'} onPress={() => router.push('/modals/mood')} />
+                <Vital i={3} label="STEPS" value={todaySteps(body).toLocaleString()} sub={`OF ${body.stepsGoal.toLocaleString()}`} onPress={() => router.push('/steps')} />
+                <Vital i={4} label="WATER" value={`${(todayWaterMl(body) / 1000).toFixed(1)}L`} sub="TAP TO ADD" onPress={() => setSheet('water')} />
+                <Vital i={5} label="WEIGHT" value={latestWeight(body) > 0 ? latestWeight(body).toFixed(1) : '—'} sub="KG · TAP TO LOG" onPress={() => setSheet('weight')} />
+              </View>
 
-            <Board title="MORE">
-              {Platform.OS === 'ios' && (
-                <BoardRow index={1} label="APPLE HEALTH"
-                  sub={body.appleHealthLastSync
-                    ? `Synced ${new Date(body.appleHealthLastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                    : body.appleHealthConnected ? 'Tap to sync' : 'Connect steps, sleep and weight'}
-                  right={healthSyncing ? <ActivityIndicator size="small" color={C.hot} /> : <MaterialCommunityIcons name="sync" size={16} color={C.dim} />}
-                  onPress={syncAppleHealth} />
-              )}
-              <BoardRow index={Platform.OS === 'ios' ? 2 : 1} label="CYCLE TRACKING" sub="Private, off by default" last
-                right={<MaterialCommunityIcons name="arrow-right" size={16} color={C.dim} />}
-                onPress={() => router.push('/modals/cycle-tracking')} />
-            </Board>
+              <Board title="MORE">
+                {Platform.OS === 'ios' && (
+                  <BoardRow index={1} label="APPLE HEALTH"
+                    sub={body.appleHealthLastSync
+                      ? `Synced ${new Date(body.appleHealthLastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : body.appleHealthConnected ? 'Tap to sync' : 'Connect steps, sleep and weight'}
+                    right={healthSyncing ? <ActivityIndicator size="small" color={C.hot} /> : <MaterialCommunityIcons name="sync" size={16} color={C.dim} />}
+                    onPress={syncAppleHealth} />
+                )}
+                <BoardRow index={Platform.OS === 'ios' ? 2 : 1} label="CYCLE TRACKING" sub="Private, off by default" last
+                  right={<MaterialCommunityIcons name="arrow-right" size={16} color={C.dim} />}
+                  onPress={() => router.push('/modals/cycle-tracking')} />
+              </Board>
 
-            <Text style={styles.credit}>Anatomy model: Z-Anatomy (CC BY-SA 4.0), from BodyParts3D © DBCLS (CC BY 4.0).</Text>
+              <Text style={styles.credit}>Anatomy model: Z-Anatomy (CC BY-SA 4.0), from BodyParts3D © DBCLS (CC BY 4.0).</Text>
 
-            <WaterSheet visible={sheet === 'water'} data={body} onData={setBody} onClose={() => setSheet(null)} />
-            <WeightSheet visible={sheet === 'weight'} data={body} onData={setBody} onClose={() => setSheet(null)} />
+              <WaterSheet visible={sheet === 'water'} data={body} onData={setBody} onClose={() => setSheet(null)} />
+              <WeightSheet visible={sheet === 'weight'} data={body} onData={setBody} onClose={() => setSheet(null)} />
           </>
         )}
       </ScrollView>
 
       <AssignPanel
         map={map}
+        zone={zone}
         regionId={selected}
         status={status}
         battery={battery}
+        batteryOf={batteryOf}
+        onPick={select}
         onAssign={assign}
         onNote={(id, note) => update(m => m.marks[id] ? { ...m, marks: { ...m.marks, [id]: { ...m.marks[id], note } } } : m)}
-        onClose={() => setSelected(null)}
+        onClose={() => (selected ? setSelected(null) : setZone(null))}
         onNewCategory={() => setEditing(true)}
+        onGo={() => setGoing(true)}
+      />
+
+      <GoSheet
+        visible={going && !!selected}
+        regionId={selected}
+        status={status}
+        library={library}
+        onClose={() => setGoing(false)}
       />
 
       <CategoryEditor
@@ -258,75 +299,143 @@ function Vital({ i, label, value, sub, onPress }: { i: number; label: string; va
 
 // ── floating assign panel ────────────────────────────────────────────────
 
-function AssignPanel({ map, regionId, status, battery, onAssign, onNote, onClose, onNewCategory }: {
-  map: BodyMap; regionId: string | null; status: MuscleStatus | null; battery: number | null;
+// A framed zone shows a strip of its muscles; a picked muscle shows the
+// full panel.
+function AssignPanel({ map, zone, regionId, status, battery, batteryOf, onPick, onAssign, onNote, onClose, onNewCategory, onGo }: {
+  map: BodyMap; zone: string | null; regionId: string | null; status: MuscleStatus | null; battery: number | null;
+  batteryOf: (id: string) => number | null; onPick: (id: string) => void;
   onAssign: (id: string, cat: string) => void; onNote: (id: string, note: string) => void;
-  onClose: () => void; onNewCategory: () => void;
+  onClose: () => void; onNewCategory: () => void; onGo: () => void;
 }) {
   const y = useRef(new Animated.Value(400)).current;
-  const [shown, setShown] = useState<string | null>(regionId);
+  const showing = regionId ?? (zone ? `zone:${zone}` : null);
+  const [shown, setShown] = useState<string | null>(showing);
   const [note, setNote] = useState('');
+  const [goalOpen, setGoalOpen] = useState(false);
 
   useEffect(() => {
-    if (regionId) {
-      setShown(regionId);
-      setNote(map.marks[regionId]?.note ?? '');
+    setGoalOpen(false);
+    if (showing) {
+      setShown(showing);
+      if (regionId) setNote(map.marks[regionId]?.note ?? '');
       y.setValue(60);
       Animated.spring(y, { toValue: 0, ...SPRING.pop }).start();
     } else {
       Animated.timing(y, { toValue: 400, duration: 200, useNativeDriver: true }).start(() => setShown(null));
     }
-  }, [regionId]);
+  }, [showing]);
 
   if (!shown) return null;
+
+  // One wrapper for both, so the slide-in isn't cut short by a remount
+  // when a zone's strip turns into a muscle's panel.
+  const framed = shown.startsWith('zone:') ? ZONE_BY_ID[shown.slice(5)] : null;
   const region = REGION_BY_ID[shown];
   const mark = map.marks[shown];
+  const cat = mark ? map.categories.find(c => c.id === mark.category) : undefined;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'position' : undefined} style={styles.panelWrap} pointerEvents="box-none">
       <Animated.View style={[styles.panel, { transform: [{ translateY: y }] }]}>
-        <View style={styles.panelHead}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.panelEyebrow}>{region.side ? `${region.group}  ${region.side === 'l' ? 'LEFT' : 'RIGHT'}` : region.group}</Text>
-            <Text style={styles.panelTitle}>{region.name}</Text>
+        {framed ? <ZoneStrip zone={framed} batteryOf={batteryOf} onPick={onPick} onClose={onClose} /> : (
+          <>
+          <View style={styles.panelHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.panelEyebrow}>{region.side ? `${region.group}  ${region.side === 'l' ? 'LEFT' : 'RIGHT'}` : region.group}</Text>
+              <Text style={styles.panelTitle}>{region.name}</Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={10} style={{ marginLeft: 10 }}>
+              <MaterialCommunityIcons name="close" size={20} color={C.dim} />
+            </Pressable>
           </View>
-          <Pressable onPress={onClose} hitSlop={10} style={{ marginLeft: 10 }}>
-            <MaterialCommunityIcons name="close" size={20} color={C.dim} />
-          </Pressable>
-        </View>
 
-        {status && battery != null && <Recovery status={status} battery={battery} />}
+          {status && battery != null && <Recovery status={status} battery={battery} />}
 
-        <Text style={styles.panelLabel}>TARGET</Text>
-        <View style={styles.catWrap}>
-          {map.categories.map(c => {
-            const on = mark?.category === c.id;
-            return (
-              <Pressable key={c.id} onPress={() => onAssign(shown, c.id)}
-                style={[styles.cat, on && { backgroundColor: TONE[c.tone], borderColor: TONE[c.tone] }]}>
-                {!on && <View style={[styles.swatch, { backgroundColor: TONE[c.tone] }]} />}
-                <Text style={[styles.catText, on && { color: C.onHot }]}>{c.name}</Text>
+          <View style={styles.actions}>
+            <Pressable onPress={() => setGoalOpen(o => !o)} style={[styles.action, goalOpen && { borderColor: C.live }]}>
+              <View style={styles.actionTop}>
+                <Text style={styles.actionLabel}>GOAL</Text>
+                <MaterialCommunityIcons name={goalOpen ? 'chevron-up' : 'chevron-down'} size={16} color={C.live} />
+              </View>
+              <View style={styles.actionValue}>
+                {cat && <View style={[styles.swatch, { backgroundColor: TONE[cat.tone] }]} />}
+                <Text style={[styles.actionValueText, cat && { color: TONE[cat.tone] }]} numberOfLines={1}>{cat?.name ?? 'NONE SET'}</Text>
+              </View>
+            </Pressable>
+            <Pressable onPress={onGo} style={({ pressed }) => [styles.action, pressed && { borderColor: C.live }]}>
+              <View style={styles.actionTop}>
+                <Text style={styles.actionLabel}>GO</Text>
+                <MaterialCommunityIcons name="arrow-right" size={16} color={C.live} />
+              </View>
+              <Text style={styles.actionValueText}>WORKOUTS</Text>
+            </Pressable>
+          </View>
+
+          {goalOpen && (
+            <View style={styles.dropdown}>
+              {map.categories.map((c, i) => {
+                const on = mark?.category === c.id;
+                return (
+                  <Pressable key={c.id} onPress={() => { onAssign(shown, c.id); setGoalOpen(false); }}
+                    style={({ pressed }) => [styles.option, i > 0 && styles.optionRule, pressed && { backgroundColor: C.surface }]}>
+                    <View style={[styles.swatch, { backgroundColor: TONE[c.tone] }]} />
+                    <Text style={[styles.optionText, on && { color: TONE[c.tone] }]}>{c.name}</Text>
+                    {on && <MaterialCommunityIcons name="check" size={16} color={TONE[c.tone]} />}
+                  </Pressable>
+                );
+              })}
+              <Pressable onPress={onNewCategory} style={({ pressed }) => [styles.option, styles.optionRule, pressed && { backgroundColor: C.surface }]}>
+                <Text style={[styles.optionText, { color: C.dim }]}>+ NEW GOAL</Text>
               </Pressable>
-            );
-          })}
-          <Pressable onPress={onNewCategory} style={[styles.cat, { borderStyle: 'dashed' }]}>
-            <Text style={styles.catText}>+ NEW</Text>
-          </Pressable>
-        </View>
+            </View>
+          )}
 
-        {mark && (
-          <TextInput
-            style={styles.note}
-            value={note}
-            onChangeText={setNote}
-            onEndEditing={() => onNote(shown, note.trim())}
-            placeholder="Note — e.g. lagging side, 3x/wk, tweaked Tue"
-            placeholderTextColor={C.faint}
-            returnKeyType="done"
-          />
+          {mark && (
+            <TextInput
+              style={styles.note}
+              value={note}
+              onChangeText={setNote}
+              onEndEditing={() => onNote(shown, note.trim())}
+              placeholder="Note — e.g. lagging side, 3x/wk, tweaked Tue"
+              placeholderTextColor={C.faint}
+              returnKeyType="done"
+            />
+          )}
+          </>
         )}
       </Animated.View>
     </KeyboardAvoidingView>
+  );
+}
+
+function ZoneStrip({ zone, batteryOf, onPick, onClose }: {
+  zone: Zone; batteryOf: (id: string) => number | null; onPick: (id: string) => void; onClose: () => void;
+}) {
+  const oneSide = /\.[lr]$/.test(zone.id); // 'L THIGH' — drop the L from each muscle
+  return (
+    <>
+      <View style={styles.panelHead}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.panelEyebrow}>{`${zone.muscles.length} MUSCLES · TAP ONE`}</Text>
+          <Text style={styles.panelTitle}>{zone.name}</Text>
+        </View>
+        <Pressable onPress={onClose} hitSlop={10} style={{ marginLeft: 10 }}>
+          <MaterialCommunityIcons name="close" size={20} color={C.dim} />
+        </Pressable>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.zoneStrip}>
+        {zone.muscles.map(id => {
+          const pct = batteryOf(id);
+          const name = REGION_BY_ID[id].name;
+          return (
+            <Pressable key={id} onPress={() => onPick(id)} style={({ pressed }) => [styles.zoneChip, pressed && { backgroundColor: C.surface }]}>
+              <Text style={styles.zoneChipName} numberOfLines={1}>{oneSide ? name.slice(2) : name}</Text>
+              {pct != null && <Text style={[numFace(`${pct}%`, 13), { color: batteryTone(pct) }]}>{`${pct}%`}</Text>}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </>
   );
 }
 
@@ -356,14 +465,7 @@ function dayTag(s: Session) {
 }
 
 function Recovery({ status, battery }: { status: MuscleStatus; battery: number }) {
-  // One row per exercise: its latest session, and how many in the window.
-  const recent: (Hit & { times: number })[] = [];
-  for (const h of status.hits) {
-    const row = recent.find(r => r.session.exerciseId === h.session.exerciseId);
-    if (row) row.times++;
-    else recent.push({ ...h, times: 1 });
-  }
-  recent.splice(4);
+  const recent = byExercise(status.hits).slice(0, 4);
   return (
     <View style={styles.rec}>
       <View style={styles.recTop}>
@@ -403,6 +505,59 @@ function Recovery({ status, battery }: { status: MuscleStatus; battery: number }
         </View>
       ))}
     </View>
+  );
+}
+
+// ── GO: exercises that work the muscle ───────────────────────────────────
+
+function GoSheet({ visible, regionId, status, library, onClose }: {
+  visible: boolean; regionId: string | null; status: MuscleStatus | null; library: Exercise[]; onClose: () => void;
+}) {
+  const region = regionId ? REGION_BY_ID[regionId] : null;
+  const base = regionId ? baseOf(regionId) : '';
+  const recent = status ? byExercise(status.hits) : [];
+  const more = region ? suggestionsFor(base, status?.hits ?? [], library) : [];
+  const role = (share: number) => (share >= 0.95 ? 'Primary' : share >= 0.6 ? 'Strong assist' : 'Assist');
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={styles.editor}>
+        <View style={styles.editorHead}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.panelEyebrow}>GO</Text>
+            <Text style={styles.editorTitle} numberOfLines={1} adjustsFontSizeToFit>{region ? (region.side ? region.name.slice(2) : region.name) : ''}</Text>
+          </View>
+          <Pressable onPress={onClose} style={styles.doneBtn}><Text style={styles.doneText}>DONE</Text></Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          <Text style={styles.panelLabel}>{`DONE RECENTLY · ${recent.length}`}</Text>
+          {recent.length === 0 ? (
+            <Text style={styles.recEmpty}>Nothing in the last 3 weeks has worked this.</Text>
+          ) : recent.map(({ session: s, share, times }) => (
+            <View key={s.exerciseId} style={styles.goRow}>
+              <View style={[styles.recShare, { opacity: 0.35 + share * 0.65 }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.recName} numberOfLines={1}>{s.name}</Text>
+                <Text style={styles.recDetail} numberOfLines={1}>{`${role(share)} · ${times}× in 3 wks · ${s.weightKg}kg best`}</Text>
+              </View>
+              <Text style={styles.recDay}>{dayTag(s)}</Text>
+            </View>
+          ))}
+
+          <Text style={[styles.panelLabel, { marginTop: 22 }]}>{`RECOMMENDED · ${more.length}`}</Text>
+          {more.length === 0 ? (
+            <Text style={styles.recEmpty}>No lifts aimed at this one — it works as part of bigger movements.</Text>
+          ) : more.map(x => (
+            <View key={x.name} style={styles.goRow}>
+              <View style={[styles.recShare, { opacity: 0.35 + x.share * 0.65 }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.recName} numberOfLines={1}>{x.name.toUpperCase()}</Text>
+                <Text style={styles.recDetail} numberOfLines={1}>{x.mine ? `${role(x.share)} · in your library` : role(x.share)}</Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -513,9 +668,20 @@ const styles = StyleSheet.create({
   recName: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
   recDetail: { fontFamily: F.mono, fontSize: 11, color: C.dim, marginTop: 2 },
   recDay: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5 },
-  catWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  cat: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  catText: { fontFamily: F.dot, fontSize: 11, color: C.ink, letterSpacing: 1.5 },
+  zoneStrip: { gap: 8, paddingTop: 12 },
+  zoneChip: { borderWidth: 1, borderColor: C.lineHi, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, gap: 4, minWidth: 92 },
+  zoneChipName: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1 },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  action: { flex: 1, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, gap: 6 },
+  actionTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  actionLabel: { fontFamily: F.dot, fontSize: 15, color: C.live, letterSpacing: 2 },
+  actionValue: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  actionValueText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5, flexShrink: 1 },
+  dropdown: { marginTop: 8, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, overflow: 'hidden' },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, minHeight: 42 },
+  optionRule: { borderTopWidth: 1, borderTopColor: C.line },
+  optionText: { flex: 1, fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1.5 },
+  goRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line },
   note: { marginTop: 12, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.mono, fontSize: 13, color: C.ink, backgroundColor: C.bg },
 
   editor: { flex: 1, backgroundColor: C.bg, padding: 20 },
