@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import { dateKey, type BodyData, type HeartNow } from './body-data';
+import type { Run } from './muscle-recovery';
 
 export type AppleHealthActivityToday = {
   activeMinutes: number;
@@ -19,6 +20,7 @@ export type AppleHealthSyncResult = {
   weightKg: number | null;
   weightAt: string | null;
   heart: HeartNow;
+  runs: Run[];             // running workouts, last 14 days
 };
 
 type HealthSample = { value: number; startDate: string; endDate: string };
@@ -54,6 +56,7 @@ function getPermissions(kit: HealthKitModule) {
         Permissions.Height,
         Permissions.HeartRate,
         Permissions.HeartRateVariability,
+        Permissions.Workout,
       ],
       write: [
         Permissions.Weight,
@@ -220,6 +223,17 @@ async function fetchHeart(kit: HealthKitModule): Promise<HeartNow> {
   };
 }
 
+/** Running workouts (any app or watch) — the BODY tab counts their steps as leg training. */
+async function fetchRuns(kit: HealthKitModule, days: number): Promise<Run[]> {
+  type W = { activityName: string; distance: number; start: string; end: string };
+  const res = await promisify<{ data: W[] }>(kit.getAnchoredWorkouts.bind(kit), {
+    startDate: addDays(startOfToday(), -days).toISOString(), endDate: new Date().toISOString(),
+  }).catch(() => ({ data: [] as W[] }));
+  return (res?.data ?? [])
+    .filter(w => /running/i.test(w.activityName) && w.distance > 0)
+    .map(w => ({ start: Date.parse(w.start), end: Date.parse(w.end), distanceM: Math.round(w.distance * 1609.344) }));
+}
+
 /** Heart-rate samples between two times, oldest first ([] without Health or a watch). */
 export async function heartRateBetween(start: number, end: number): Promise<{ at: number; bpm: number }[]> {
   const kit = getHealthKit();
@@ -237,15 +251,16 @@ export async function fetchAppleHealthMetrics(historyDays = 56): Promise<AppleHe
   const kit = getHealthKit();
   if (!kit) return null;
 
-  const [dailySteps, activityToday, sleepMins, weight, heart] = await Promise.all([
+  const [dailySteps, activityToday, sleepMins, weight, heart, runs] = await Promise.all([
     fetchDailySteps(kit, historyDays),
     fetchTodayActivity(kit),
     fetchLastNightSleepMins(kit),
     fetchLatestWeightKg(kit),
     fetchHeart(kit),
+    fetchRuns(kit, 14),
   ]);
 
-  return { dailySteps, activityToday, sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null, heart };
+  return { dailySteps, activityToday, sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null, heart, runs };
 }
 
 /** Writes a manually-logged weight into HealthKit so it shows up in the Health app too. */
@@ -283,6 +298,7 @@ export function mergeAppleHealthIntoBodyData(
     stepsThisYear: stepsThisYearFromHistory(stepsHistory),
     activityToday: sync.activityToday,
     heart: sync.heart,
+    runs: sync.runs,
     appleHealthConnected: true,
     appleHealthLastSync: new Date().toISOString(),
   };

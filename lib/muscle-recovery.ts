@@ -15,6 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import type { MuscleGroup } from './workout-data';
+import { toDateKey } from './dateKey';
 
 export type Session = {
   exerciseId: string;
@@ -26,6 +27,8 @@ export type Session = {
   weightKg: number;   // best set
   reps: number | null;
   measured: boolean;  // real logged sets (exercise_sets) vs. the template's plan
+  /** How heavy it was for this lifter, 0.4–1 (withIntensity); unset counts as 1. */
+  intensity?: number;
 };
 
 export type Hit = { session: Session; share: number };
@@ -59,6 +62,22 @@ const QUADS = { 'quad.rf': 1, 'quad.vl': 1, 'quad.vm': 1 };
 const HAMS = { 'ham.bf': 1, 'ham.st': 1 };
 const CALVES = { 'gastro.lat': 1, 'gastro.med': 1, soleus: 0.8 };
 const scale = (s: Share, k: number): Share => Object.fromEntries(Object.entries(s).map(([m, v]) => [m, v * k]));
+
+// Running and walking (cardioSessions below). Shares follow where a stride's
+// work goes, from running/walking biomechanics (EMG and musculoskeletal
+// models, e.g. Hamner & Delp 2010; Dorn et al. 2012): the calves, soleus
+// most, give most of the support and push-off; the quads absorb each landing;
+// glute med holds the pelvis level and glute max extends the hip; hamstrings
+// brake the swinging leg; hip flexors swing it through; tibialis lowers the
+// foot. Walking leans more on calves, tibialis and glute med, less on quads.
+const RUN: Share = {
+  soleus: 1, 'gastro.lat': 0.85, 'gastro.med': 0.85, 'quad.vl': 0.6, 'quad.vm': 0.6, 'quad.rf': 0.55,
+  'glute.med': 0.5, 'glute.max': 0.45, 'ham.bf': 0.45, 'ham.st': 0.45, hipflex: 0.5, tib: 0.5, adductor: 0.25,
+};
+const WALK: Share = {
+  soleus: 1, 'gastro.lat': 0.7, 'gastro.med': 0.7, tib: 0.6, 'glute.med': 0.6, 'quad.vl': 0.35, 'quad.vm': 0.35,
+  'quad.rf': 0.3, 'glute.max': 0.35, 'ham.bf': 0.3, 'ham.st': 0.3, hipflex: 0.35, adductor: 0.2,
+};
 
 // Exercise name → muscles worked, first match wins. Checked before the
 // coarse muscle-group fallback so "INCLINE DB PRESS" lands on the upper
@@ -96,6 +115,9 @@ const RULES: [RegExp, Share][] = [
   [/SQUAT|LEG PRESS|LUNGE|SPLIT|STEP ?UP|HACK/, { ...QUADS, 'quad.rf': 0.8, 'glute.max': 0.7, adductor: 0.5, ...scale(HAMS, 0.2) }],
   [/TWIST|WOODCHOP|SIDE PLANK/, { oblique: 1, 'abs.upper': 0.4 }],
   [/CRUNCH|SIT ?UP|PLANK|LEG RAISE|\bABS?\b/, { 'abs.upper': 1, 'abs.lower': 0.8, oblique: 0.4 }],
+  // Last, so WALKING LUNGE stays a lunge.
+  [/^ RUN $|\bRUNNING\b|\bJOG(GING)?\b|\bSPRINTS?\b/, RUN],
+  [/^ WALKING $|\bHIKE\b|\bHIKING\b/, WALK],
 ];
 
 const GROUPS: Record<MuscleGroup, Share> = {
@@ -204,7 +226,7 @@ export function muscleStatus(baseId: string, sessions: Session[], now: number): 
     if (share <= 0 || s.at > now) continue;
     hits.push({ session: s, share });
     if (!base) continue;
-    const stim = s.sets * share;
+    const stim = s.sets * share * (s.intensity ?? 1);
     const need = base * Math.min(1.3, Math.max(0.6, 0.6 + stim / 8)) * H;
     const left = 1 - (now - s.at) / need;
     if (left <= 0) continue;
@@ -219,3 +241,98 @@ export function muscleStatus(baseId: string, sessions: Session[], now: number): 
     hits,
   };
 }
+
+// ── how heavy, and what running/walking cost ─────────────────────────────
+
+const e1rm = (s: Session) => (s.weightKg > 0 ? s.weightKg * (1 + (s.reps ?? 1) / 30) : 0);
+
+/** Marks each lift with how heavy it was for this lifter: its estimated 1RM
+ *  against their best for that exercise in the same sessions. A light day
+ *  drains less than a heavy one. Lifts without a weight stay at 1. */
+export function withIntensity(sessions: Session[]): Session[] {
+  const best = new Map<string, number>();
+  for (const s of sessions) best.set(s.exerciseId, Math.max(best.get(s.exerciseId) ?? 0, e1rm(s)));
+  return sessions.map(s => {
+    const b = best.get(s.exerciseId) ?? 0, v = e1rm(s);
+    return v > 0 && b > 0 ? { ...s, intensity: Math.max(0.4, v / b) } : s;
+  });
+}
+
+export type Run = { start: number; end: number; distanceM: number };
+
+// Steps as training. A run's steps come from its distance; walking is the
+// day's steps minus any run, and only what's past an ordinary day counts.
+// Calibrated so a 5 km run (~4,300 steps) takes about half the calves'
+// battery and a half marathon empties calves and quads for 2–4 days; a
+// 20k-step day of walking costs the calves about a fifth.
+const STEP_M = 1.15;            // metres per running step, recreational pace
+const RUN_SETS_PER_1K = 0.5;    // 1,000 running steps ≈ half a hard set for the prime movers
+const WALK_FREE = 7500;         // everyday walking below this costs nothing
+const WALK_SETS_PER_1K = 0.06;
+
+export const runSteps = (r: Run) => r.distanceM / STEP_M;
+
+/** Runs (watch or in-app; overlapping ones counted once) and heavy walking days, as sessions. */
+export function cardioSessions(steps: Record<string, number>, runs: Run[], now: number, days = 7): Session[] {
+  const since = now - days * 86_400_000;
+  const kept: Run[] = [];
+  for (const r of [...runs].sort((a, b) => b.distanceM - a.distanceM)) {
+    if (r.end < since || r.distanceM <= 0 || r.start > now) continue;
+    if (!kept.some(k => r.start < k.end && k.start < r.end)) kept.push(r);
+  }
+  const out: Session[] = kept.map(r => ({
+    exerciseId: `run:${r.start}`, name: 'RUN', muscleGroups: [], date: toDateKey(new Date(r.end)), at: r.end,
+    sets: (runSteps(r) / 1000) * RUN_SETS_PER_1K, weightKg: 0, reps: null, measured: true,
+  }));
+  for (let d = 0; d < days; d++) {
+    const day = new Date(now - d * 86_400_000);
+    const key = toDateKey(day);
+    const ran = kept.filter(r => toDateKey(new Date(r.end)) === key).reduce((a, r) => a + runSteps(r), 0);
+    const extra = (steps[key] ?? 0) - ran - WALK_FREE;
+    if (extra <= 0) continue;
+    const evening = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 20).getTime();
+    out.push({
+      exerciseId: `walk:${key}`, name: 'WALKING', muscleGroups: [], date: key, at: Math.min(now, evening),
+      sets: (extra / 1000) * WALK_SETS_PER_1K, weightKg: 0, reps: null, measured: true,
+    });
+  }
+  return out;
+}
+
+// ── the BODY tab's lenses ────────────────────────────────────────────────
+
+const isWalk = (s: Session) => s.name === 'WALKING';
+
+/** How hard a set of lifts hits each muscle, 0–1 — the same drain the battery takes. */
+export function loadOf(items: { name: string; muscleGroups: MuscleGroup[]; sets: number; intensity?: number }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const it of items) {
+    for (const [m, share] of Object.entries(musclesFor(it.name, it.muscleGroups))) {
+      out[m] = Math.min(1, (out[m] ?? 0) + Math.min(1, (it.sets * share * (it.intensity ?? 1)) / 4));
+    }
+  }
+  return out;
+}
+
+/** The most recent day you trained (walking doesn't count) and what it took out of each muscle. */
+export function lastDay(sessions: Session[]): { date: string | null; names: string[]; load: Record<string, number> } {
+  const date = sessions.filter(s => !isWalk(s)).reduce<string | null>((d, s) => (!d || s.date > d ? s.date : d), null);
+  const day = sessions.filter(s => s.date === date && !isWalk(s));
+  return { date, names: [...new Set(day.map(s => s.name))], load: loadOf(day) };
+}
+
+/** Days since each muscle was last worked (walking doesn't count); null = not in these sessions. */
+export function daysSince(sessions: Session[], now: number): Record<string, number | null> {
+  const out: Record<string, number | null> = Object.fromEntries(Object.keys(BASE_H).map(m => [m, null]));
+  for (const s of sessions) {
+    if (isWalk(s) || s.at > now) continue;
+    for (const [m, share] of Object.entries(musclesFor(s.name, s.muscleGroups))) {
+      if (share < 0.3 || !(m in out)) continue;
+      const d = (now - s.at) / 86_400_000;
+      out[m] = out[m] == null ? d : Math.min(out[m]!, d);
+    }
+  }
+  return out;
+}
+
+export const RECOVERY_MUSCLES = Object.keys(BASE_H);

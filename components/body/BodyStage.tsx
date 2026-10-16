@@ -153,7 +153,15 @@ interface Props {
   /** Today's numbers around the whole figure; hidden while zoomed or framing a zone. */
   hud: HudStat[];
   pulse: HudPulse;
+  /** Lens / recovery colours, by muscle id: from ink (t 0) to `tone` (t 1). Wins over goals. */
+  paint: Record<string, Paint> | null;
+  /** Draw goal categories' colours (off while a lens is showing something else). */
+  showGoals: boolean;
+  /** Step back the muscles `paint` leaves out, so the painted ones stand out. */
+  dimRest: boolean;
 }
+
+export type Paint = { tone: string; t: number };
 
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -161,6 +169,7 @@ const easeInOut = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u 
 const easeOut = (u: number) => 1 - Math.pow(1 - u, 3);
 const phase = (t: number, [a, b]: readonly [number, number]) => clamp01((t - a) / (b - a));
 const rgb = (hex: string): V3 => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255) as V3;
+const mix3 = (a: V3, b: V3, t: number): V3 => [0, 1, 2].map(k => a[k] + (b[k] - a[k]) * t) as V3;
 
 /** World → camera rotation (yaw about y, then the fixed pitch), as rows. */
 function rotation(yaw: number): [V3, V3, V3] {
@@ -263,7 +272,7 @@ function setupGL(gl: ExpoWebGLRenderingContext): GLState {
   return { gl, aPos, aNrm, u };
 }
 
-export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed, hud, pulse }: Props) {
+export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed, hud, pulse, paint, showGoals, dimRest }: Props) {
   const cam = useRef<Cam>({ ...HOME });
   const tween = useRef<Tween | null>(null);
   const spin = useRef(0);               // rad/s of momentum
@@ -299,16 +308,17 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   const look = useMemo(() => {
     const ink = rgb(C.ink);
     return MUSCLES.map((m, i) => {
-      const mk = map.marks[m.id];
+      const mk = showGoals ? map.marks[m.id] : undefined;
       const cat = mk && (!filter || mk.category === filter) ? catById[mk.category] : undefined;
-      const col = cat ? rgb(TONE[cat.tone]) : ink;
-      const full = cat ? 1 : 0.8;
+      const pt = paint?.[m.id];
+      const col: V3 = pt ? mix3(ink, rgb(pt.tone), pt.t) : cat ? rgb(TONE[cat.tone]) : ink;
+      const full = pt || cat ? 1 : dimRest ? 0.32 : 0.8;
       if (!zv) return { col, amt: full, phase: PHASE[i], mode: 0 };
       if (!zv.members.has(i)) return { col, amt: full * 0.16, phase: PHASE[i], mode: 0 };
       if (!selected) return { col, amt: 1, phase: ZONE_PHASE, mode: 1 };
       return m.id === selected ? { col, amt: 1, phase: PHASE[i], mode: 2 } : { col, amt: full * 0.6, phase: PHASE[i], mode: 0 };
     });
-  }, [map.marks, filter, catById, selected, zv]);
+  }, [map.marks, filter, catById, selected, zv, paint, showGoals, dimRest]);
 
   // Everything the draw needs that React owns, for the animation loop.
   const live = useRef({ look, selPart, zv, active, W, H, base });

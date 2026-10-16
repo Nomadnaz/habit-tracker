@@ -35,6 +35,7 @@ export const C = {
   signal:   '#FFB23F', // arrival-board amber — body-map categories only
   water:    '#3FA9FF', // water progress only
   food:     '#FF7A3D', // calorie progress only
+  stale:    '#FFE680', // BODY's LONGEST SINCE lens only
   scrim:    'rgba(0,0,0,0.72)',
 };
 

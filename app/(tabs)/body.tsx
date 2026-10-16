@@ -25,12 +25,19 @@ import {
   REGIONS, REGION_BY_ID, loadBodyMap, saveBodyMap,
   type BodyMap, type Category, type Tone,
 } from '@/lib/body-map';
-import { BodyStage, Battery, TONE, batteryTone, type Facing, type HudStat } from '@/components/body/BodyStage';
+import { BodyStage, Battery, TONE, batteryTone, type Facing, type HudStat, type Paint } from '@/components/body/BodyStage';
+import { FanSelect, type FanOption } from '@/components/body/FanSelect';
 import { ZONE_BY_ID, ZONE_OF, type Zone } from '@/lib/body-mesh';
-import { getExercises, getTrainingSessions, type Exercise } from '@/lib/workout-data';
 import {
-  baseOf, byExercise, hasBattery, muscleStatus, suggestionsFor, type MuscleStatus, type Session,
+  getExercises, getTrainingSessions, getGymPlan, getTemplates, getTemplateExercises, getDoneLog, type Exercise,
+} from '@/lib/workout-data';
+import {
+  baseOf, byExercise, hasBattery, muscleStatus, suggestionsFor, withIntensity, cardioSessions, loadOf, lastDay, daysSince,
+  runSteps, type MuscleStatus, type Session, type Run,
 } from '@/lib/muscle-recovery';
+import { upNext, type UpNext } from '@/lib/up-next';
+import { getActivitiesInRange } from '@/lib/activity-data';
+import { MUSCLES } from '@/lib/body-mesh';
 import { toDateKey } from '@/lib/dateKey';
 import { Board, BoardRow } from '@/components/Board';
 import { WaterSheet, WeightSheet } from '@/components/BodyLogSheets';
@@ -43,6 +50,18 @@ import { getMealsForDate, dailyTotals, getTargets, todayKey } from '@/lib/meals-
 import { getTodayMood } from '@/lib/mood-data';
 
 const SIDES: Facing[] = ['front', 'back'];
+
+// What the figure is coloured by. GOALS = the user's categories; the rest
+// are lenses over the training history (lib/muscle-recovery.ts).
+type Lens = 'goals' | 'next' | 'last' | 'since';
+const LENSES: FanOption<Lens>[] = [
+  { id: 'goals', label: 'GOALS', color: C.ink, icon: 'target' },
+  { id: 'next', label: 'UP NEXT', color: C.live, icon: 'calendar-arrow-right' },
+  { id: 'last', label: 'LAST USED', color: C.alert, icon: 'history' },
+  { id: 'since', label: 'LONGEST SINCE', color: C.stale, icon: 'timer-sand' },
+];
+const SINCE_FULL_DAYS = 14; // LONGEST SINCE is fully yellow at two weeks
+const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 type Vitals = { kcal: number; kcalGoal: number; mood: number | null };
 
@@ -64,6 +83,10 @@ export default function BodyScreen() {
   const [sheet, setSheet] = useState<'water' | 'weight' | null>(null);
   const [healthSyncing, setHealthSyncing] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [appRuns, setAppRuns] = useState<Run[]>([]);
+  const [next, setNext] = useState<UpNext | null>(null);
+  const [lens, setLens] = useState<Lens>('goals');
+  const [recovery, setRecovery] = useState(false);
 
   useEffect(() => { loadBodyMap().then(setMap); }, []);
 
@@ -78,6 +101,15 @@ export default function BodyScreen() {
       setVitals({ kcal: dailyTotals(meals).calories, kcalGoal: t.calories, mood: mood?.moodScore ?? null }));
     void getTrainingSessions().then(setSessions).catch(() => {});
     void getExercises().then(setLibrary);
+    // Runs tracked in the app count as leg training too (watch runs come with Apple Health).
+    void getActivitiesInRange(new Date(Date.now() - 14 * 86_400_000).toISOString(), new Date().toISOString())
+      .then(a => setAppRuns(a.filter(x => x.type === 'run').map(x => ({ start: Date.parse(x.startTime), end: Date.parse(x.endTime), distanceM: x.distanceM }))))
+      .catch(() => {});
+    void (async () => {
+      const [plan, templates, library, done] = await Promise.all([getGymPlan(), getTemplates(), getExercises(), getDoneLog()]);
+      const byTemplate = Object.fromEntries(await Promise.all(templates.map(async t => [t.id, await getTemplateExercises(t.id)] as const)));
+      setNext(upNext(plan, templates, byTemplate, library, done, new Date()));
+    })().catch(() => {});
     setFocused(true);
     return () => setFocused(false);
   }, []));
@@ -131,10 +163,35 @@ export default function BodyScreen() {
 
   if (!map) return <SafeAreaView style={styles.safe} />;
 
+  // Everything that wears muscles: lifts (lighter days count for less), and
+  // runs and long walking days from the watch, Apple Health and the app.
+  const now = Date.now();
+  const runs = [...(body?.runs ?? []), ...appRuns];
+  const worn = [...withIntensity(sessions), ...cardioSessions(body?.stepsHistory ?? {}, runs, now)];
   const selBase = selected ? baseOf(selected) : null;
-  const status = selBase ? muscleStatus(selBase, sessions, Date.now()) : null;
+  const status = selBase ? muscleStatus(selBase, worn, now) : null;
   const battery = selBase && status && hasBattery(selBase) ? status.pct : null;
-  const batteryOf = (id: string) => (hasBattery(baseOf(id)) ? muscleStatus(baseOf(id), sessions, Date.now()).pct : null);
+  const batteryOf = (id: string) => (hasBattery(baseOf(id)) ? muscleStatus(baseOf(id), worn, now).pct : null);
+
+  // The figure's colours: the recovery toggle (white → red by how worn each
+  // muscle is) underneath, the lens on top for the muscles it's about.
+  // Muscles a lens touches at all get at least a quarter of its colour.
+  const lensLoad: Record<string, number> | null =
+    lens === 'next' ? (next ? loadOf(next.exercises) : {})
+    : lens === 'last' ? lastDay(worn).load
+    : lens === 'since' ? Object.fromEntries(Object.entries(daysSince(worn, now)).map(([m, d]) => [m, d == null ? 1 : Math.min(1, d / SINCE_FULL_DAYS)]))
+    : null;
+  const lensTone = lens === 'next' ? C.live : lens === 'last' ? C.alert : C.stale;
+  const paint: Record<string, Paint> | null = (recovery || lensLoad) ? {} : null;
+  if (paint) {
+    for (const m of MUSCLES) {
+      const b = baseOf(m.id);
+      const l = lensLoad?.[b];
+      if (l != null && l > 0.02) paint[m.id] = { tone: lensTone, t: lens === 'since' ? l : 0.25 + 0.75 * l };
+      else if (recovery && hasBattery(b)) paint[m.id] = { tone: C.alert, t: 1 - muscleStatus(b, worn, now).pct / 100 };
+    }
+  }
+  const lensInfo = lensCaption(lens, recovery, next, worn, runs, body?.stepsHistory ?? {}, now);
   // A framed zone's battery: the average of its muscles that have one.
   const zonePcts = zone ? ZONE_BY_ID[zone].muscles.map(batteryOf).filter((p): p is number => p != null) : [];
   const zoneBattery = zonePcts.length ? Math.round(zonePcts.reduce((a, b) => a + b, 0) / zonePcts.length) : null;
@@ -192,6 +249,24 @@ export default function BodyScreen() {
           </View>
         </View>
 
+        {lensInfo && (
+          <View style={styles.lens}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.lensTitle} numberOfLines={1} adjustsFontSizeToFit>{lensInfo.title}</Text>
+              <Text style={styles.lensSub} numberOfLines={2}>{lensInfo.sub}</Text>
+            </View>
+            <View style={styles.scale}>
+              <View style={styles.scaleBar}>
+                {[0, 0.25, 0.5, 0.75, 1].map(t => (
+                  <View key={t} style={[styles.scaleCell, { backgroundColor: lensInfo.tone, opacity: lensInfo.from + (1 - lensInfo.from) * t }]} />
+                ))}
+              </View>
+              <Text style={styles.scaleText}>{lensInfo.scale}</Text>
+            </View>
+          </View>
+        )}
+
+        <View>
         <BodyStage
           width={width}
           height={stageH}
@@ -208,22 +283,31 @@ export default function BodyScreen() {
           onZoomed={setStageZoomed}
           hud={hud}
           pulse={heart?.bpm ?? null}
+          paint={paint}
+          showGoals={lens === 'goals' && !recovery}
+          dimRest={lens !== 'goals'}
         />
+        {/* NORMAL ↔ RECOVERY: white, or white → red by how worn each muscle is. */}
+        <Pressable onPress={() => { Haptics.selectionAsync(); setRecovery(r => !r); }} hitSlop={6}
+          style={[styles.recovery, recovery && { borderColor: C.alert }]}
+          accessibilityLabel={recovery ? 'Normal colours' : 'Recovery colours'}>
+          <MaterialCommunityIcons name="thermometer" size={14} color={recovery ? C.alert : C.dim} />
+          <Text style={[styles.recoveryText, recovery && { color: C.alert }]}>{recovery ? 'RECOVERY' : 'NORMAL'}</Text>
+        </Pressable>
+        </View>
 
         <Text style={styles.hint}>DRAG TO SPIN · PINCH TO ZOOM · TAP TO ZOOM IN</Text>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.legend}>
-          {map.categories.map(c => {
-            const on = filter === c.id;
-            return (
-              <Pressable key={c.id} onPress={() => setFilter(on ? null : c.id)} style={[styles.legendChip, on && { borderColor: TONE[c.tone] }]}>
-                <View style={[styles.swatch, { backgroundColor: TONE[c.tone] }]} />
-                <Text style={[styles.legendText, on && { color: C.hot }]}>{c.name}</Text>
-                <Text style={styles.legendCount}>{counts[c.id] ?? 0}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <FanSelect
+          eyebrow="GOALS"
+          options={[
+            { id: 'all', label: `ALL ${targets.length}`, color: C.ink },
+            ...map.categories.map(c => ({ id: c.id, label: `${c.name} ${counts[c.id] ?? 0}`, color: TONE[c.tone] })),
+          ]}
+          value={filter ?? 'all'}
+          onChange={id => { setFilter(id === 'all' ? null : id); setLens('goals'); }}
+        />
+        <FanSelect eyebrow="VIEW" options={LENSES} value={lens} onChange={setLens} />
 
         <Board title="TARGETS" empty={targets.length === 0 ? 'NOTHING TARGETED YET' : undefined}>
           {targets.map((r, i) => {
@@ -654,10 +738,18 @@ const styles = StyleSheet.create({
 
   hint: { fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: 1, textAlign: 'center', marginTop: 2 },
   credit: { fontFamily: F.mono, fontSize: 9, color: C.faint, textAlign: 'center', marginHorizontal: 24, marginTop: 16, lineHeight: 13 },
-  legend: { gap: 8, paddingHorizontal: 16, paddingVertical: 14 },
-  legendChip: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: C.line, borderRadius: 999, paddingHorizontal: 14, minHeight: 38 },
-  legendText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 1.5 },
-  legendCount: { fontFamily: F.dot, fontSize: 11, color: C.faint },
+  lens: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 20, marginTop: 4, marginBottom: 6 },
+  recovery: {
+    position: 'absolute', top: 6, left: 12, flexDirection: 'row', alignItems: 'center', gap: 5, height: 30,
+    paddingHorizontal: 11, borderRadius: 15, borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.surface,
+  },
+  recoveryText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5 },
+  lensTitle: { fontFamily: F.dot, fontSize: 26, color: C.hot, letterSpacing: 1 },
+  lensSub: { fontFamily: F.mono, fontSize: 11, color: C.dim, marginTop: 2 },
+  scale: { alignItems: 'flex-end', gap: 4, marginBottom: 2 },
+  scaleBar: { flexDirection: 'row', gap: 2 },
+  scaleCell: { width: 9, height: 9 },
+  scaleText: { fontFamily: F.mono, fontSize: 9, color: C.faint },
   swatch: { width: 7, height: 7 },
 
   rowTag: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 1.5 },
@@ -722,3 +814,41 @@ const styles = StyleSheet.create({
   addCat: { borderWidth: 1, borderStyle: 'dashed', borderColor: C.lineHi, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   addCatText: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 2 },
 });
+
+// ── lens caption ─────────────────────────────────────────────────────────
+
+/** The bold line above the figure for a lens (or the recovery toggle), and its colour key. */
+function lensCaption(
+  lens: Lens, recovery: boolean, next: UpNext | null, worn: Session[], runs: Run[], steps: Record<string, number>, now: number,
+): { title: string; sub: string; tone: string; from: number; scale: string } | null {
+  if (lens === 'next') {
+    if (!next) return { title: 'NOTHING PLANNED', sub: 'Plan your week on TRAIN to see what is up next.', tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
+    return { title: next.title, sub: `${next.when} · ${next.exercises.length} EXERCISES`, tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
+  }
+  if (lens === 'last') {
+    const ld = lastDay(worn);
+    if (!ld.date) return { title: 'LAST USED', sub: 'Nothing logged in the last three weeks.', tone: C.alert, from: 0.25, scale: 'LIGHT → HARD' };
+    const [y, m, d] = ld.date.split('-').map(Number);
+    return { title: 'LAST USED', sub: `${DAY_NAMES[new Date(y, m - 1, d).getDay()]} · ${ld.names.slice(0, 3).join(', ')}${ld.names.length > 3 ? '…' : ''}`, tone: C.alert, from: 0.25, scale: 'LIGHT → HARD' };
+  }
+  if (lens === 'since') {
+    const ds = Object.entries(daysSince(worn, now));
+    const never = ds.filter(([, d]) => d == null).length;
+    const oldest = ds.filter((e): e is [string, number] => e[1] != null).sort((a, b) => b[1] - a[1])[0];
+    const name = (b: string) => MUSCLES.find(x => baseOf(x.id) === b)?.name.replace(/^[LR] /, '') ?? b;
+    const sub = never ? `${never} MUSCLES NOT TRAINED IN 3 WEEKS` : oldest ? `${name(oldest[0])} · ${Math.floor(oldest[1])} DAYS` : '';
+    return { title: 'LONGEST SINCE', sub, tone: C.stale, from: 0, scale: `TODAY → ${SINCE_FULL_DAYS}D+` };
+  }
+  if (recovery) {
+    const week = now - 7 * 86_400_000;
+    const n = runs.filter(r => r.end >= week).length;
+    const total = Object.entries(steps).filter(([k]) => Date.parse(k) >= week - 86_400_000).reduce((a, [, v]) => a + v, 0);
+    const ran = runs.filter(r => r.end >= week).reduce((a, r) => a + runSteps(r), 0);
+    return {
+      title: 'RECOVERY',
+      sub: `LIFTS${n ? ` · ${n} RUN${n > 1 ? 'S' : ''} (${Math.round(ran / 1000)}K STEPS)` : ''} · ${Math.round(total / 1000)}K STEPS THIS WEEK`,
+      tone: C.alert, from: 0, scale: 'FRESH → WORN',
+    };
+  }
+  return null;
+}
