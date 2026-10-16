@@ -25,6 +25,7 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { adpcmDecode, makeAdpcmState, type AdpcmState } from '@/lib/adpcm';
 import { reconcile as reconcileRemoteTasks } from '@/lib/use-remote-task-sync';
 import { toDateKey } from '@/lib/dateKey';
+import { RepAssembler, recordLiftSet } from '@/lib/lift-sessions';
 
 // Set once a BLE connection has ever succeeded. Gates auto-connect-on-launch
 // (below) so a user who has never owned/paired the physical device doesn't
@@ -123,6 +124,7 @@ class BleBridgeManager {
   private syncInFlight = false;
   private noteMode = false; // next audio session is a vault capture, not a question
   private liftSetupMode = false; // next audio session starts a lift, not a question
+  private repChunks = new RepAssembler(); // a set's rep-by-rep numbers, ahead of its log_set
   private _attachedId: string | null = null; // device id currently subscribed -- guards double-attach
   private adpcmState: AdpcmState = makeAdpcmState();
   private samples: number[] = [];
@@ -780,6 +782,12 @@ class BleBridgeManager {
       this.noteMode = true;
       return;
     }
+    // Local only: each rep's height and speed for the lift receipt, sent
+    // by the puck just ahead of the set's log_set (companion-hud screen_lift.c).
+    if (action?.op === 'set_reps') {
+      if (typeof action.r === 'string' && Number.isFinite(action.set)) this.repChunks.add(action);
+      return;
+    }
     // Sent by the puck on every connect. provisioned:false means its own
     // cloud login is gone (the server rejected it and the firmware wiped it),
     // so it only works through this phone. The old @device_provisioned flag
@@ -827,6 +835,8 @@ class BleBridgeManager {
       && Date.now() - pending.at < PENDING_LIFT_MS
       && String(action.exercise ?? '').trim().toUpperCase() === pending.name.slice(0, 39);
     if (tagged) action = { ...action, exercise_id: pending.exerciseId, date: pending.date };
+    // The receipt is local, so it prints even if the upload below fails.
+    if (action?.op === 'log_set') this._recordLiftSet(action, tagged ? pending : null);
     const { error } = await supabase.functions.invoke('device-state', {
       body: { actions: [action], tzOffsetMinutes: new Date().getTimezoneOffset() },
     });
@@ -839,6 +849,20 @@ class BleBridgeManager {
     // voice path below.
     void this._reconcileTasksAfterAction();
     await this._pushSnapshot();
+  }
+
+  /** Keeps a puck set (with its reps, if they all arrived) for the lift
+   *  receipt; app/_layout.tsx opens the receipt when one lands. */
+  private _recordLiftSet(a: any, pending: { exerciseId: string; date: string } | null) {
+    const { reps: repData, ms } = Number.isFinite(a.set) ? this.repChunks.take(a.set) : { reps: null, ms: null };
+    const num = (v: unknown) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+    const reps = num(a.reps) ?? 0;
+    if (reps <= 0) return;
+    void recordLiftSet({
+      at: new Date().toISOString(), setMs: ms, weightKg: num(a.weight_kg) ?? 0, reps,
+      romCm: num(a.rom_cm), peakMps: num(a.peak_velocity_mps), tempoS: num(a.tempo_seconds), repData,
+    }, String(a.exercise ?? 'LIFT'), pending?.exerciseId ?? null, pending?.date ?? toDateKey(new Date()))
+      .catch(e => console.warn('[ble-bridge] lift receipt save failed:', e?.message));
   }
 
   /** Apple Calendar/Reminders only gets a server-written task via

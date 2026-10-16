@@ -46,6 +46,7 @@ import { useRemoteTaskSync } from '@/lib/use-remote-task-sync';
 
 // Auto-reconnect the Companion HUD BLE bridge on launch/foreground.
 import { useBleAutoConnect } from '@/lib/ble-bridge';
+import { useLiftReceipts } from '@/lib/use-lift-receipts';
 
 // Auto-refresh today's Apple Health steps/activity on launch/foreground —
 // see lib/apple-health.ts's useAppleHealthAutoSync for why this exists
@@ -115,6 +116,9 @@ export default function RootLayout() {
   // the app not open on that exact screen had no live connection to relay
   // over. No-op for anyone who has never paired a device.
   useBleAutoConnect();
+
+  // A set finished on the puck prints its receipt (app/lift-receipt.tsx).
+  useLiftReceipts();
 
   // Same idea for steps: re-pull from HealthKit on launch/foreground so the
   // Companion HUD's KCAL/STEPS stats don't read from a month-old sync.
@@ -260,6 +264,7 @@ export default function RootLayout() {
         <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
         <Stack.Screen name="workouts" />
         <Stack.Screen name="workout-detail" />
+        <Stack.Screen name="lift-receipt" />
         <Stack.Screen name="steps" />
         <Stack.Screen name="focus-timer" />
         <Stack.Screen name="calorie" />

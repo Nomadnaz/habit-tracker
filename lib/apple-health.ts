@@ -220,6 +220,19 @@ async function fetchHeart(kit: HealthKitModule): Promise<HeartNow> {
   };
 }
 
+/** Heart-rate samples between two times, oldest first ([] without Health or a watch). */
+export async function heartRateBetween(start: number, end: number): Promise<{ at: number; bpm: number }[]> {
+  const kit = getHealthKit();
+  if (!kit) return [];
+  try {
+    if (!(await initAppleHealth())) return [];
+    const xs = await promisify<HealthSample[]>(kit.getHeartRateSamples.bind(kit), {
+      startDate: new Date(start).toISOString(), endDate: new Date(end).toISOString(), ascending: true,
+    });
+    return xs.map(x => ({ at: Date.parse(x.startDate), bpm: Math.round(x.value) }));
+  } catch { return []; }
+}
+
 export async function fetchAppleHealthMetrics(historyDays = 56): Promise<AppleHealthSyncResult | null> {
   const kit = getHealthKit();
   if (!kit) return null;

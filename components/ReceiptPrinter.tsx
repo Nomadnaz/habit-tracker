@@ -14,7 +14,7 @@
 //     <ReceiptPrinter.Output><ReceiptPrinter.Paper> … </ReceiptPrinter.Paper></ReceiptPrinter.Output>
 //   </ReceiptPrinter.Root>
 //
-// Only used by app/activity-receipt.tsx today.
+// Used by app/activity-receipt.tsx and app/lift-receipt.tsx.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -33,6 +33,8 @@ const GLASS   = '#14110E';
 const LIT     = '#F4F2EE';
 const DIM     = '#8C857B';
 const GREEN   = '#3B7A57';
+const FADED   = '#5C554C'; // secondary ink on the paper
+const RULE    = '#C9C2B7';
 const BOLD    = 'PixeloidSans_700Bold';
 const REG     = 'PixeloidSans_400Regular';
 
@@ -408,10 +410,10 @@ const s = StyleSheet.create({
   tornEdge: { backgroundColor: 'transparent' },
 
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 },
-  rowLabel: { fontFamily: REG, fontSize: 10, color: '#5C554C', flexShrink: 1 },
+  rowLabel: { fontFamily: REG, fontSize: 10, color: FADED, flexShrink: 1 },
   rowValue: { fontFamily: REG, fontSize: 10, color: INK },
   rowStrong: { fontFamily: BOLD, fontSize: 12, color: INK },
-  rule: { borderTopWidth: 1, borderStyle: 'dashed', borderColor: '#C9C2B7', marginVertical: 10 },
+  rule: { borderTopWidth: 1, borderStyle: 'dashed', borderColor: RULE, marginVertical: 10 },
 });
 
-export { INK as RECEIPT_INK, PAPER as RECEIPT_PAPER, LIT as PRINTER_SCREEN_TEXT, DIM as PRINTER_SCREEN_DIM };
+export { INK as RECEIPT_INK, PAPER as RECEIPT_PAPER, LIT as PRINTER_SCREEN_TEXT, DIM as PRINTER_SCREEN_DIM, BOLD as RECEIPT_BOLD, REG as RECEIPT_REG, FADED as RECEIPT_FADED, RULE as RECEIPT_RULE };
