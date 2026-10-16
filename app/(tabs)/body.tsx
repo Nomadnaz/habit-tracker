@@ -142,17 +142,22 @@ export default function BodyScreen() {
   // Today's numbers around the figure, each tied to where it lives on the body.
   const heart = body?.heart;
   const noHeart = body?.appleHealthConnected ? 'NO READING' : 'TAP TO CONNECT';
+  const toGoal = (v: number, goal: number) => (goal > 0 ? Math.round((v / goal) * 100) : 0);
   const hud: HudStat[] = body ? [
     { id: 'hr', label: 'HEART', value: heart?.bpm != null ? String(heart.bpm) : '—', unit: 'BPM',
       sub: heart?.avgBpm != null ? `AVG ${heart.avgBpm}` : noHeart, onPress: syncAppleHealth },
     { id: 'hrv', label: 'HRV', value: heart?.hrvMs != null ? String(heart.hrvMs) : '—', unit: 'MS',
       sub: heart?.hrvAvgMs != null ? `7 DAY AVG ${heart.hrvAvgMs}` : noHeart, onPress: syncAppleHealth },
     { id: 'kcal', label: 'CALORIES', value: String(vitals.kcal), unit: 'KCAL',
-      sub: vitals.kcalGoal ? `OF ${vitals.kcalGoal}` : 'TODAY', onPress: () => router.push('/calorie') },
+      sub: vitals.kcalGoal ? `OF ${vitals.kcalGoal}` : 'TODAY', onPress: () => router.push('/calorie'),
+      // Over the goal goes red — the one readout where more isn't better.
+      fill: vitals.kcalGoal ? { pct: toGoal(vitals.kcal, vitals.kcalGoal), tone: vitals.kcal > vitals.kcalGoal ? C.alert : C.food, icon: 'fire' } : undefined },
     { id: 'water', label: 'WATER', value: (todayWaterMl(body) / 1000).toFixed(1), unit: 'L',
-      sub: 'TAP TO ADD', onPress: () => setSheet('water') },
+      sub: 'TAP TO ADD', onPress: () => setSheet('water'),
+      fill: { pct: toGoal(todayWaterMl(body), body.waterGoalMl), tone: C.water, icon: 'water' } },
     { id: 'steps', label: 'STEPS', value: todaySteps(body).toLocaleString(), unit: '',
-      sub: `OF ${body.stepsGoal.toLocaleString()}`, onPress: () => router.push('/steps') },
+      sub: `OF ${body.stepsGoal.toLocaleString()}`, onPress: () => router.push('/steps'),
+      fill: { pct: toGoal(todaySteps(body), body.stepsGoal), tone: C.live, icon: 'shoe-print' } },
   ] : [];
 
   const stageH = Math.min(580, Math.round(width * 1.36));

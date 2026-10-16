@@ -111,7 +111,9 @@ const ZONE_VIEW: Record<string, ZoneView> = Object.fromEntries(ZONES.map(z => {
 // ── readouts ─────────────────────────────────────────────────────────────
 
 export type HudId = 'hr' | 'hrv' | 'kcal' | 'water' | 'steps';
-export type HudStat = { id: HudId; label: string; value: string; unit: string; sub: string; onPress?: () => void };
+/** A readout's progress to its goal, drawn as a battery that charges up. */
+export type HudFill = { pct: number; tone: string; icon: keyof typeof MaterialCommunityIcons.glyphMap };
+export type HudStat = { id: HudId; label: string; value: string; unit: string; sub: string; fill?: HudFill; onPress?: () => void };
 /** Beats per minute, for the HEART readout's pulse. */
 export type HudPulse = number | null;
 type HudPt = { x: number; y: number; a: number };
@@ -123,8 +125,8 @@ const HUD_W = 70; // until a readout has measured itself
 const HUD_SLOT: Record<HudId, { side: 'l' | 'r'; y: number; at: V3; n: V3 | null }> = {
   hr: { side: 'r', y: 0.13, at: [6, 128, 11], n: [0.3, 0, 0.95] },
   hrv: { side: 'r', y: 0.29, at: [6, 128, 11], n: [0.3, 0, 0.95] },
-  kcal: { side: 'l', y: 0.25, at: [-4, 112, 11], n: [0, 0, 1] },
-  water: { side: 'l', y: 0.41, at: [-3, 97, 10], n: [0, 0, 1] },
+  kcal: { side: 'l', y: 0.2, at: [-4, 112, 11], n: [0, 0, 1] },
+  water: { side: 'l', y: 0.35, at: [-3, 97, 10], n: [0, 0, 1] },
   steps: { side: 'l', y: 0.78, at: [-9.5, 5, 8], n: null },
 };
 
@@ -717,6 +719,21 @@ function Hud({ W, H, stats, pulse, bind, onBind }: {
 }) {
   const [pts, setPts] = useState<Record<HudId, HudPt> | null>(null);
   const beat = useRef(new Animated.Value(0.25)).current;
+  // Batteries charge up from empty when the readouts appear or a goal's
+  // number changes, like a muscle's callout.
+  const [charge, setCharge] = useState(0);
+  const fills = stats.map(st => st.fill?.pct ?? '').join(',');
+  useEffect(() => {
+    const t0 = Date.now();
+    let f: number | null = null;
+    const tick = () => {
+      const u = clamp01((Date.now() - t0) / (FILL[1] - FILL[0]));
+      setCharge(easeOut(u));
+      f = u < 1 ? requestAnimationFrame(tick) : null;
+    };
+    f = requestAnimationFrame(tick);
+    return () => { if (f != null) cancelAnimationFrame(f); };
+  }, [fills]);
   useEffect(() => {
     bind.current = setPts;
     onBind();
@@ -777,7 +794,16 @@ function Hud({ W, H, stats, pulse, bind, onBind }: {
               <Text style={[styles.hudValue, numFace(st.value, 22)]} numberOfLines={1}>{st.value}</Text>
               {!!st.unit && <Text style={styles.hudUnit}>{st.unit}</Text>}
             </View>
-            <Text style={styles.hudSub} numberOfLines={1}>{st.sub}</Text>
+            <View style={styles.hudRow}>
+              <Text style={styles.hudSub} numberOfLines={1}>{st.sub}</Text>
+              {st.fill && <Text style={[numFace('%', 8), { color: st.fill.tone }]}>{`${Math.round(st.fill.pct * charge)}%`}</Text>}
+            </View>
+            {st.fill && (
+              <View style={styles.hudFill}>
+                <MaterialCommunityIcons name={st.fill.icon} size={12} color={st.fill.tone} />
+                <Battery pct={Math.round(st.fill.pct * charge)} tone={st.fill.tone} cells={8} cellW={5} cellH={8} showPct={false} />
+              </View>
+            )}
           </Pressable>
         );
       })}
@@ -787,8 +813,8 @@ function Hud({ W, H, stats, pulse, bind, onBind }: {
 
 /** Ten-cell battery, filled to `pct`, with the number beside it. `tone`
  *  overrides the colour (the callout fills up in its final colour). */
-export function Battery({ pct, tone = batteryTone(pct), cells = 10, cellW = 7, cellH = 11 }: {
-  pct: number; tone?: string; cells?: number; cellW?: number; cellH?: number;
+export function Battery({ pct, tone = batteryTone(pct), cells = 10, cellW = 7, cellH = 11, showPct = true }: {
+  pct: number; tone?: string; cells?: number; cellW?: number; cellH?: number; showPct?: boolean;
 }) {
   const full = Math.round((pct / 100) * cells);
   return (
@@ -799,7 +825,7 @@ export function Battery({ pct, tone = batteryTone(pct), cells = 10, cellW = 7, c
         ))}
       </View>
       <View style={[styles.batteryNub, { height: cellH * 0.5 }]} />
-      <Text style={[styles.batteryPct, numFace(`${pct}%`, 13), { color: tone }]}>{`${pct}%`}</Text>
+      {showPct && <Text style={[styles.batteryPct, numFace(`${pct}%`, 13), { color: tone }]}>{`${pct}%`}</Text>}
     </View>
   );
 }
@@ -825,6 +851,7 @@ const styles = StyleSheet.create({
   hudValue: { color: C.hot },
   hudUnit: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1 },
   hudSub: { fontFamily: F.dot, fontSize: 7, color: C.faint, letterSpacing: 1, marginTop: 2 },
+  hudFill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   reset: {
     position: 'absolute', right: 12, bottom: 12, width: 40, height: 40, borderRadius: 20,
     borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center',

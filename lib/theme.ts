@@ -33,6 +33,8 @@ export const C = {
   live:     '#74F25B', // today / done — the puck's today dot
   alert:    '#FF3B30', // destructive, over-target
   signal:   '#FFB23F', // arrival-board amber — body-map categories only
+  water:    '#3FA9FF', // water progress only
+  food:     '#FF7A3D', // calorie progress only
   scrim:    'rgba(0,0,0,0.72)',
 };
 
