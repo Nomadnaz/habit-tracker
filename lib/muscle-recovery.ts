@@ -157,7 +157,7 @@ export function musclesFor(name: string, groups: MuscleGroup[]): Share {
 
 /** Common lifts, offered under RECOMMENDED. Names go through the same
  *  RULES as logged sessions; `groups` only matter where no rule matches. */
-const CATALOGUE: [string, MuscleGroup[]][] = [
+export const CATALOGUE: [string, MuscleGroup[]][] = [
   ['BENCH PRESS', ['chest']], ['DUMBBELL BENCH PRESS', ['chest']], ['INCLINE DB PRESS', ['chest']],
   ['INCLINE BENCH PRESS', ['chest']], ['DECLINE BENCH PRESS', ['chest']], ['MACHINE CHEST PRESS', ['chest']],
   ['PUSH UP', ['chest']], ['CHEST DIPS', ['chest']], ['CABLE FLY', ['chest']], ['PEC DECK', ['chest']],

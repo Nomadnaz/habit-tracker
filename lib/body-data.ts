@@ -597,3 +597,23 @@ export function getTrackerBarItems(d: BodyData) {
     },
   ];
 }
+
+// ── Body profile (for starting weights) ──────────────────────────────────
+
+export type BodyProfile = { heightCm: number | null; sex: string | null; weightKg: number | null };
+const PROFILE_KEY = '@body_profile';
+
+/** Height, sex and onboarding weight from user_profiles; the last good read is kept for offline. */
+export async function getBodyProfile(): Promise<BodyProfile> {
+  let cached: BodyProfile = { heightCm: null, sex: null, weightKg: null };
+  try { cached = JSON.parse((await AsyncStorage.getItem(PROFILE_KEY)) ?? 'null') ?? cached; } catch { /* keep empty */ }
+  try {
+    const userId = await getUid();
+    if (!userId) return cached;
+    const { data } = await supabase.from('user_profiles').select('height_cm, sex, weight_kg').eq('user_id', userId).maybeSingle();
+    if (!data) return cached;
+    const fresh = { heightCm: data.height_cm ?? null, sex: data.sex ?? null, weightKg: data.weight_kg ?? null };
+    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(fresh));
+    return fresh;
+  } catch { return cached; }
+}

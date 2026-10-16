@@ -38,12 +38,14 @@ import {
 import { upNext, type UpNext } from '@/lib/up-next';
 import { getActivitiesInRange } from '@/lib/activity-data';
 import { MUSCLES } from '@/lib/body-mesh';
+import { guideFor, goalOf, type Guide } from '@/lib/exercise-guide';
+import { ExerciseCard } from '@/components/ExerciseCard';
 import { toDateKey } from '@/lib/dateKey';
 import { Board, BoardRow } from '@/components/Board';
 import { WaterSheet, WeightSheet } from '@/components/BodyLogSheets';
 import {
   loadBodyData, pullRemoteBody, refreshAppleHealthIfConnected,
-  todaySteps, todayWaterMl, latestWeight, formatSleep, type BodyData,
+  todaySteps, todayWaterMl, latestWeight, formatSleep, getBodyProfile, type BodyData, type BodyProfile,
 } from '@/lib/body-data';
 import { connectAndSyncAppleHealth } from '@/lib/apple-health';
 import { getMealsForDate, dailyTotals, getTargets, todayKey } from '@/lib/meals-data';
@@ -87,6 +89,7 @@ export default function BodyScreen() {
   const [next, setNext] = useState<UpNext | null>(null);
   const [lens, setLens] = useState<Lens>('goals');
   const [recovery, setRecovery] = useState(false);
+  const [profile, setProfile] = useState<BodyProfile>({ heightCm: null, sex: null, weightKg: null });
 
   useEffect(() => { loadBodyMap().then(setMap); }, []);
 
@@ -101,6 +104,7 @@ export default function BodyScreen() {
       setVitals({ kcal: dailyTotals(meals).calories, kcalGoal: t.calories, mood: mood?.moodScore ?? null }));
     void getTrainingSessions().then(setSessions).catch(() => {});
     void getExercises().then(setLibrary);
+    void getBodyProfile().then(setProfile);
     // Runs tracked in the app count as leg training too (watch runs come with Apple Health).
     void getActivitiesInRange(new Date(Date.now() - 14 * 86_400_000).toISOString(), new Date().toISOString())
       .then(a => setAppRuns(a.filter(x => x.type === 'run').map(x => ({ start: Date.parse(x.startTime), end: Date.parse(x.endTime), distanceM: x.distanceM }))))
@@ -374,6 +378,14 @@ export default function BodyScreen() {
         regionId={selected}
         status={status}
         library={library}
+        guide={name => guideFor(name, {
+          goal: goalOf(selected && map.marks[selected] ? map.categories.find(c => c.id === map.marks[selected].category)?.name : null),
+          bodyKg: (body && latestWeight(body)) || profile.weightKg,
+          heightCm: profile.heightCm,
+          sex: profile.sex,
+          bestE1rmKg: bestE1rm(name, worn, library),
+        })}
+        bodyKg={(body && latestWeight(body)) || profile.weightKg}
         onClose={() => setGoing(false)}
       />
 
@@ -618,9 +630,23 @@ function Recovery({ status, battery }: { status: MuscleStatus; battery: number }
 
 // ── GO: exercises that work the muscle ───────────────────────────────────
 
-function GoSheet({ visible, regionId, status, library, onClose }: {
-  visible: boolean; regionId: string | null; status: MuscleStatus | null; library: Exercise[]; onClose: () => void;
+/** Your best estimated 1RM for an exercise, from logged sessions or its working weight in the library. */
+function bestE1rm(name: string, sessions: Session[], library: Exercise[]): number | null {
+  const key = name.trim().toUpperCase();
+  const e1 = (kg: number, reps: number | null) => (kg > 0 ? kg * (1 + (reps ?? 1) / 30) : 0);
+  const fromLog = sessions.filter(s => s.name.trim().toUpperCase() === key).map(s => e1(s.weightKg, s.reps));
+  const lib = library.find(e => e.name.trim().toUpperCase() === key);
+  const fromLib = lib ? e1(lib.weightKg, parseInt(lib.reps, 10) || null) : 0;
+  const best = Math.max(0, fromLib, ...fromLog);
+  return best > 0 ? best : null;
+}
+
+function GoSheet({ visible, regionId, status, library, guide, bodyKg, onClose }: {
+  visible: boolean; regionId: string | null; status: MuscleStatus | null; library: Exercise[];
+  guide: (name: string) => Guide; bodyKg: number | null; onClose: () => void;
 }) {
+  const [open, setOpen] = useState<{ name: string; role: string } | null>(null);
+  useEffect(() => { if (!visible) setOpen(null); }, [visible]);
   const region = regionId ? REGION_BY_ID[regionId] : null;
   const base = regionId ? baseOf(regionId) : '';
   const recent = status ? byExercise(status.hits) : [];
@@ -641,29 +667,34 @@ function GoSheet({ visible, regionId, status, library, onClose }: {
           {recent.length === 0 ? (
             <Text style={styles.recEmpty}>Nothing in the last 3 weeks has worked this.</Text>
           ) : recent.map(({ session: s, share, times }) => (
-            <View key={s.exerciseId} style={styles.goRow}>
+            <Pressable key={s.exerciseId} onPress={() => { Haptics.selectionAsync(); setOpen({ name: s.name, role: role(share).toUpperCase() }); }}
+              style={({ pressed }) => [styles.goRow, pressed && { backgroundColor: C.surface }]}>
               <View style={[styles.recShare, { opacity: 0.35 + share * 0.65 }]} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.recName} numberOfLines={1}>{s.name}</Text>
                 <Text style={styles.recDetail} numberOfLines={1}>{`${role(share)} · ${times}× in 3 wks · ${s.weightKg}kg best`}</Text>
               </View>
               <Text style={styles.recDay}>{dayTag(s)}</Text>
-            </View>
+              <MaterialCommunityIcons name="play-circle-outline" size={18} color={C.dim} />
+            </Pressable>
           ))}
 
           <Text style={[styles.panelLabel, { marginTop: 22 }]}>{`RECOMMENDED · ${more.length}`}</Text>
           {more.length === 0 ? (
             <Text style={styles.recEmpty}>No lifts aimed at this one — it works as part of bigger movements.</Text>
           ) : more.map(x => (
-            <View key={x.name} style={styles.goRow}>
+            <Pressable key={x.name} onPress={() => { Haptics.selectionAsync(); setOpen({ name: x.name, role: role(x.share).toUpperCase() }); }}
+              style={({ pressed }) => [styles.goRow, pressed && { backgroundColor: C.surface }]}>
               <View style={[styles.recShare, { opacity: 0.35 + x.share * 0.65 }]} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.recName} numberOfLines={1}>{x.name.toUpperCase()}</Text>
                 <Text style={styles.recDetail} numberOfLines={1}>{x.mine ? `${role(x.share)} · in your library` : role(x.share)}</Text>
               </View>
-            </View>
+              <MaterialCommunityIcons name="play-circle-outline" size={18} color={C.dim} />
+            </Pressable>
           ))}
         </ScrollView>
+        {open && <ExerciseCard name={open.name} role={open.role} guide={guide(open.name)} bodyKg={bodyKg} onClose={() => setOpen(null)} />}
       </View>
     </Modal>
   );
