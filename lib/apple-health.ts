@@ -1,9 +1,9 @@
-// Apple Health (HealthKit) — read steps, walking distance, activity, sleep, weight.
+// Apple Health (HealthKit) — read steps, walking distance, activity, sleep, weight, heart rate, HRV.
 // Requires a custom iOS dev build (not Expo Go). Run: npx expo prebuild && npx expo run:ios
 
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
-import { dateKey, type BodyData } from './body-data';
+import { dateKey, type BodyData, type HeartNow } from './body-data';
 
 export type AppleHealthActivityToday = {
   activeMinutes: number;
@@ -18,6 +18,7 @@ export type AppleHealthSyncResult = {
   sleepMins: number | null;
   weightKg: number | null;
   weightAt: string | null;
+  heart: HeartNow;
 };
 
 type HealthSample = { value: number; startDate: string; endDate: string };
@@ -51,6 +52,8 @@ function getPermissions(kit: HealthKitModule) {
         Permissions.SleepAnalysis,
         Permissions.Weight,
         Permissions.Height,
+        Permissions.HeartRate,
+        Permissions.HeartRateVariability,
       ],
       write: [
         Permissions.Weight,
@@ -200,18 +203,36 @@ async function fetchLatestWeightKg(kit: HealthKitModule): Promise<{ kg: number; 
   return { kg: Math.round(kg * 10) / 10, at: latest.endDate };
 }
 
+async function fetchHeart(kit: HealthKitModule): Promise<HeartNow> {
+  const now = Date.now();
+  const range = (days: number) => ({ startDate: new Date(now - days * 86_400_000).toISOString(), endDate: new Date(now).toISOString(), ascending: false });
+  const [hr, hrv] = await Promise.all([
+    promisify<HealthSample[]>(kit.getHeartRateSamples.bind(kit), range(1)).catch(() => [] as HealthSample[]),
+    promisify<HealthSample[]>(kit.getHeartRateVariabilitySamples.bind(kit), range(7)).catch(() => [] as HealthSample[]),
+  ]);
+  const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+  // Newest first. HRV comes back in seconds.
+  return {
+    bpm: hr.length ? Math.round(hr[0].value) : null,
+    avgBpm: mean(hr.map(x => x.value)),
+    hrvMs: hrv.length ? Math.round(hrv[0].value * 1000) : null,
+    hrvAvgMs: mean(hrv.map(x => x.value * 1000)),
+  };
+}
+
 export async function fetchAppleHealthMetrics(historyDays = 56): Promise<AppleHealthSyncResult | null> {
   const kit = getHealthKit();
   if (!kit) return null;
 
-  const [dailySteps, activityToday, sleepMins, weight] = await Promise.all([
+  const [dailySteps, activityToday, sleepMins, weight, heart] = await Promise.all([
     fetchDailySteps(kit, historyDays),
     fetchTodayActivity(kit),
     fetchLastNightSleepMins(kit),
     fetchLatestWeightKg(kit),
+    fetchHeart(kit),
   ]);
 
-  return { dailySteps, activityToday, sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null };
+  return { dailySteps, activityToday, sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null, heart };
 }
 
 /** Writes a manually-logged weight into HealthKit so it shows up in the Health app too. */
@@ -248,6 +269,7 @@ export function mergeAppleHealthIntoBodyData(
     stepsHistory,
     stepsThisYear: stepsThisYearFromHistory(stepsHistory),
     activityToday: sync.activityToday,
+    heart: sync.heart,
     appleHealthConnected: true,
     appleHealthLastSync: new Date().toISOString(),
   };

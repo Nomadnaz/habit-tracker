@@ -37,16 +37,15 @@ export type MuscleStatus = {
   hits: Hit[];              // newest first
 };
 
-// Base recovery hours. Muscles not listed (head, joints, hands, feet) aren't
-// trained directly and have no battery.
+// Base recovery hours, for every muscle on the figure.
 const BASE_H: Record<string, number> = {
   'quad.rf': 72, 'quad.vl': 72, 'quad.vm': 72, 'ham.bf': 72, 'ham.st': 72, 'glute.max': 72,
   erector: 72, lat: 72, 'pec.upper': 72, 'pec.lower': 72,
   'delt.front': 48, 'delt.side': 48, 'delt.rear': 48, 'traps.upper': 48, 'traps.mid': 48, 'traps.lower': 48,
   cuff: 48, biceps: 48, brachialis: 48, 'triceps.lat': 48, 'triceps.long': 48, adductor: 48,
-  'glute.med': 48, hipflex: 48, serratus: 48, teres: 48, tfl: 48, sartorius: 48,
+  'glute.med': 48, hipflex: 48, serratus: 48, teres: 48, tfl: 48,
   brachiorad: 36, 'forearm.flex': 36, 'forearm.ext': 36, 'gastro.lat': 36, 'gastro.med': 36,
-  soleus: 36, tib: 36, peroneal: 36, 'abs.upper': 36, 'abs.lower': 36, oblique: 36,
+  soleus: 36, tib: 36, 'abs.upper': 36, 'abs.lower': 36, oblique: 36,
 };
 
 export const hasBattery = (baseId: string) => baseId in BASE_H;
@@ -72,8 +71,8 @@ const RULES: [RegExp, Share][] = [
   [/EXTERNAL ROT|INTERNAL ROT|CUBAN/, { cuff: 1, 'delt.rear': 0.3 }],
   [/\bY[ -]RAISE/, { 'traps.lower': 1, 'traps.mid': 0.6, 'delt.rear': 0.4 }],
   [/SERRATUS|SCAP(ULAR)? PUSH/, { serratus: 1, 'delt.front': 0.3 }],
-  [/TIB(IALIS)? RAISE|TOE RAISE/, { tib: 1, shin: 0.6 }],
-  [/KNEE RAISE|HIP FLEX/, { hipflex: 1, 'abs.lower': 0.6, tfl: 0.4, sartorius: 0.3 }],
+  [/TIB(IALIS)? RAISE|TOE RAISE/, { tib: 1 }],
+  [/KNEE RAISE|HIP FLEX/, { hipflex: 1, 'abs.lower': 0.6, tfl: 0.4 }],
   [/BACK EXT|HYPEREXT|SUPERMAN/, { erector: 1, 'glute.max': 0.5, ...scale(HAMS, 0.4) }],
   [/WRIST|FOREARM|GRIP/, { 'forearm.flex': 1, 'forearm.ext': 0.8, brachiorad: 0.5 }],
   [/CURL/, { biceps: 1, brachialis: 0.7, 'forearm.flex': 0.4 }],
@@ -94,7 +93,7 @@ const RULES: [RegExp, Share][] = [
   [/HIP THRUST|GLUTE BRIDGE|GLUTE KICK/, { 'glute.max': 1, 'glute.med': 0.5, ...scale(HAMS, 0.4) }],
   [/ABDUCT/, { 'glute.med': 1, tfl: 0.6 }],
   [/ADDUCT/, { adductor: 1 }],
-  [/SQUAT|LEG PRESS|LUNGE|SPLIT|STEP ?UP|HACK/, { ...QUADS, 'quad.rf': 0.8, 'glute.max': 0.7, adductor: 0.5, sartorius: 0.3, ...scale(HAMS, 0.2) }],
+  [/SQUAT|LEG PRESS|LUNGE|SPLIT|STEP ?UP|HACK/, { ...QUADS, 'quad.rf': 0.8, 'glute.max': 0.7, adductor: 0.5, ...scale(HAMS, 0.2) }],
   [/TWIST|WOODCHOP|SIDE PLANK/, { oblique: 1, 'abs.upper': 0.4 }],
   [/CRUNCH|SIT ?UP|PLANK|LEG RAISE|\bABS?\b/, { 'abs.upper': 1, 'abs.lower': 0.8, oblique: 0.4 }],
 ];
@@ -115,7 +114,7 @@ const GROUPS: Record<MuscleGroup, Share> = {
   calves: CALVES,
   abs: { 'abs.upper': 1, 'abs.lower': 1 },
   'lower back': { erector: 1 },
-  'hip flexors': { hipflex: 1, tfl: 0.6, sartorius: 0.5 },
+  'hip flexors': { hipflex: 1, tfl: 0.6 },
   core: { 'abs.upper': 1, 'abs.lower': 1, oblique: 0.8, serratus: 0.5 },
   cardio: {},
 };

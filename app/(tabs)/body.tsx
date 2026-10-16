@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────
-// BODY — the 3D muscle map + today's vitals (calories, sleep, mood,
-// steps, water, weight). Water and weight log right here via
+// BODY — the hub: the 3D muscle map with today's numbers floating round it
+// (heart rate and HRV from Apple Health, calories, water, steps), then
+// sleep, mood and weight below. Water and weight log right here via
 // components/BodyLogSheets.tsx; the rest open their own screens.
 //
 // Spin the figure, pinch in, tap a zone (the chest, a thigh) → a strip of
@@ -24,7 +25,7 @@ import {
   REGIONS, REGION_BY_ID, loadBodyMap, saveBodyMap,
   type BodyMap, type Category, type Tone,
 } from '@/lib/body-map';
-import { BodyStage, Battery, TONE, batteryTone, type Facing } from '@/components/body/BodyStage';
+import { BodyStage, Battery, TONE, batteryTone, type Facing, type HudStat } from '@/components/body/BodyStage';
 import { ZONE_BY_ID, ZONE_OF, type Zone } from '@/lib/body-mesh';
 import { getExercises, getTrainingSessions, type Exercise } from '@/lib/workout-data';
 import {
@@ -138,6 +139,22 @@ export default function BodyScreen() {
   const zonePcts = zone ? ZONE_BY_ID[zone].muscles.map(batteryOf).filter((p): p is number => p != null) : [];
   const zoneBattery = zonePcts.length ? Math.round(zonePcts.reduce((a, b) => a + b, 0) / zonePcts.length) : null;
 
+  // Today's numbers around the figure, each tied to where it lives on the body.
+  const heart = body?.heart;
+  const noHeart = body?.appleHealthConnected ? 'NO READING' : 'TAP TO CONNECT';
+  const hud: HudStat[] = body ? [
+    { id: 'hr', label: 'HEART', value: heart?.bpm != null ? String(heart.bpm) : '—', unit: 'BPM',
+      sub: heart?.avgBpm != null ? `AVG ${heart.avgBpm}` : noHeart, onPress: syncAppleHealth },
+    { id: 'hrv', label: 'HRV', value: heart?.hrvMs != null ? String(heart.hrvMs) : '—', unit: 'MS',
+      sub: heart?.hrvAvgMs != null ? `7 DAY AVG ${heart.hrvAvgMs}` : noHeart, onPress: syncAppleHealth },
+    { id: 'kcal', label: 'CALORIES', value: String(vitals.kcal), unit: 'KCAL',
+      sub: vitals.kcalGoal ? `OF ${vitals.kcalGoal}` : 'TODAY', onPress: () => router.push('/calorie') },
+    { id: 'water', label: 'WATER', value: (todayWaterMl(body) / 1000).toFixed(1), unit: 'L',
+      sub: 'TAP TO ADD', onPress: () => setSheet('water') },
+    { id: 'steps', label: 'STEPS', value: todaySteps(body).toLocaleString(), unit: '',
+      sub: `OF ${body.stepsGoal.toLocaleString()}`, onPress: () => router.push('/steps') },
+  ] : [];
+
   const stageH = Math.min(580, Math.round(width * 1.36));
   const counts = Object.values(map.marks).reduce<Record<string, number>>((a, m) => ({ ...a, [m.category]: (a[m.category] ?? 0) + 1 }), {});
   const targets = REGIONS.filter(r => map.marks[r.id]).sort((a, b) =>
@@ -184,6 +201,8 @@ export default function BodyScreen() {
           onHome={home}
           onFacing={setSide}
           onZoomed={setStageZoomed}
+          hud={hud}
+          pulse={heart?.bpm ?? null}
         />
 
         <Text style={styles.hint}>DRAG TO SPIN · PINCH TO ZOOM · TAP TO ZOOM IN</Text>
@@ -219,12 +238,9 @@ export default function BodyScreen() {
           <>
               <Text style={styles.sectionTitle}>VITALS</Text>
               <View style={styles.vitals}>
-                <Vital i={0} label="CALORIES" value={String(vitals.kcal)} sub={vitals.kcalGoal ? `OF ${vitals.kcalGoal}` : 'KCAL'} onPress={() => router.push('/calorie')} />
-                <Vital i={1} label="SLEEP" value={body.sleepMins != null ? formatSleep(body.sleepMins) : '—'} sub="LAST NIGHT" onPress={() => router.push('/modals/sleep-detail')} />
-                <Vital i={2} label="MOOD" value={vitals.mood != null ? `${vitals.mood}/10` : '—'} sub={vitals.mood != null ? 'TODAY' : 'TAP TO LOG'} onPress={() => router.push('/modals/mood')} />
-                <Vital i={3} label="STEPS" value={todaySteps(body).toLocaleString()} sub={`OF ${body.stepsGoal.toLocaleString()}`} onPress={() => router.push('/steps')} />
-                <Vital i={4} label="WATER" value={`${(todayWaterMl(body) / 1000).toFixed(1)}L`} sub="TAP TO ADD" onPress={() => setSheet('water')} />
-                <Vital i={5} label="WEIGHT" value={latestWeight(body) > 0 ? latestWeight(body).toFixed(1) : '—'} sub="KG · TAP TO LOG" onPress={() => setSheet('weight')} />
+                <Vital i={0} label="SLEEP" value={body.sleepMins != null ? formatSleep(body.sleepMins) : '—'} sub="LAST NIGHT" onPress={() => router.push('/modals/sleep-detail')} />
+                <Vital i={1} label="MOOD" value={vitals.mood != null ? `${vitals.mood}/10` : '—'} sub={vitals.mood != null ? 'TODAY' : 'TAP TO LOG'} onPress={() => router.push('/modals/mood')} />
+                <Vital i={2} label="WEIGHT" value={latestWeight(body) > 0 ? latestWeight(body).toFixed(1) : '—'} sub="KG · TAP TO LOG" onPress={() => setSheet('weight')} />
               </View>
 
               <Board title="MORE">
@@ -290,7 +306,7 @@ export default function BodyScreen() {
 
 function Vital({ i, label, value, sub, onPress }: { i: number; label: string; value: string; sub: string; onPress: () => void }) {
   // Hairlines between tiles only — the grid's own border closes the outside.
-  const edges = { borderRightWidth: i % 3 === 2 ? 0 : 1, borderBottomWidth: i >= 3 ? 0 : 1 };
+  const edges = { borderRightWidth: i % 3 === 2 ? 0 : 1 };
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.vital, edges, pressed && { backgroundColor: C.raised }]}>
       <Text style={styles.vitalLabel}>{label}</Text>

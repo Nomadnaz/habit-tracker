@@ -67,6 +67,14 @@ export type BodyActivityToday = {
   flightsClimbed: number;
 };
 
+/** Latest heart readings from Apple Health (a watch writes these). */
+export type HeartNow = {
+  bpm: number | null;       // newest heart-rate sample, last 24h
+  avgBpm: number | null;    // mean of the last 24h
+  hrvMs: number | null;     // newest HRV (SDNN), last 7 days
+  hrvAvgMs: number | null;  // mean HRV over those 7 days
+};
+
 export type BodyData = {
   // 1.1 Global stats bar
   workoutsTotal: number;
@@ -101,6 +109,7 @@ export type BodyData = {
   appleHealthConnected?: boolean;
   appleHealthLastSync?: string;
   activityToday?: BodyActivityToday;
+  heart?: HeartNow;
 };
 
 // ── Date helpers ───────────────────────────────────────────────────────────
@@ -183,7 +192,7 @@ type CoreBodyData = Pick<
   BodyData,
   | 'stepsGoal' | 'stepsHistory' | 'activeMovement' | 'weightLogs' | 'waterLogs'
   | 'waterGoalMl' | 'workoutsTotal' | 'appleHealthConnected' | 'appleHealthLastSync'
-  | 'activityToday' | 'sleepMins'
+  | 'activityToday' | 'sleepMins' | 'heart'
 >;
 
 // stepsGoal/waterGoalMl are user-configurable GOALS (sane defaults), not
@@ -200,6 +209,7 @@ const EMPTY_CORE: CoreBodyData = {
   appleHealthLastSync: undefined,
   activityToday: undefined,
   sleepMins: null,
+  heart: undefined,
 };
 
 async function loadCore(): Promise<CoreBodyData> {
@@ -219,6 +229,7 @@ async function loadCore(): Promise<CoreBodyData> {
         appleHealthLastSync: parsed.appleHealthLastSync,
         activityToday: parsed.activityToday,
         sleepMins: parsed.sleepMins ?? null,
+        heart: parsed.heart,
       };
     }
   } catch { /* fall through */ }

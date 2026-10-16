@@ -1,11 +1,15 @@
 # Which Z-Anatomy objects make up each muscle id on the BODY tab.
 # Paired ids get '.l' / '.r' appended (Z-Anatomy's own side suffixes; +x is
 # the figure's left in both). Names without a side are taken from both sides
-# for an unsided id ('neck', 'head', 'abs.*').
+# for an unsided id ('x.neck', 'x.head', 'abs.*').
 # Muscles hidden under others (rhomboids, supraspinatus, vastus intermedius,
 # gluteus minimus...) are left out: they can't be seen or tapped.
-# 'head', 'hand', 'foot' and the joints are skin regions from Z-Anatomy's
-# "Regions of human body" — there's no muscle to show there.
+# Only muscles you'd train get an id. Everything else that makes the figure
+# read as a body — head, neck, hands, feet, the knee and forearm bones, the
+# small lower-leg muscles — is scenery under an 'x.' id: drawn faint, never
+# tappable. (Z-Anatomy's skin regions for the knee, elbow, wrist and ankle
+# were bands wrapped round the muscles and made the joints look swollen;
+# the bones underneath fill those gaps at their real size.)
 
 PAIRED = {
     'delt.front': ['Clavicular part of deltoid muscle'],
@@ -24,7 +28,6 @@ PAIRED = {
     'brachialis': ['Brachialis muscle', 'Coracobrachialis muscle'],
     'triceps.lat': ['Lateral head of triceps brachii'],
     'triceps.long': ['Long head of triceps brachii', 'Medial head of triceps brachii'],
-    'elbow': ['Posterior region of elbow'],
     'brachiorad': ['Brachioradialis muscle'],
     'forearm.flex': ['Flexor carpi radialis', 'Palmaris longus muscle', 'Humeral head of flexor carpi ulnaris',
                      'Ulnar head of flexor carpi ulnaris', 'Humero-ulnar head of flexor digitorum superficialis',
@@ -32,8 +35,6 @@ PAIRED = {
     'forearm.ext': ['Extensor carpi radialis longus', 'Extensor carpi radialis brevis', 'Extensor digitorum',
                     'Extensor digiti minimi', 'Humeral head of extensor carpi ulnaris', 'Ulnar head of extensor carpi ulnaris',
                     'Abductor pollicis longus', 'Extensor pollicis brevis', 'Anconeus muscle'],
-    'wrist': ['Anterior region of wrist', 'Posterior region of wrist'],
-    'hand': ['Dorsum of hand', 'Palm', 'Dorsal surfaces of digits of hand', 'Palmar surfaces of digits of hand'],
     'oblique': ['External abdominal oblique muscle'],
     'serratus': ['Serratus anterior muscle'],
     'hipflex': ['Iliacus muscle', 'Psoas major'],
@@ -43,29 +44,35 @@ PAIRED = {
     'quad.rf': ['Rectus femoris muscle'],
     'quad.vl': ['Vastus lateralis muscle'],
     'quad.vm': ['Vastus medialis muscle'],
-    'sartorius': ['Sartorius muscle'],
     'adductor': ['Adductor longus', 'Adductor magnus', 'Gracilis muscle', 'Pectineus muscle'],
     'ham.bf': ['Long head of biceps femoris', 'Short head of biceps femoris'],
     'ham.st': ['Semitendinosus muscle', 'Semimembranosus muscle'],
-    'knee': ['Anterior region of knee'],
     'tib': ['Tibialis anterior muscle'],
-    'shin': ['Extensor digitorum longus', 'Extensor hallucis longus'],
-    'peroneal': ['Fibularis longus muscle', 'Fibularis brevis muscle'],
     'gastro.lat': ['Lateral head of gastrocnemius'],
     'gastro.med': ['Medial head of gastrocnemius'],
     'soleus': ['Soleus muscle'],
-    'ankle': ['Calcaneal tendon', 'Anterior region of ankle', 'Lateral malleolus', 'Medial malleolus'],
-    'foot': ['Dorsum of foot', 'Sole', 'Dorsal surfaces of digits of foot', 'Plantar surfaces of digits of foot', 'Heel region'],
 }
 
 SINGLE = {
-    'head': ['Frontal region', 'Parietal region', 'Occipital region', 'Temporal region', 'Orbital region',
+    'x.head': ['Frontal region', 'Parietal region', 'Occipital region', 'Temporal region', 'Orbital region',
              'Infra-orbital region', 'Zygomatic region', 'Buccal region', 'Parotideomasseteric region', 'Oral region',
              'Mental region', 'Nasal region', 'Mastoid region', 'Auricular region', 'Helix', 'Lobule of auricle',
              'Eyelids', 'External nose', 'Upper lip', 'Chin'],
-    'neck': ['Sternocleidomastoid muscle', 'Splenius capitis muscle', 'Levator scapulae', 'Scalenus anterior muscle',
+    'x.neck': ['Sternocleidomastoid muscle', 'Splenius capitis muscle', 'Levator scapulae', 'Scalenus anterior muscle',
              'Scalenus medius muscle', 'Omohyoid muscle', 'Sternohyoid muscle'],
     'abs': ['Rectus abdominis muscle', 'Pyramidalis muscle'],  # split into abs.upper / abs.lower at the navel
+}
+
+# Scenery (paired: per side).
+DECOR = {
+    'x.hand': ['Dorsum of hand', 'Palm', 'Dorsal surfaces of digits of hand', 'Palmar surfaces of digits of hand'],
+    'x.foot': ['Dorsum of foot', 'Sole', 'Dorsal surfaces of digits of foot', 'Plantar surfaces of digits of foot', 'Heel region'],
+    'x.arm': ['Humerus', 'Ulna', 'Radius'],
+    'x.knee': ['Patella', 'Tibia', 'Fibula'],
+    'x.ankle': ['Calcaneal tendon'],
+    'x.clavicle': ['Clavicle'],
+    'x.leg': ['Sartorius muscle', 'Extensor digitorum longus', 'Extensor hallucis longus',
+              'Fibularis longus muscle', 'Fibularis brevis muscle'],
 }
 
 ABS_SPLIT_Z = 1.03  # m — navel height in Z-Anatomy; rectus above it → abs.upper

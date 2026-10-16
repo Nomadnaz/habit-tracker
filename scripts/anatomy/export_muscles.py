@@ -5,11 +5,11 @@
 # Coordinates out: cm, y up, feet at 0, +z front, +x the figure's left.
 import bpy, bmesh, json, math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from parts import PAIRED, SINGLE, ABS_SPLIT_Z, TRIM
+from parts import PAIRED, SINGLE, DECOR, ABS_SPLIT_Z, TRIM
 
 argv = sys.argv[sys.argv.index('--') + 1:]
 OUT = argv[0]
-BUDGET = int(argv[1]) if len(argv) > 1 else 60000
+BUDGET = int(argv[1]) if len(argv) > 1 else 120000
 
 scene = bpy.context.scene
 tmp = bpy.data.collections.new('export_tmp')
@@ -84,7 +84,7 @@ def decimated(bm, target):
 
 # Build every part's source mesh first, so the budget can be shared by area.
 src = {}
-for mid, names in PAIRED.items():
+for mid, names in {**PAIRED, **DECOR}.items():
     for side in ('l', 'r'):
         b = source_bm(names, ['.' + side])
         if mid in TRIM:
@@ -106,7 +106,8 @@ for key, keep in (('abs.upper', lambda z: z >= ABS_SPLIT_Z), ('abs.lower', lambd
     src[key] = b
 
 areas = {k: area(b) for k, b in src.items()}
-weight = {k: max(a, 1e-6) ** 0.8 for k, a in areas.items()}
+# Scenery gets half the detail per area of a muscle — it's drawn faint.
+weight = {k: max(a, 1e-6) ** 0.8 * (0.5 if k.startswith('x.') else 1) for k, a in areas.items()}
 total_w = sum(weight.values())
 out = {}
 for k, b in src.items():

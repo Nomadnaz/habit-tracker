@@ -15,11 +15,15 @@
 // display — with a faint rim on the edges. The selected muscle is drawn
 // solid and lit, so its real shape reads at a glance. Marked muscles take
 // their category's colour.
+// At the whole figure, today's numbers float either side of it (heart rate
+// and HRV, calories, water, steps), each with a leader line to where it
+// lives on the body — the heart, the stomach, a foot — that follows the
+// figure as it turns.
 // Rendering is plain WebGL through expo-gl: one shader, one draw per
 // muscle, redrawn only when something changes. React only re-renders for
-// the callout.
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+// the callout and the readouts' lines.
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import Svg, { Polyline, Rect } from 'react-native-svg';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -104,6 +108,26 @@ const ZONE_VIEW: Record<string, ZoneView> = Object.fromEntries(ZONES.map(z => {
   return [z.id, { lo, hi, c, r, yaw, members: new Set(parts.map(p => p.mi)), anchors }];
 }));
 
+// ── readouts ─────────────────────────────────────────────────────────────
+
+export type HudId = 'hr' | 'hrv' | 'kcal' | 'water' | 'steps';
+export type HudStat = { id: HudId; label: string; value: string; unit: string; sub: string; onPress?: () => void };
+/** Beats per minute, for the HEART readout's pulse. */
+export type HudPulse = number | null;
+type HudPt = { x: number; y: number; a: number };
+
+// Where each readout floats (which side, how far down the stage) and the
+// point on the body (cm) its line runs to, with the way that point faces —
+// its line fades while it's round the back. Feet show from any side.
+const HUD_W = 70; // until a readout has measured itself
+const HUD_SLOT: Record<HudId, { side: 'l' | 'r'; y: number; at: V3; n: V3 | null }> = {
+  hr: { side: 'r', y: 0.13, at: [6, 128, 11], n: [0.3, 0, 0.95] },
+  hrv: { side: 'r', y: 0.29, at: [6, 128, 11], n: [0.3, 0, 0.95] },
+  kcal: { side: 'l', y: 0.25, at: [-4, 112, 11], n: [0, 0, 1] },
+  water: { side: 'l', y: 0.41, at: [-3, 97, 10], n: [0, 0, 1] },
+  steps: { side: 'l', y: 0.78, at: [-9.5, 5, 8], n: null },
+};
+
 interface Props {
   width: number;
   height: number;
@@ -115,7 +139,7 @@ interface Props {
   filter: string | null;
   /** False while the tab is out of sight — stops the idle turn. */
   active: boolean;
-  /** Recovery 0–100 of the selected muscle, or the zone's average; null when there's none (joints, head). */
+  /** Recovery 0–100 of the selected muscle, or the zone's average; null when there's none. */
   battery: number | null;
   /** A tap on the figure: the muscle under the finger, or null for empty space. */
   onPick: (id: string | null) => void;
@@ -124,6 +148,9 @@ interface Props {
   onFacing: (f: Facing) => void;
   /** True while zoomed in, so the page can stop scrolling under the finger. */
   onZoomed: (zoomed: boolean) => void;
+  /** Today's numbers around the whole figure; hidden while zoomed or framing a zone. */
+  hud: HudStat[];
+  pulse: HudPulse;
 }
 
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -234,7 +261,7 @@ function setupGL(gl: ExpoWebGLRenderingContext): GLState {
   return { gl, aPos, aNrm, u };
 }
 
-export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed }: Props) {
+export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed, hud, pulse }: Props) {
   const cam = useRef<Cam>({ ...HOME });
   const tween = useRef<Tween | null>(null);
   const spin = useRef(0);               // rad/s of momentum
@@ -251,6 +278,8 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   const [zoomed, setZoomed] = useState(false);
   const facingRef = useRef<Facing>(facing);
   const zoomedRef = useRef(false);
+  const hudSet = useRef<((p: Record<HudId, HudPt>) => void) | null>(null);
+  const hudLast = useRef<Record<HudId, HudPt> | null>(null);
 
   // Latest props for the gesture callbacks (they're built once).
   const props = useRef({ onPick, onFacing, onZoomed });
@@ -329,6 +358,17 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
       gl.vertexAttribPointer(S.aNrm, 3, gl.FLOAT, false, 24, p.vStart * 24 + 12);
       gl.drawElements(gl.TRIANGLES, p.iCount, gl.UNSIGNED_SHORT, p.iStart * 2);
     }
+    // Scenery: one faint ink, receding further while a zone is framed.
+    const ink = rgb(C.ink);
+    gl.uniform3f(u.uCol, ink[0], ink[1], ink[2]);
+    gl.uniform1f(u.uAmt, z ? 0.1 : 0.42);
+    gl.uniform1f(u.uMode, 0);
+    gl.uniform2f(u.uPhase, ZONE_PHASE[0], ZONE_PHASE[1]);
+    for (const p of MESH.decor) {
+      gl.vertexAttribPointer(S.aPos, 3, gl.FLOAT, false, 24, p.vStart * 24);
+      gl.vertexAttribPointer(S.aNrm, 3, gl.FLOAT, false, 24, p.vStart * 24 + 12);
+      gl.drawElements(gl.TRIANGLES, p.iCount, gl.UNSIGNED_SHORT, p.iStart * 2);
+    }
     gl.flush();
     gl.endFrameEXP?.();
   };
@@ -382,12 +422,33 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     settle();
     draw();
     if (live.current.selPart || live.current.zv) setFrame(f => f + 1); // the callout follows the muscle / zone
+    else placeHud();
     if (more) { last.current = now; raf.current = requestAnimationFrame(step); }
   };
   useEffect(() => () => { if (raf.current != null) cancelAnimationFrame(raf.current); }, []);
 
   // Colours / size changed → redraw once.
-  useEffect(() => { draw(); }, [look, W, H]);
+  useEffect(() => { draw(); placeHud(); }, [look, W, H]);
+
+  // Moves the readouts' lines to where their points now are on screen —
+  // only when one has moved, so a still figure re-renders nothing.
+  const placeHud = () => {
+    if (!hudSet.current) return;
+    const R = rotation(cam.current.yaw);
+    const next = {} as Record<HudId, HudPt>;
+    let moved = !hudLast.current;
+    for (const id of Object.keys(HUD_SLOT) as HudId[]) {
+      const { at, n } = HUD_SLOT[id];
+      const p = project(at);
+      const a = n ? 0.3 + 0.7 * clamp01((dot3(R[2], n) + 0.15) / 0.5) : 1;
+      next[id] = { x: p.x, y: p.y, a };
+      const was = hudLast.current?.[id];
+      if (was && (Math.abs(was.x - p.x) > 0.5 || Math.abs(was.y - p.y) > 0.5 || Math.abs(was.a - a) > 0.02)) moved = true;
+    }
+    if (!moved) return;
+    hudLast.current = next;
+    hudSet.current(next);
+  };
 
   // Back on the tab → pick the idle turn up again.
   useEffect(() => { if (active) { lastInput.current = Date.now(); kick(); } }, [active]);
@@ -476,7 +537,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   const pick = (x: number, y: number): string | null => {
     const { o, d } = rayAt(x, y);
     const hit = raycast(MESH, o, d);
-    return hit ? MUSCLES[hit.mi].id : null;
+    return hit && hit.mi >= 0 ? MUSCLES[hit.mi].id : null;
   };
   const pickRef = useRef(pick);
   pickRef.current = pick;
@@ -635,12 +696,92 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
         </View>
       )}
 
+      {!zone && !zoomed && hud.length > 0 && (
+        <Hud W={W} H={H} stats={hud} pulse={pulse} bind={hudSet} onBind={() => { hudLast.current = null; placeHud(); }} />
+      )}
+
       {zoomed && (
         <Pressable onPress={zone ? onHome : reset} style={styles.reset} hitSlop={8} accessibilityLabel="Reset view">
           <MaterialCommunityIcons name="fit-to-screen-outline" size={18} color={C.ink} />
         </Pressable>
       )}
     </View>
+  );
+}
+
+/** The readouts, with their leader lines. Lines are re-placed by the stage
+ *  through `bind` as the figure turns, without re-rendering the stage. */
+function Hud({ W, H, stats, pulse, bind, onBind }: {
+  W: number; H: number; stats: HudStat[]; pulse: HudPulse;
+  bind: MutableRefObject<((p: Record<HudId, HudPt>) => void) | null>; onBind: () => void;
+}) {
+  const [pts, setPts] = useState<Record<HudId, HudPt> | null>(null);
+  const beat = useRef(new Animated.Value(0.25)).current;
+  useEffect(() => {
+    bind.current = setPts;
+    onBind();
+    return () => { bind.current = null; };
+  }, []);
+  // The heart readout's square beats at the measured rate.
+  useEffect(() => {
+    if (!pulse) { beat.setValue(0.25); return; }
+    const ms = 60_000 / pulse;
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(beat, { toValue: 1, duration: ms * 0.15, useNativeDriver: true }),
+      Animated.timing(beat, { toValue: 0.25, duration: ms * 0.85, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  // Each line leaves from the readout's inner edge, so it needs its width.
+  const [wide, setWide] = useState<Partial<Record<HudId, number>>>({});
+  const edge = (id: HudId) => {
+    const { side, y } = HUD_SLOT[id];
+    const w = (wide[id] ?? HUD_W) + 6;
+    return { x: side === 'l' ? 12 + w : W - 12 - w, y: y * H + 24, dx: side === 'l' ? 10 : -10 };
+  };
+  return (
+    <>
+      {pts && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Svg width={W} height={H}>
+            {stats.map(st => {
+              const p = pts[st.id], e = edge(st.id);
+              const line = `${e.x},${e.y} ${e.x + e.dx},${e.y} ${p.x},${p.y}`;
+              // A dark casing, so the line still reads across the lit figure.
+              return [
+                <Polyline key={`${st.id}-c`} points={line} fill="none" stroke={C.bg} strokeWidth={3} strokeOpacity={0.7 * p.a} />,
+                <Polyline key={st.id} points={line} fill="none" stroke={C.hot} strokeWidth={1} strokeOpacity={0.7 * p.a} />,
+              ];
+            })}
+            {stats.map(st => {
+              const p = pts[st.id];
+              return <Rect key={st.id} x={p.x - 2.5} y={p.y - 2.5} width={5} height={5} fill={C.hot} fillOpacity={p.a} />;
+            })}
+          </Svg>
+        </View>
+      )}
+      {stats.map(st => {
+        const { side, y } = HUD_SLOT[st.id];
+        const right = side === 'r';
+        return (
+          <Pressable key={st.id} onPress={st.onPress} hitSlop={6}
+            onLayout={e => { const w = Math.round(e.nativeEvent.layout.width); setWide(o => (o[st.id] === w ? o : { ...o, [st.id]: w })); }}
+            style={[styles.hud, { top: y * H }, right ? { right: 12, alignItems: 'flex-end' } : { left: 12 }]}>
+            <View style={styles.hudHead}>
+              {st.id === 'hr' && <Animated.View style={[styles.hudBeat, { opacity: beat }]} />}
+              <Text style={styles.hudLabel}>{st.label}</Text>
+            </View>
+            <View style={styles.hudRow}>
+              <Text style={[styles.hudValue, numFace(st.value, 22)]} numberOfLines={1}>{st.value}</Text>
+              {!!st.unit && <Text style={styles.hudUnit}>{st.unit}</Text>}
+            </View>
+            <Text style={styles.hudSub} numberOfLines={1}>{st.sub}</Text>
+          </Pressable>
+        );
+      })}
+    </>
   );
 }
 
@@ -676,6 +817,14 @@ const styles = StyleSheet.create({
   batteryBody: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 2, borderWidth: 1, borderColor: C.lineHi, borderRadius: 3 },
   batteryNub: { width: 2, backgroundColor: C.lineHi, marginLeft: 1, borderTopRightRadius: 1, borderBottomRightRadius: 1 },
   batteryPct: { marginLeft: 7 },
+  hud: { position: 'absolute', maxWidth: 124 },
+  hudHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  hudBeat: { width: 5, height: 5, backgroundColor: C.alert },
+  hudLabel: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5 },
+  hudRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 },
+  hudValue: { color: C.hot },
+  hudUnit: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1 },
+  hudSub: { fontFamily: F.dot, fontSize: 7, color: C.faint, letterSpacing: 1, marginTop: 2 },
   reset: {
     position: 'absolute', right: 12, bottom: 12, width: 40, height: 40, borderRadius: 20,
     borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center',

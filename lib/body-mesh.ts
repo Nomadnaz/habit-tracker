@@ -2,10 +2,11 @@
 // Body mesh — the anatomical figure on the BODY tab.
 //
 // Real muscle geometry from Z-Anatomy (CC BY-SA 4.0, itself built on
-// BodyParts3D © DBCLS, CC BY 4.0), cut down to the ~90 muscles you can see
-// and tap, decimated, and pre-packed into lib/body-mesh-data.ts by
-// scripts/anatomy/ (see the README there). Head, hands, feet and the
-// joints are the matching skin regions — there's no muscle to show there.
+// BodyParts3D © DBCLS, CC BY 4.0), cut down to the muscles you'd train,
+// decimated, and pre-packed into lib/body-mesh-data.ts by scripts/anatomy/
+// (see the README there). The rest of the figure — head, neck, hands,
+// feet, the knee and forearm bones, the small lower-leg muscles — is
+// scenery: parts named 'x.…', drawn faint and never tappable.
 //
 // Units are centimetres, y up (feet at 0), +z is the front of the body and
 // +x is the figure's LEFT.
@@ -21,8 +22,6 @@ type V3 = [number, number, number];
 // ── muscles ──────────────────────────────────────────────────────────────
 
 const SINGLE: [string, string, string][] = [
-  ['head', 'HEAD', 'HEAD'],
-  ['neck', 'NECK', 'NECK'],
   ['abs.upper', 'UPPER ABS', 'CORE'],
   ['abs.lower', 'LOWER ABS', 'CORE'],
 ];
@@ -44,12 +43,9 @@ const PAIRED: [string, string, string][] = [
   ['brachialis', 'BRACHIALIS', 'ARMS'],
   ['triceps.lat', 'TRICEP OUTER HEAD', 'ARMS'],
   ['triceps.long', 'TRICEP LONG HEAD', 'ARMS'],
-  ['elbow', 'ELBOW', 'ARMS'],
   ['brachiorad', 'BRACHIORADIALIS', 'ARMS'],
   ['forearm.flex', 'FOREARM FLEXORS', 'ARMS'],
   ['forearm.ext', 'FOREARM EXTENSORS', 'ARMS'],
-  ['wrist', 'WRIST', 'ARMS'],
-  ['hand', 'HAND', 'ARMS'],
   ['oblique', 'OBLIQUE', 'CORE'],
   ['serratus', 'SERRATUS', 'CORE'],
   ['hipflex', 'HIP FLEXOR', 'HIPS'],
@@ -59,19 +55,13 @@ const PAIRED: [string, string, string][] = [
   ['quad.rf', 'RECTUS FEMORIS', 'LEGS'],
   ['quad.vl', 'OUTER QUAD', 'LEGS'],
   ['quad.vm', 'INNER QUAD', 'LEGS'],
-  ['sartorius', 'SARTORIUS', 'LEGS'],
   ['adductor', 'ADDUCTORS', 'LEGS'],
   ['ham.bf', 'OUTER HAMSTRING', 'LEGS'],
   ['ham.st', 'INNER HAMSTRING', 'LEGS'],
-  ['knee', 'KNEE', 'LEGS'],
   ['tib', 'TIBIALIS', 'LEGS'],
-  ['shin', 'TOE EXTENSORS', 'LEGS'],
-  ['peroneal', 'PERONEALS', 'LEGS'],
   ['gastro.lat', 'OUTER CALF', 'LEGS'],
   ['gastro.med', 'INNER CALF', 'LEGS'],
   ['soleus', 'SOLEUS', 'LEGS'],
-  ['ankle', 'ANKLE', 'LEGS'],
-  ['foot', 'FOOT', 'LEGS'],
 ];
 
 export const MUSCLES: Muscle[] = [
@@ -90,17 +80,16 @@ export const MUSCLE_INDEX: Record<string, number> = Object.fromEntries(MUSCLES.m
 export interface Zone { id: string; name: string; muscles: string[] }
 
 const ZONE_DEFS: [id: string, name: string, muscles: string[], bothSides: boolean][] = [
-  ['head', 'HEAD AND NECK', ['head', 'neck'], true],
   ['chest', 'CHEST', ['pec.upper', 'pec.lower'], true],
   ['core', 'CORE', ['abs.upper', 'abs.lower', 'oblique', 'serratus'], true],
   ['upperback', 'UPPER BACK', ['traps.upper', 'traps.mid', 'traps.lower', 'cuff', 'teres'], true],
   ['back', 'LATS AND LOWER BACK', ['lat', 'erector'], true],
   ['hips', 'HIPS AND GLUTES', ['glute.max', 'glute.med', 'hipflex', 'tfl'], true],
   ['shoulder', 'SHOULDER', ['delt.front', 'delt.side', 'delt.rear'], false],
-  ['arm', 'UPPER ARM', ['biceps', 'brachialis', 'triceps.lat', 'triceps.long', 'elbow'], false],
-  ['forearm', 'FOREARM', ['brachiorad', 'forearm.flex', 'forearm.ext', 'wrist', 'hand'], false],
-  ['thigh', 'THIGH', ['quad.rf', 'quad.vl', 'quad.vm', 'sartorius', 'adductor', 'ham.bf', 'ham.st', 'knee'], false],
-  ['leg', 'LOWER LEG', ['tib', 'shin', 'peroneal', 'gastro.lat', 'gastro.med', 'soleus', 'ankle', 'foot'], false],
+  ['arm', 'UPPER ARM', ['biceps', 'brachialis', 'triceps.lat', 'triceps.long'], false],
+  ['forearm', 'FOREARM', ['brachiorad', 'forearm.flex', 'forearm.ext'], false],
+  ['thigh', 'THIGH', ['quad.rf', 'quad.vl', 'quad.vm', 'adductor', 'ham.bf', 'ham.st'], false],
+  ['leg', 'LOWER LEG', ['tib', 'gastro.lat', 'gastro.med', 'soleus'], false],
 ];
 
 const withSides = (ids: string[], sides: Side[]) =>
@@ -116,7 +105,7 @@ export const ZONE_OF: Record<string, string> = Object.fromEntries(ZONES.flatMap(
 // ── mesh ─────────────────────────────────────────────────────────────────
 
 export interface Part {
-  mi: number;            // index into MUSCLES
+  mi: number;            // index into MUSCLES; -1 for scenery
   vStart: number;        // first vertex in the shared arrays
   vCount: number;
   iStart: number;        // first index in `idx` (indices are part-local)
@@ -132,6 +121,7 @@ export interface BodyMesh {
   nrm: Float32Array;     // unit normal per vertex
   idx: Uint16Array;      // triangles, part-local vertex numbers
   parts: Part[];
+  decor: Part[];         // scenery: drawn, and hides what's behind it, but never picked
   byMuscle: (Part | undefined)[];
 }
 
@@ -172,7 +162,7 @@ export function decodeBodyMesh(b64: string = BODY_MESH): BodyMesh {
   }
   const NV = heads.reduce((s, h) => s + h.nv, 0), NI = heads.reduce((s, h) => s + h.ni, 0);
   const pos = new Float32Array(NV * 3), nrm = new Float32Array(NV * 3), idx = new Uint16Array(NI);
-  const parts: Part[] = [];
+  const parts: Part[] = [], decor: Part[] = [];
   let vs = 0, is = 0;
   for (const h of heads) {
     for (let i = 0; i < h.nv; i++) {
@@ -186,11 +176,12 @@ export function decodeBodyMesh(b64: string = BODY_MESH): BodyMesh {
     for (let i = 0; i < h.ni; i++) { idx[is + i] = v.getUint16(o, true); o += 2; }
     const mi = MUSCLE_INDEX[h.name];
     if (mi != null) parts.push(frame({ mi, vStart: vs, vCount: h.nv, iStart: is, iCount: h.ni, yaw: h.yaw, c: h.c }, pos));
+    else if (h.name.startsWith('x.')) decor.push(frame({ mi: -1, vStart: vs, vCount: h.nv, iStart: is, iCount: h.ni, yaw: h.yaw, c: h.c }, pos));
     vs += h.nv; is += h.ni;
   }
   const byMuscle: (Part | undefined)[] = MUSCLES.map(() => undefined);
   for (const p of parts) byMuscle[p.mi] = p;
-  return { pos, nrm, idx, parts, byMuscle };
+  return { pos, nrm, idx, parts, decor, byMuscle };
 }
 
 function frame(p: Pick<Part, 'mi' | 'vStart' | 'vCount' | 'iStart' | 'iCount' | 'yaw' | 'c'>, pos: Float32Array): Part {
@@ -210,11 +201,12 @@ function frame(p: Pick<Part, 'mi' | 'vStart' | 'vCount' | 'iStart' | 'iCount' | 
 
 // ── picking ──────────────────────────────────────────────────────────────
 
-/** Nearest part hit by the ray o + t·d (t > 0), or null. */
+/** Nearest part hit by the ray o + t·d (t > 0), or null. Scenery counts —
+ *  a hand in front of a thigh hides it — so check `mi` before picking. */
 export function raycast(mesh: BodyMesh, o: V3, d: V3): Part | null {
   let best: Part | null = null, bestT = Infinity;
   const { pos, idx } = mesh;
-  for (const p of mesh.parts) {
+  for (const p of [...mesh.parts, ...mesh.decor]) {
     if (!rayBox(o, d, p.lo, p.hi, bestT)) continue;
     for (let t = 0; t < p.iCount; t += 3) {
       const a = (p.vStart + idx[p.iStart + t]) * 3, b = (p.vStart + idx[p.iStart + t + 1]) * 3, c = (p.vStart + idx[p.iStart + t + 2]) * 3;
