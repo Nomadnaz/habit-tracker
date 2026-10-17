@@ -6,7 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   addExerciseToTemplate, createExercise, createTemplate, ensureSeeded, getDoneLog, getExercises, getGymPlan,
-  getTemplates, getTrainingSessions, setGymPlan,
+  getPBLog, getTemplates, getTrainingSessions, setGymPlan, updateExercise,
   type Exercise, type Focus, type GymPlan, type MovementType, type MuscleGroup,
 } from './workout-data';
 import {
@@ -113,4 +113,50 @@ export async function ensureFocusTemplate(focus: Focus): Promise<string> {
     await addExerciseToTemplate(t.id, ex.id);
   }
   return t.id;
+}
+
+// ── the starter library's numbers ────────────────────────────────────────
+
+// What the seed (lib/workout-data.ts buildSeed) shipped with — placeholder
+// numbers (a 100 kg bench, a 180 kg deadlift), not anyone's working weights.
+const SEED: Record<string, { sets: number; reps: string; weightKg: number }> = {
+  'e-latpull': { sets: 3, reps: '8-10', weightKg: 60 }, 'e-srow': { sets: 3, reps: '10-12', weightKg: 65 },
+  'e-sarow': { sets: 3, reps: '10-12', weightKg: 22.5 }, 'e-facepull': { sets: 3, reps: '15', weightKg: 20 },
+  'e-bicurl': { sets: 3, reps: '10-12', weightKg: 14 }, 'e-hamcurl': { sets: 3, reps: '10-12', weightKg: 16 },
+  'e-bench': { sets: 4, reps: '5-8', weightKg: 100 }, 'e-incline': { sets: 3, reps: '8-10', weightKg: 34 },
+  'e-ohp': { sets: 3, reps: '6-8', weightKg: 60 }, 'e-lateral': { sets: 3, reps: '15', weightKg: 10 },
+  'e-tripdwn': { sets: 3, reps: '12', weightKg: 30 }, 'e-squat': { sets: 4, reps: '5', weightKg: 140 },
+  'e-rdl': { sets: 3, reps: '8-10', weightKg: 100 }, 'e-legpress': { sets: 3, reps: '10-12', weightKg: 180 },
+  'e-legcurl': { sets: 3, reps: '12', weightKg: 40 }, 'e-calf': { sets: 4, reps: '15', weightKg: 60 },
+  'e-dead': { sets: 3, reps: '3-5', weightKg: 180 },
+};
+
+/** Best estimated 1RM per exercise from real (puck-measured) sets. */
+export function bestE1rms(sessions: Session[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const s of sessions) {
+    if (!s.measured || s.weightKg <= 0) continue;
+    const e = s.weightKg * (1 + (s.reps ?? 1) / 30);
+    if (e > (out[s.exerciseId] ?? 0)) out[s.exerciseId] = e;
+  }
+  return out;
+}
+
+/** Starter lifts still on their placeholder numbers, untouched and never logged, get the
+ *  guide's sets × reps and starting weight for this body (or your puck history). */
+export async function recalibrateStarterLifts(sessions: Session[]): Promise<number> {
+  const [library, pbs, profile, body] = await Promise.all([getExercises(), getPBLog(), getBodyProfile(), loadBodyData()]);
+  const bodyKg = latestWeight(body) || profile.weightKg;
+  const best = bestE1rms(sessions);
+  let changed = 0;
+  for (const ex of library) {
+    const seed = SEED[ex.id];
+    if (!seed || ex.sets !== seed.sets || ex.reps !== seed.reps || ex.weightKg !== seed.weightKg) continue;
+    if (pbs.some(p => p.exerciseId === ex.id)) continue;
+    const g = guideFor(ex.name, { goal: 'size', bodyKg, heightCm: profile.heightCm, sex: profile.sex, bestE1rmKg: best[ex.id] });
+    if (g.startKg == null && g.equipment !== 'bodyweight') continue; // no bodyweight to size it from yet
+    await updateExercise(ex.id, { sets: g.sets, reps: `${g.reps[0]}-${g.reps[1]}`, weightKg: g.startKg ?? 0 });
+    changed++;
+  }
+  return changed;
 }

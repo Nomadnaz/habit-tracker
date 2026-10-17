@@ -49,3 +49,26 @@ describe('goals and links', () => {
     expect(videoUrl('BENCH PRESS')).toBe('https://www.youtube.com/results?search_query=BENCH%20PRESS%20proper%20form%20tutorial');
   });
 });
+
+describe('difficulty', () => {
+  it('reads reps in reserve off a 1RM', async () => {
+    const { difficulty } = await import('./exercise-guide');
+    // 100 kg 1RM: 75 kg is ~10 reps possible.
+    expect(difficulty(75, 6, 100)?.word).toBe('EASY');
+    expect(difficulty(75, 8, 100)?.word).toBe('MODERATE');
+    expect(difficulty(75, 10, 100)?.word).toBe('MAX');
+    expect(difficulty(100, 5, 100)?.word).toBe('TOO HEAVY');
+    expect(difficulty(100, 5, 100)!.level).toBe(1);
+    expect(difficulty(0, 5, 100)).toBeNull();
+  });
+  it('estimates a 1RM from the guide when there is no history', async () => {
+    const { e1rmFor, guideFor, difficulty } = await import('./exercise-guide');
+    const g = guideFor('BENCH PRESS', { goal: 'size', bodyKg: 80, heightCm: 180, sex: 'male' });
+    const e = e1rmFor(g)!;
+    expect(e.measured).toBe(false);
+    // The recommended start is comfortably doable for the top of the range.
+    expect(['EASY', 'MODERATE']).toContain(difficulty(g.startKg!, g.reps[1], e.kg)!.word);
+    // A seeded 100 kg bench is not.
+    expect(['MAX', 'TOO HEAVY']).toContain(difficulty(100, g.reps[1], e.kg)!.word);
+  });
+});

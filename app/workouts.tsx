@@ -28,9 +28,11 @@ import {
   alternativesFor, dayWord, FOCI, FOCUS_TITLE, focusOfName, LEVEL, liftReady, muscleWord, planSession, suggestFor,
   type Pick as Choice, type Resting, type Today,
 } from '@/lib/coach';
-import { ensureFocusTemplate, exerciseFor, loadCoach } from '@/lib/routine';
+import { bestE1rms, ensureFocusTemplate, exerciseFor, loadCoach, recalibrateStarterLifts } from '@/lib/routine';
 import { musclesFor, type Session } from '@/lib/muscle-recovery';
-import { equipmentOf, guideFor, patternOf } from '@/lib/exercise-guide';
+import { difficulty, e1rmFor, equipmentOf, guideFor, patternOf, type Guide } from '@/lib/exercise-guide';
+import { Stepper } from '@/components/train/Stepper';
+import { DifficultyBar } from '@/components/train/DifficultyBar';
 import { getBodyProfile, latestWeight, loadBodyData, type BodyProfile } from '@/lib/body-data';
 import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
 import { bleBridge } from '@/lib/ble-bridge';
@@ -115,6 +117,8 @@ export default function LogWorkout() {
       const c = await loadCoach();
       setToday(c.today);
       setSessions(c.sessions);
+      // Starter lifts still on placeholder numbers get real ones before anything shows.
+      await recalibrateStarterLifts(c.sessions);
       const asked = FOCI.find(f => f === params.focus);
       await choose({ focus: asked ?? c.today.focus });
     })();
@@ -143,6 +147,10 @@ export default function LogWorkout() {
     const { rest } = planSession(rows.map(r => r.ex), before, at);
     return Object.fromEntries(rest.map(r => [r.lift.id, r])) as Record<string, Resting<Exercise>>;
   }, [rows, sessions, at]);
+  // One recommendation per lift — the tile and the HOW TO card read the same one.
+  const best = useMemo(() => bestE1rms(sessions), [sessions]);
+  const guideOf = (ex: Exercise): Guide =>
+    guideFor(ex.name, { goal: 'size', bodyKg: bodyKg ?? profile.weightKg, heightCm: profile.heightCm, sex: profile.sex, bestE1rmKg: best[ex.id] });
   const isResting = (ex: Exercise) => !!restOf[ex.id] && !forced.has(ex.id);
   const active = rows.filter(r => !isResting(r.ex));
   const tray = useMemo(() => {
@@ -210,10 +218,19 @@ export default function LogWorkout() {
     busy.current = false;
   }
 
+  // Steppers can fire many times a second (hold, scrub): show at once, save once it settles.
+  const pending = useRef<Record<string, { patch: LiftEdit; timer: ReturnType<typeof setTimeout> }>>({});
   function patch(ex: Exercise, next: LiftEdit) {
     setRows(rs => rs.map(r => (r.ex.id === ex.id ? { ...r, ex: { ...r.ex, ...next } } : r)));
-    void updateExercise(ex.id, next);
+    const cur = pending.current[ex.id];
+    if (cur) clearTimeout(cur.timer);
+    const merged = { ...(cur?.patch ?? {}), ...next };
+    pending.current[ex.id] = { patch: merged, timer: setTimeout(() => { delete pending.current[ex.id]; void updateExercise(ex.id, merged); }, 450) };
   }
+  // Leaving mid-scrub still saves.
+  useEffect(() => () => {
+    for (const [id, p] of Object.entries(pending.current)) { clearTimeout(p.timer); void updateExercise(id, p.patch); }
+  }, []);
 
   async function sendToPuck(ex: Exercise) {
     setPuck(ex.id);
@@ -322,6 +339,8 @@ export default function LogWorkout() {
               open={open === r.jid}
               swapping={swapping === r.jid}
               resting={isResting(r.ex) ? restOf[r.ex.id] : null}
+              guide={guideOf(r.ex)}
+              bestE1rm={best[r.ex.id]}
               onForce={() => { animate(); setForced(f => new Set([...f, r.ex.id])); }}
               alternatives={swapping === r.jid ? swapsFor(r.ex) : []}
               unit={unitSystem}
@@ -384,7 +403,7 @@ export default function LogWorkout() {
         <ExerciseCard
           name={howTo.name}
           role={title}
-          guide={guideFor(howTo.name, { goal: easy ? 'easy' : 'size', bodyKg: bodyKg ?? profile.weightKg, heightCm: profile.heightCm, sex: profile.sex })}
+          guide={guideOf(howTo)}
           bodyKg={bodyKg ?? profile.weightKg}
           onClose={() => setHowTo(null)}
         />
@@ -395,27 +414,15 @@ export default function LogWorkout() {
 
 type LiftEdit = Partial<Pick<Exercise, 'sets' | 'reps' | 'weightKg'>>;
 
-function Stepper({ label, value, onDec, onInc }: { label: string; value: string; onDec: () => void; onInc: () => void }) {
-  return (
-    <View style={st.stepper}>
-      <Text style={st.stepLabel}>{label}</Text>
-      <View style={st.stepRow}>
-        <Pressable onPress={onDec} hitSlop={6} style={st.stepBtn}><MaterialCommunityIcons name="minus" size={14} color={C.ink} /></Pressable>
-        <Text style={st.stepValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-        <Pressable onPress={onInc} hitSlop={6} style={st.stepBtn}><MaterialCommunityIcons name="plus" size={14} color={C.ink} /></Pressable>
-      </View>
-    </View>
-  );
-}
-
 function LiftChip({
-  index, row, sets, logged, open, swapping, alternatives, unit, puckSent, resting, onForce,
+  index, row, sets, logged, open, swapping, alternatives, unit, puckSent, resting, onForce, guide, bestE1rm,
   onToggle, onSwapToggle, onSwap, onRemove, onPatch, onPuck, onHowTo, onHistory,
 }: {
   index: number; row: Row; sets: number; logged: number; open: boolean; swapping: boolean; alternatives: Choice[];
   unit: 'metric' | 'imperial'; puckSent: boolean;
   /** Set when a main muscle won't be recovered — the lift sits this session out. */
   resting: Resting<Exercise> | null; onForce: () => void;
+  guide: Guide; bestE1rm?: number;
   onToggle: () => void; onSwapToggle: () => void; onSwap: (p: Choice) => void; onRemove: () => void;
   onPatch: (p: LiftEdit) => void; onPuck: () => void; onHowTo: () => void; onHistory: () => void;
 }) {
@@ -426,6 +433,11 @@ function LiftChip({
   const step = unit === 'imperial' ? 2.268 : kit === 'dumbbell' ? (ex.weightKg < 10 ? 1 : 2) : 2.5;
   const range = repRange(ex.reps);
   const weight = ex.weightKg > 0 ? formatWeightWithUnit(ex.weightKg, unit) : 'BODYWEIGHT';
+  const e1 = e1rmFor(guide, bestE1rm);
+  const diff = e1 && ex.weightKg > 0 ? difficulty(ex.weightKg, range[1], e1.kg) : null;
+  const recReps = `${guide.reps[0]}-${guide.reps[1]}`;
+  const recKg = guide.startKg ?? 0;
+  const onRec = ex.sets === guide.sets && ex.reps === recReps && Math.abs(ex.weightKg - recKg) < 0.01;
 
   return (
     <Animated.View style={[st.chip, open && st.chipOpen, resting && st.chipResting, { transform: [{ scale: pop }] }]}>
@@ -478,12 +490,24 @@ function LiftChip({
 
       {open && (
         <View style={st.panel}>
+          <DifficultyBar d={diff} measured={!!e1?.measured} />
+          <View style={st.rec}>
+            <Text style={st.recText} numberOfLines={1}>
+              {`RECOMMENDED ${guide.sets} × ${recReps} · ${guide.startKg == null ? 'BODYWEIGHT' : formatWeightWithUnit(recKg, unit)}${guide.perHand ? ' EACH' : ''}`}
+            </Text>
+            {onRec
+              ? <MaterialCommunityIcons name="check-circle" size={16} color={C.live} />
+              : (
+                <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onPatch({ sets: guide.sets, reps: recReps, weightKg: recKg }); }} hitSlop={8} style={({ pressed }) => [st.recBtn, pressed && { transform: [{ scale: 0.92 }] }]}>
+                  <Text style={st.recBtnText}>USE</Text>
+                </Pressable>
+              )}
+          </View>
           <View style={st.steppers}>
-            <Stepper label="SETS" value={`${ex.sets}`} onDec={() => onPatch({ sets: Math.max(1, ex.sets - 1) })} onInc={() => onPatch({ sets: Math.min(10, ex.sets + 1) })} />
-            <Stepper label="REPS" value={ex.reps} onDec={() => onPatch({ reps: repText([Math.max(1, range[0] - 1), Math.max(1, range[1] - 1)]) })} onInc={() => onPatch({ reps: repText([range[0] + 1, range[1] + 1]) })} />
-            <Stepper label={unit === 'imperial' ? 'LB' : 'KG'} value={ex.weightKg > 0 ? formatWeightWithUnit(ex.weightKg, unit).replace(/\s*(KG|LB)$/i, '') : '0'}
-              onDec={() => onPatch({ weightKg: Math.max(0, Math.round((ex.weightKg - step) * 100) / 100) })}
-              onInc={() => onPatch({ weightKg: Math.round((ex.weightKg + step) * 100) / 100 })} />
+            <Stepper label="SETS" value={`${ex.sets}`} onStep={d => onPatch({ sets: Math.max(1, Math.min(10, ex.sets + d)) })} />
+            <Stepper label="REPS" value={ex.reps} onStep={d => onPatch({ reps: repText([Math.max(1, range[0] + d), Math.max(1, range[1] + d)]) })} />
+            <Stepper label="WEIGHT" unit={unit === 'imperial' ? 'LB' : 'KG'} value={ex.weightKg > 0 ? formatWeightWithUnit(ex.weightKg, unit).replace(/\s*(KG|LB)$/i, '') : '0'}
+              onStep={d => onPatch({ weightKg: Math.max(0, Math.round((ex.weightKg + d * step) * 100) / 100) })} />
           </View>
           <View style={st.actions}>
             <Pressable onPress={onPuck} style={({ pressed }) => [st.action, st.actionHot, pressed && { opacity: 0.8 }]}>
@@ -552,11 +576,10 @@ const st = StyleSheet.create({
 
   panel: { gap: 10, paddingTop: 4 },
   steppers: { flexDirection: 'row', gap: 6 },
-  stepper: { flex: 1, backgroundColor: C.bg, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 8, gap: 6 },
-  stepLabel: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1.5, textAlign: 'center' },
-  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  stepBtn: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center' },
-  stepValue: { flex: 1, fontFamily: F.mono, fontSize: 15, color: C.hot, textAlign: 'center' },
+  rec: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingLeft: 10, paddingRight: 6, height: 38, backgroundColor: C.bg },
+  recText: { flex: 1, fontFamily: F.dot, fontSize: 8, color: C.ink, letterSpacing: 1 },
+  recBtn: { height: 26, paddingHorizontal: 12, borderRadius: 13, backgroundColor: C.hot, justifyContent: 'center' },
+  recBtnText: { fontFamily: F.dot, fontSize: 9, color: C.onHot, letterSpacing: 1.5 },
   actions: { flexDirection: 'row', gap: 6 },
   action: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 38, borderRadius: 12, borderWidth: 1, borderColor: C.lineHi },
   actionHot: { flex: 1.4, backgroundColor: C.hot, borderColor: C.hot },

@@ -146,3 +146,32 @@ export function guideFor(name: string, ctx: {
 
 export const videoUrl = (name: string) =>
   `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} proper form tutorial`)}`;
+
+// ── how hard a weight is ─────────────────────────────────────────────────
+
+export type Difficulty = {
+  /** Reps you'd have left at the end of the set (negative = can't finish it). */
+  rir: number;
+  /** 0–1 for the dot bar: green (easy) → red (max or beyond). */
+  level: number;
+  word: 'EASY' | 'MODERATE' | 'HARD' | 'MAX' | 'TOO HEAVY';
+};
+
+/** Your estimated 1RM for a lift: the best you've done (puck history), else
+ *  backed out of the guide's starting weight, a weight with ~4 reps to spare. */
+export function e1rmFor(g: Guide, bestE1rmKg?: number | null): { kg: number; measured: boolean } | null {
+  if (bestE1rmKg && bestE1rmKg > 0) return { kg: bestE1rmKg, measured: true };
+  if (g.startKg == null) return null;
+  const target = Math.round((g.reps[0] + g.reps[1]) / 2);
+  return { kg: (g.startKg / 0.9) * (1 + target / 30), measured: false };
+}
+
+/** How hard `reps` at `kg` is against a 1RM, through Epley: reps possible = 30 × (1RM / kg − 1). */
+export function difficulty(kg: number, reps: number, e1rmKg: number): Difficulty | null {
+  if (kg <= 0 || e1rmKg <= 0) return null;
+  const possible = 30 * (e1rmKg / kg - 1);
+  const rir = Math.round(possible - reps);
+  const level = Math.max(0.06, Math.min(1, (6 - rir) / 7));
+  const word = rir >= 4 ? 'EASY' : rir >= 2 ? 'MODERATE' : rir === 1 ? 'HARD' : rir === 0 ? 'MAX' : 'TOO HEAVY';
+  return { rir, level, word };
+}
