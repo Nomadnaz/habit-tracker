@@ -89,7 +89,8 @@
         {
           "microphonePermission": "Hold the dot to speak a log or ask a question \u2014 audio is transcribed, then discarded."
         }
-      ]
+      ],
+      "./plugins/with-fmt-cxx17"
     ],
     "extra": {
       "router": {},
