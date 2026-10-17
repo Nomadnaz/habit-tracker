@@ -29,6 +29,7 @@ import { computeStreak } from './habits-data';
 import { getRecentSleepLogs } from './sleep-data';
 import { getMealsForDate, dailyTotals, getTargets } from './meals-data';
 import type { Run } from './muscle-recovery';
+import type { Vitals } from './coach';
 import {
   stepsThisYearFromHistory, trainingDayTypeFor, computeHeadlineLiftsFromData,
   computeStrengthTrendFromLifts, computeLeastTrainedMuscleFromData, computeMuscleGroupTalliesFromData,
@@ -112,6 +113,7 @@ export type BodyData = {
   activityToday?: BodyActivityToday;
   heart?: HeartNow;
   runs?: Run[];             // Apple Health running workouts, last 14 days
+  vitals?: Vitals;          // daily HRV / resting HR / sleep from the wearable (lib/vitals.ts)
 };
 
 // ── Date helpers ───────────────────────────────────────────────────────────
@@ -194,7 +196,7 @@ type CoreBodyData = Pick<
   BodyData,
   | 'stepsGoal' | 'stepsHistory' | 'activeMovement' | 'weightLogs' | 'waterLogs'
   | 'waterGoalMl' | 'workoutsTotal' | 'appleHealthConnected' | 'appleHealthLastSync'
-  | 'activityToday' | 'sleepMins' | 'heart' | 'runs'
+  | 'activityToday' | 'sleepMins' | 'heart' | 'runs' | 'vitals'
 >;
 
 // stepsGoal/waterGoalMl are user-configurable GOALS (sane defaults), not
@@ -213,6 +215,7 @@ const EMPTY_CORE: CoreBodyData = {
   sleepMins: null,
   heart: undefined,
   runs: [],
+  vitals: undefined,
 };
 
 async function loadCore(): Promise<CoreBodyData> {
@@ -234,6 +237,7 @@ async function loadCore(): Promise<CoreBodyData> {
         sleepMins: parsed.sleepMins ?? null,
         heart: parsed.heart,
         runs: parsed.runs ?? [],
+        vitals: parsed.vitals,
       };
     }
   } catch { /* fall through */ }

@@ -279,6 +279,7 @@ export default function RootLayout() {
         <Stack.Screen name="modals/search" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/index" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings/companion-persona" />
+        <Stack.Screen name="settings/wearables" />
       </Stack>
 
       {/* Floats above every screen; shows when a task syncs in from the device. */}

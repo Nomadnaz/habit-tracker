@@ -29,13 +29,14 @@ import { BodyStage, Battery, TONE, batteryTone, type Facing, type HudStat, type 
 import { FanSelect, type FanOption } from '@/components/body/FanSelect';
 import { ZONE_BY_ID, ZONE_OF, type Zone } from '@/lib/body-mesh';
 import {
-  getExercises, getTrainingSessions, getGymPlan, getTemplates, getTemplateExercises, getDoneLog, type Exercise,
+  getExercises, getTrainingSessions, getTemplates, getTemplateExercises, type Exercise,
 } from '@/lib/workout-data';
 import {
   baseOf, byExercise, hasBattery, muscleStatus, suggestionsFor, withIntensity, cardioSessions, loadOf, lastDay, daysSince,
   runSteps, type MuscleStatus, type Session, type Run,
 } from '@/lib/muscle-recovery';
-import { upNext, type UpNext } from '@/lib/up-next';
+import { loadCoach } from '@/lib/routine';
+import { fitFor, focusOfName } from '@/lib/coach';
 import { getActivitiesInRange } from '@/lib/activity-data';
 import { MUSCLES } from '@/lib/body-mesh';
 import { guideFor, goalOf, type Guide } from '@/lib/exercise-guide';
@@ -56,6 +57,7 @@ const SIDES: Facing[] = ['front', 'back'];
 // What the figure is coloured by. GOALS = the user's categories; the rest
 // are lenses over the training history (lib/muscle-recovery.ts).
 type Lens = 'goals' | 'next' | 'last' | 'since';
+type UpNext = { title: string; when: string; exercises: Exercise[] };
 const LENSES: FanOption<Lens>[] = [
   { id: 'goals', label: 'GOALS', color: C.ink, icon: 'target' },
   { id: 'next', label: 'UP NEXT', color: C.live, icon: 'calendar-arrow-right' },
@@ -109,10 +111,12 @@ export default function BodyScreen() {
     void getActivitiesInRange(new Date(Date.now() - 14 * 86_400_000).toISOString(), new Date().toISOString())
       .then(a => setAppRuns(a.filter(x => x.type === 'run').map(x => ({ start: Date.parse(x.startTime), end: Date.parse(x.endTime), distanceM: x.distanceM }))))
       .catch(() => {});
+    // UP NEXT is the coach's pick (lib/coach.ts) — the same session TRAIN shows.
     void (async () => {
-      const [plan, templates, library, done] = await Promise.all([getGymPlan(), getTemplates(), getExercises(), getDoneLog()]);
-      const byTemplate = Object.fromEntries(await Promise.all(templates.map(async t => [t.id, await getTemplateExercises(t.id)] as const)));
-      setNext(upNext(plan, templates, byTemplate, library, done, new Date()));
+      const [{ today }, templates, library] = await Promise.all([loadCoach(), getTemplates(), getExercises()]);
+      const t = templates.find(x => !x.isArchived && focusOfName(x.name) === today.focus);
+      const exercises = t ? await getTemplateExercises(t.id) : library.filter(e => fitFor(today.focus, e.name, e.muscleGroups) >= 0.5);
+      setNext({ title: today.title, when: today.when, exercises });
     })().catch(() => {});
     setFocused(true);
     return () => setFocused(false);
@@ -853,7 +857,7 @@ function lensCaption(
   lens: Lens, recovery: boolean, next: UpNext | null, worn: Session[], runs: Run[], steps: Record<string, number>, now: number,
 ): { title: string; sub: string; tone: string; from: number; scale: string } | null {
   if (lens === 'next') {
-    if (!next) return { title: 'NOTHING PLANNED', sub: 'Plan your week on TRAIN to see what is up next.', tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
+    if (!next) return { title: 'NOTHING PLANNED', sub: 'Set your routine on TRAIN to see what is up next.', tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
     return { title: next.title, sub: `${next.when} · ${next.exercises.length} EXERCISES`, tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
   }
   if (lens === 'last') {

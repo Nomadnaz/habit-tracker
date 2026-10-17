@@ -19,6 +19,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { companions } from '@/lib/companions';
 import { exportToObsidian } from '@/lib/obsidianExport';
+import { getWearable, wearableById, type Wearable } from '@/lib/wearables';
 
 import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -45,6 +46,7 @@ export default function Settings() {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [wearable, setWearable] = useState<Wearable | null>(null);
 
   async function handleExport() {
     setExporting(true);
@@ -74,7 +76,7 @@ export default function Settings() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { refresh(); void getWearable().then(l => setWearable(wearableById(l?.id))); }, [refresh]));
 
   async function save() {
     setBusy(true);
@@ -142,6 +144,17 @@ export default function Settings() {
             <Text style={styles.saveBtnText}>{busy ? 'SAVING…' : 'SAVE'}</Text>
           </TouchableOpacity>
         </View>
+
+        <Board title="WEARABLES">
+          <BoardRow
+            index={1}
+            label={wearable ? `${wearable.name} · CONNECTED` : 'CONNECT WEARABLE'}
+            sub={wearable ? 'HRV, sleep and resting HR feed your readiness' : 'Oura, WHOOP, Apple Watch, Garmin and more'}
+            right={ARROW}
+            onPress={() => router.push('/settings/wearables')}
+            last
+          />
+        </Board>
 
         <Board title="COMPANIONS">
           {Object.entries(companions).map(([type, cfg], i, all) => (

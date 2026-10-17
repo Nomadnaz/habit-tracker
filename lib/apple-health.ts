@@ -5,6 +5,9 @@ import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import { dateKey, type BodyData, type HeartNow } from './body-data';
 import type { Run } from './muscle-recovery';
+import type { Vitals } from './coach';
+import { buildVitals, type Sample, type Seen, type SleepSample } from './vitals';
+import { getWearable, wearableById } from './wearables';
 
 export type AppleHealthActivityToday = {
   activeMinutes: number;
@@ -21,6 +24,7 @@ export type AppleHealthSyncResult = {
   weightAt: string | null;
   heart: HeartNow;
   runs: Run[];             // running workouts, last 14 days
+  vitals: Vitals;          // daily HRV / resting HR / sleep / breathing, 35 days — the coach's inputs
 };
 
 type HealthSample = { value: number; startDate: string; endDate: string };
@@ -41,11 +45,15 @@ function getHealthKit(): HealthKitModule | null {
   }
 }
 
-function getPermissions(kit: HealthKitModule) {
+// `vitals` adds what only a wearable writes. Asked for from Settings' CONNECT
+// WEARABLE, not on every auto-sync, so a launch never pops a Health sheet;
+// once granted, iOS remembers and reads work either way.
+function getPermissions(kit: HealthKitModule, vitals = false) {
   const { Permissions } = kit.Constants;
   return {
     permissions: {
       read: [
+        ...(vitals ? [Permissions.RestingHeartRate, Permissions.RespiratoryRate, Permissions.OxygenSaturation] : []),
         Permissions.Steps,
         Permissions.DistanceWalkingRunning,
         Permissions.ActiveEnergyBurned,
@@ -92,7 +100,7 @@ export function isAppleHealthSupported(): boolean {
   return Platform.OS === 'ios' && getHealthKit() != null;
 }
 
-export async function initAppleHealth(): Promise<boolean> {
+export async function initAppleHealth(vitals = false): Promise<boolean> {
   const kit = getHealthKit();
   if (!kit) return false;
 
@@ -103,7 +111,7 @@ export async function initAppleHealth(): Promise<boolean> {
   if (!available) return false;
 
   await new Promise<void>((resolve, reject) => {
-    kit.initHealthKit(getPermissions(kit), (err: string) => {
+    kit.initHealthKit(getPermissions(kit, vitals), (err: string) => {
       if (err) reject(new Error(err));
       else resolve();
     });
@@ -234,6 +242,37 @@ async function fetchRuns(kit: HealthKitModule, days: number): Promise<Run[]> {
     .map(w => ({ start: Date.parse(w.start), end: Date.parse(w.end), distanceM: Math.round(w.distance * 1609.344) }));
 }
 
+/** 35 days of the coach's recovery numbers, from the connected wearable where it wrote them. */
+async function fetchVitals(kit: HealthKitModule, days = 35): Promise<{ vitals: Vitals; seen: Seen }> {
+  const range = { startDate: addDays(startOfToday(), -days).toISOString(), endDate: new Date().toISOString() };
+  const get = <T,>(fn: string) => (typeof kit[fn] === 'function'
+    ? promisify<T[]>(kit[fn].bind(kit), range).catch(() => [] as T[])
+    : Promise.resolve([] as T[]));
+  const [hrv, rhr, resp, spo2, sleep, link] = await Promise.all([
+    get<Sample>('getHeartRateVariabilitySamples'),
+    get<Sample>('getRestingHeartRateSamples'),
+    get<Sample>('getRespiratoryRateSamples'),
+    get<Sample>('getOxygenSaturationSamples'),
+    get<SleepSample>('getSleepSamples'),
+    getWearable(),
+  ]);
+  return buildVitals({ hrv, rhr, resp, spo2, sleep, prefer: wearableById(link?.id)?.source ?? null });
+}
+
+/** CONNECT WEARABLE's check: ask for the wearable permissions, then report who wrote what. */
+export async function checkWearableData(): Promise<{ ok: boolean; seen: Seen; error?: string }> {
+  const kit = getHealthKit();
+  if (!kit) return { ok: false, seen: [], error: 'Apple Health needs the iPhone app (not the web or Expo Go).' };
+  try {
+    if (!(await initAppleHealth(true))) return { ok: false, seen: [], error: 'Apple Health is not available on this device.' };
+    const { seen } = await fetchVitals(kit);
+    void connectAndSyncAppleHealth(56);
+    return { ok: true, seen };
+  } catch (e) {
+    return { ok: false, seen: [], error: e instanceof Error ? e.message : 'Could not read Apple Health.' };
+  }
+}
+
 /** Heart-rate samples between two times, oldest first ([] without Health or a watch). */
 export async function heartRateBetween(start: number, end: number): Promise<{ at: number; bpm: number }[]> {
   const kit = getHealthKit();
@@ -251,16 +290,19 @@ export async function fetchAppleHealthMetrics(historyDays = 56): Promise<AppleHe
   const kit = getHealthKit();
   if (!kit) return null;
 
-  const [dailySteps, activityToday, sleepMins, weight, heart, runs] = await Promise.all([
+  const [dailySteps, activityToday, sleepMins, weight, heart, runs, { vitals }] = await Promise.all([
     fetchDailySteps(kit, historyDays),
     fetchTodayActivity(kit),
     fetchLastNightSleepMins(kit),
     fetchLatestWeightKg(kit),
     fetchHeart(kit),
     fetchRuns(kit, 14),
+    fetchVitals(kit),
   ]);
 
-  return { dailySteps, activityToday, sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null, heart, runs };
+  // Last night from the wearable's sleep stages beats the longest raw segment.
+  const staged = vitals.sleep[dateKey(startOfToday())]?.asleep ?? null;
+  return { dailySteps, activityToday, sleepMins: staged ?? sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null, heart, runs, vitals };
 }
 
 /** Writes a manually-logged weight into HealthKit so it shows up in the Health app too. */
@@ -299,6 +341,7 @@ export function mergeAppleHealthIntoBodyData(
     activityToday: sync.activityToday,
     heart: sync.heart,
     runs: sync.runs,
+    vitals: sync.vitals,
     appleHealthConnected: true,
     appleHealthLastSync: new Date().toISOString(),
   };

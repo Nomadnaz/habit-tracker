@@ -355,6 +355,27 @@ export async function addExerciseToTemplate(templateId: string, exerciseId: stri
   });
 }
 
+/** Swap the exercise in one slot of a template, keeping its place in the order. */
+export async function replaceExerciseInTemplate(junctionId: string, exerciseId: string): Promise<void> {
+  const junctions = await getJunctions();
+  const j = junctions.find(x => x.id === junctionId);
+  if (!j) return;
+  await save(K.junctions, junctions.map(x => x.id === junctionId ? { ...x, exerciseId } : x));
+  bg(async () => {
+    const userId = await uid();
+    if (!userId) return;
+    const ex = (await getExercises()).find(e => e.id === exerciseId);
+    if (ex) {
+      await supabase.from('exercises').upsert({
+        id: ex.id, user_id: userId, name: ex.name,
+        muscle_groups: ex.muscleGroups ?? [], movement_type: ex.movementType,
+        sets: ex.sets, reps: ex.reps, weight_kg: ex.weightKg ?? 0,
+      });
+    }
+    await supabase.from('workout_exercises').update({ exercise_id: exerciseId }).eq('id', junctionId).eq('user_id', userId);
+  });
+}
+
 export async function removeExerciseFromTemplate(junctionId: string): Promise<void> {
   const junctions = await getJunctions();
   await save(K.junctions, junctions.filter(j => j.id !== junctionId));
@@ -529,7 +550,9 @@ export async function getTrainingSessions(days = 21): Promise<Session[]> {
 // per user, one column per weekday — reusing BodyMovement's push/pull/legs/
 // upper/lower vocabulary, plus 'rest'/'cheat' markers this task adds.
 
-export type PlanDayValue = BodyMovement | 'rest' | 'cheat' | null;
+/** A session's focus: the movements plus the coach's FULL BODY and CORE days (lib/coach.ts). */
+export type Focus = BodyMovement | 'full' | 'core';
+export type PlanDayValue = Focus | 'rest' | 'cheat' | null;
 export type GymPlan = Record<'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday', PlanDayValue>;
 export const WEEKDAYS: (keyof GymPlan)[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -553,4 +576,15 @@ export async function setGymPlanDay(day: keyof GymPlan, value: PlanDayValue): Pr
     await supabase.from('gym_plan').upsert({ user_id: userId, ...next, updated_at: new Date().toISOString() });
   });
   return next;
+}
+
+/** Replace the whole week at once (the coach's routine, lib/routine.ts). */
+export async function setGymPlan(plan: GymPlan): Promise<GymPlan> {
+  await withStorageLock(GYM_PLAN_KEY, () => save(GYM_PLAN_KEY, plan));
+  bg(async () => {
+    const userId = await uid();
+    if (!userId) return;
+    await supabase.from('gym_plan').upsert({ user_id: userId, ...plan, updated_at: new Date().toISOString() });
+  });
+  return plan;
 }
