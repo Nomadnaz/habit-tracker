@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View, type TextStyle, type StyleProp } from 'react-native';
 
-export function TypeLine({ text, style, delay = 0, speed = 22, cursor, numberOfLines = 1, onDone }: {
+export function TypeLine({ text, style, delay = 0, speed = 22, cursor, numberOfLines = 1, go = true, onDone }: {
   text: string;
   style?: StyleProp<TextStyle>;
   /** ms before the first character. */
@@ -15,6 +15,8 @@ export function TypeLine({ text, style, delay = 0, speed = 22, cursor, numberOfL
   /** Cursor colour; omit for none. */
   cursor?: string;
   numberOfLines?: number;
+  /** Hold the line blank (space still reserved) until true. */
+  go?: boolean;
   onDone?: () => void;
 }) {
   const [n, setN] = useState(0);
@@ -24,6 +26,7 @@ export function TypeLine({ text, style, delay = 0, speed = 22, cursor, numberOfL
   useEffect(() => {
     setN(0);
     setShowCursor(false);
+    if (!go) return;
     let i = 0;
     let timer: ReturnType<typeof setTimeout>;
     const tick = () => {
@@ -37,7 +40,7 @@ export function TypeLine({ text, style, delay = 0, speed = 22, cursor, numberOfL
     };
     timer = setTimeout(() => { setShowCursor(!!cursor); tick(); }, delay);
     return () => clearTimeout(timer);
-  }, [text]);
+  }, [text, go]);
 
   useEffect(() => {
     if (!showCursor) return;

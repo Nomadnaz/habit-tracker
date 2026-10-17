@@ -177,7 +177,7 @@ export default function StepsScreen() {
               <Text style={st.runDate}>{`${new Date(shown.startTime).getDate()} ${MON[new Date(shown.startTime).getMonth()]} · ${new Date(shown.startTime).toTimeString().slice(0, 5)}`}</Text>
             </View>
             <View style={st.runBody}>
-              <View style={st.routeBox}><RouteMap key={shown.id} waypoints={shown.waypoints} width={Math.round(stageW * 0.46)} height={Math.round(stageW * 0.46)} durationMs={1400} /></View>
+              <View style={st.routeBox}><RouteMap key={shown.id} waypoints={shown.waypoints} width={Math.round(stageW * 0.46)} height={Math.round(stageW * 0.46)} durationMs={2600} /></View>
               <View style={st.stats}>
                 <Stat label="DISTANCE" value={`${km(shown.distanceM)}`} unit="KM" />
                 <Stat label="TIME" value={formatDuration(shown.durationSecs)} />

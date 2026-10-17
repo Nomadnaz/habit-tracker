@@ -42,6 +42,18 @@ export const C = {
 
 /** STEPS' ASCII mountain only (components/steps/Mountain.tsx): snow to meadow,
  *  hut timber, and the five prayer-flag colours (blue, white, red, green, yellow). */
+/** components/RouteMap.tsx's block map only: greyscale ground, dithered parks
+ *  and water, building tops [base, speckle] by height — taller reads lighter. */
+export const MAP = {
+  ground: '#0A0A0A',
+  park: '#0F110F', parkDot: '#1F241F',
+  water: '#0C0E11', waterLine: '#1A1F26',
+  minor: '#1E1E1E', major: '#343434', path: '#2A2A2A', rail: '#262626',
+  shade: '#000000',
+  low: ['#1F1F1F', '#2A2A2A'], mid: ['#272727', '#353535'], tall: ['#303030', '#444444'],
+  label: '#5E5E5E',
+};
+
 export const MTN = {
   snow: '#F4F4F4', snowShade: '#BFC6CE', rock: '#9A9A9A', rockShade: '#5E5E5E',
   scree: '#8C7B68', meadow: '#6FB46A', forest: '#3F8048', ground: '#3A3A3A',
