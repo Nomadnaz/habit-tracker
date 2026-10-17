@@ -18,7 +18,8 @@ module.exports = config => withDangerousMod(config, ['ios', async cfg => {
   const file = path.join(cfg.modRequest.platformProjectRoot, 'Podfile');
   let src = fs.readFileSync(file, 'utf8');
   if (!src.includes(MARK)) {
-    src = src.replace(/post_install do \|installer\|/, m => m + SNIPPET);
+    // After react_native_post_install, which sets every pod's C++ standard itself.
+    src = src.replace(/(react_native_post_install\([\s\S]*?\n\s*\))/, m => m + SNIPPET);
     fs.writeFileSync(file, src);
   }
   return cfg;
