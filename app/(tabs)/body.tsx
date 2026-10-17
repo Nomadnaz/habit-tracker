@@ -37,7 +37,8 @@ import {
 } from '@/lib/muscle-recovery';
 import { loadCoach } from '@/lib/routine';
 import { fitFor, focusOfName, muscleWord, planSession } from '@/lib/coach';
-import { RecoveryAura, RecoveryToggle, useRecoveryMix } from '@/components/body/RecoveryToggle';
+import { RecoveryThermo, useRecoveryMix } from '@/components/body/RecoveryToggle';
+import { TypeLine } from '@/components/body/TypeLine';
 import { getActivitiesInRange } from '@/lib/activity-data';
 import { MUSCLES } from '@/lib/body-mesh';
 import { guideFor, goalOf, type Guide } from '@/lib/exercise-guide';
@@ -182,6 +183,12 @@ export default function BodyScreen() {
     return Object.fromEntries(RECOVERY_MUSCLES.map(m => [m, muscleStatus(m, worn, t).pct]));
   }, [sessions, body, appRuns]);
 
+  // Overall wear for the thermometer: the average muscle's drain.
+  const overallWorn = useMemo(() => {
+    const v = Object.values(recPct);
+    return v.length ? v.reduce((a, p) => a + (1 - p / 100), 0) / v.length : 0;
+  }, [recPct]);
+
   if (!map) return <SafeAreaView style={styles.safe} />;
 
   // Everything that wears muscles: lifts (lighter days count for less), and
@@ -210,7 +217,11 @@ export default function BodyScreen() {
       const b = baseOf(m.id);
       const l = lensLoad?.[b];
       if (l != null && l > 0.02) paint[m.id] = { tone: lensTone, t: lens === 'since' ? l : 0.25 + 0.75 * l };
-      else if (mix > 0.01 && hasBattery(b)) paint[m.id] = { tone: C.alert, t: (1 - (recPct[b] ?? 100) / 100) * mix };
+      else if (mix > 0.01 && hasBattery(b)) {
+        // Worn muscles also glow, more the more worn — kept soft (BodyStage's shader).
+        const worn = 1 - (recPct[b] ?? 100) / 100;
+        paint[m.id] = { tone: C.alert, t: worn * mix, glow: worn > 0.08 ? Math.pow(worn, 1.3) * mix : 0 };
+      }
     }
   }
   const lensInfo = lensCaption(lens, recovery, next, worn, runs, body?.stepsHistory ?? {}, now);
@@ -271,22 +282,7 @@ export default function BodyScreen() {
           </View>
         </View>
 
-        {lensInfo && (
-          <View style={styles.lens}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.lensTitle} numberOfLines={1} adjustsFontSizeToFit>{lensInfo.title}</Text>
-              <Text style={styles.lensSub} numberOfLines={2}>{lensInfo.sub}</Text>
-            </View>
-            <View style={styles.scale}>
-              <View style={styles.scaleBar}>
-                {[0, 0.25, 0.5, 0.75, 1].map(t => (
-                  <View key={t} style={[styles.scaleCell, { backgroundColor: lensInfo.tone, opacity: lensInfo.from + (1 - lensInfo.from) * t }]} />
-                ))}
-              </View>
-              <Text style={styles.scaleText}>{lensInfo.scale}</Text>
-            </View>
-          </View>
-        )}
+        <LensCaption info={lensInfo} />
 
         <View>
         <BodyStage
@@ -309,9 +305,8 @@ export default function BodyScreen() {
           showGoals={lens === 'goals' && mix < 0.02}
           dimRest={lens !== 'goals'}
         />
-        {/* RECOVERY: muscles fade white → red by how worn each is, with a red aura round the stage. */}
-        <RecoveryAura mix={recMix} w={width} h={stageH} />
-        <RecoveryToggle on={recovery} mix={recMix} onToggle={() => setRecovery(r => !r)}
+        {/* RECOVERY: a dot that grows into a thermometer of overall wear; muscles fade white → red and the worn ones glow. */}
+        <RecoveryThermo on={recovery} worn={overallWorn} onToggle={() => setRecovery(r => !r)}
           style={[styles.recovery, { right: stageZoomed || zone ? 64 : 12 }]} />
         </View>
 
@@ -784,7 +779,12 @@ const styles = StyleSheet.create({
 
   hint: { fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: 1, textAlign: 'center', marginTop: 2 },
   credit: { fontFamily: F.mono, fontSize: 9, color: C.faint, textAlign: 'center', marginHorizontal: 24, marginTop: 16, lineHeight: 13 },
-  lens: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 20, marginTop: 4, marginBottom: 6 },
+  lensSlot: { height: 66, justifyContent: 'flex-end', marginTop: 2, marginBottom: 6 },
+  lens: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 20 },
+  lensChips: { flexDirection: 'row', gap: 6 },
+  lensChip: { flexDirection: 'row', alignItems: 'baseline', gap: 5, borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.surface, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  lensChipVal: { fontFamily: F.dot, fontSize: 14, color: C.hot, letterSpacing: 0.5 },
+  lensChipLabel: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1.2 },
   recovery: { position: 'absolute', bottom: 12 },
   lensTitle: { fontFamily: F.dot, fontSize: 26, color: C.hot, letterSpacing: 1 },
   lensSub: { fontFamily: F.mono, fontSize: 11, color: C.dim, marginTop: 2 },
@@ -859,10 +859,61 @@ const styles = StyleSheet.create({
 
 // ── lens caption ─────────────────────────────────────────────────────────
 
+type LensInfo = {
+  title: string; sub: string; tone: string; from: number; scale: string;
+  /** Boxed figures under the title (RECOVERY: steps, runs, lifts). */
+  chips?: { value: string; label: string; note?: string }[];
+};
+
+/** The caption above the figure: a fixed-height slot (so the page never jumps)
+ *  that springs in and types its title, line and figures out one after another. */
+function LensCaption({ info }: { info: LensInfo | null }) {
+  const enter = useRef(new Animated.Value(0)).current;
+  const key = info ? `${info.title}|${info.sub}|${info.chips?.map(c => c.value).join(',') ?? ''}` : '';
+  useEffect(() => {
+    enter.setValue(0);
+    if (info) Animated.spring(enter, { toValue: 1, friction: 7, tension: 80, useNativeDriver: true }).start();
+  }, [key]);
+  if (!info) return <View style={styles.lensSlot} />;
+  const titleMs = info.title.length * 26;
+  return (
+    <View style={styles.lensSlot}>
+      <Animated.View style={[styles.lens, {
+        opacity: enter,
+        transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }, { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
+      }]}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <TypeLine key={`t${key}`} text={info.title} style={styles.lensTitle} speed={26} cursor={info.tone} />
+          {info.chips ? (
+            <View style={styles.lensChips}>
+              {info.chips.map((c, i) => (
+                <View key={c.label} style={styles.lensChip}>
+                  <TypeLine key={`c${key}${i}`} text={c.value} style={styles.lensChipVal} delay={titleMs + i * 160} speed={45} />
+                  <Text style={styles.lensChipLabel}>{c.label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <TypeLine key={`s${key}`} text={info.sub} style={styles.lensSub} delay={titleMs} speed={12} />
+          )}
+        </View>
+        <View style={styles.scale}>
+          <View style={styles.scaleBar}>
+            {[0, 0.25, 0.5, 0.75, 1].map(t => (
+              <View key={t} style={[styles.scaleCell, { backgroundColor: info.tone, opacity: info.from + (1 - info.from) * t }]} />
+            ))}
+          </View>
+          <Text style={styles.scaleText}>{info.scale}</Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
 /** The bold line above the figure for a lens (or the recovery toggle), and its colour key. */
 function lensCaption(
   lens: Lens, recovery: boolean, next: UpNext | null, worn: Session[], runs: Run[], steps: Record<string, number>, now: number,
-): { title: string; sub: string; tone: string; from: number; scale: string } | null {
+): LensInfo | null {
   if (lens === 'next') {
     if (!next) return { title: 'NOTHING PLANNED', sub: 'Set your routine on TRAIN to see what is up next.', tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
     const r = next.resting;
@@ -888,10 +939,16 @@ function lensCaption(
     const n = runs.filter(r => r.end >= week).length;
     const total = Object.entries(steps).filter(([k]) => Date.parse(k) >= week - 86_400_000).reduce((a, [, v]) => a + v, 0);
     const ran = runs.filter(r => r.end >= week).reduce((a, r) => a + runSteps(r), 0);
+    const lifts = worn.filter(x => x.name !== 'RUN' && x.name !== 'WALKING' && x.at >= week).length;
     return {
       title: 'RECOVERY',
-      sub: `LIFTS${n ? ` · ${n} RUN${n > 1 ? 'S' : ''} (${Math.round(ran / 1000)}K STEPS)` : ''} · ${Math.round(total / 1000)}K STEPS THIS WEEK`,
+      sub: 'Last 7 days, weighted by how hard each hit',
       tone: C.alert, from: 0, scale: 'FRESH → WORN',
+      chips: [
+        { value: `${Math.round(total / 1000)}K`, label: 'STEPS' },
+        { value: `${n}`, label: n === 1 ? 'RUN' : 'RUNS', note: n ? `${Math.round(ran / 1000)}K STRIDES` : undefined },
+        { value: `${lifts}`, label: lifts === 1 ? 'LIFT' : 'LIFTS' },
+      ],
     };
   }
   return null;

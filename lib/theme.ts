@@ -36,6 +36,7 @@ export const C = {
   water:    '#3FA9FF', // water progress only
   food:     '#FF7A3D', // calorie progress only
   stale:    '#FFE680', // BODY's LONGEST SINCE lens only
+  wornDeep: '#6E1410', // BODY's RECOVERY thermometer, the deep end of the reds
   scrim:    'rgba(0,0,0,0.72)',
 };
 

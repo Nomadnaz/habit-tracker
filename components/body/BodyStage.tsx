@@ -161,7 +161,8 @@ interface Props {
   dimRest: boolean;
 }
 
-export type Paint = { tone: string; t: number };
+/** glow 0–1: a soft inner light that breathes (RECOVERY lights worn muscles by how worn). */
+export type Paint = { tone: string; t: number; glow?: number };
 
 const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -205,6 +206,8 @@ uniform float uWave;   // ring radius from there, cm
 uniform float uCell;   // halftone cell, device px
 uniform vec2 uPhase;   // per-muscle shift of the dot grid, in cells
 uniform vec3 uLight;
+uniform float uGlow;   // 0–1, worn muscles under RECOVERY
+uniform float uTime;   // seconds, for the glow's slow breathe
 void main() {
   vec3 n = normalize(vN);
   if (!gl_FrontFacing) n = -n;
@@ -214,9 +217,13 @@ void main() {
   // Each muscle's grid is shifted a little, so where two meet the dots
   // fall out of step and the boundary shows as a seam.
   vec2 g = fract(gl_FragCoord.xy / uCell + uPhase) - 0.5;
-  float r = 0.48 * sqrt(lum);
+  // Glow: dots swell a touch, a faint light fills between them and the
+  // silhouette's edge brightens — kept low so it reads as warmth, not neon.
+  float glow = uGlow * (0.8 + 0.2 * sin(uTime * 2.1));
+  float r = 0.48 * sqrt(lum) * (1.0 + 0.16 * glow);
   float dots = 1.0 - smoothstep(r - 0.1, r + 0.1, length(g));
   vec3 col = vec3(0.025) + uCol * (dots * uAmt + rim * 0.2 * uAmt);
+  col += uCol * glow * (0.07 + 0.3 * rim) * (0.5 + 0.5 * lum);
   if (uMode > 0.5) {
     float d = distance(vW, uSelC);
     if (uMode > 1.5) {
@@ -266,7 +273,7 @@ function setupGL(gl: ExpoWebGLRenderingContext): GLState {
   gl.enableVertexAttribArray(aPos);
   gl.enableVertexAttribArray(aNrm);
   const u: GLState['u'] = {};
-  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uMode', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight']) u[name] = gl.getUniformLocation(prog, name);
+  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uMode', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight', 'uGlow', 'uTime']) u[name] = gl.getUniformLocation(prog, name);
   gl.enable(gl.DEPTH_TEST);
   gl.clearColor(0, 0, 0, 1);
   return { gl, aPos, aNrm, u };
@@ -313,16 +320,18 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
       const pt = paint?.[m.id];
       const col: V3 = pt ? mix3(ink, rgb(pt.tone), pt.t) : cat ? rgb(TONE[cat.tone]) : ink;
       const full = pt || cat ? 1 : dimRest ? 0.32 : 0.8;
-      if (!zv) return { col, amt: full, phase: PHASE[i], mode: 0 };
-      if (!zv.members.has(i)) return { col, amt: full * 0.16, phase: PHASE[i], mode: 0 };
-      if (!selected) return { col, amt: 1, phase: ZONE_PHASE, mode: 1 };
-      return m.id === selected ? { col, amt: 1, phase: PHASE[i], mode: 2 } : { col, amt: full * 0.6, phase: PHASE[i], mode: 0 };
+      const glow = pt?.glow ?? 0;
+      if (!zv) return { col, amt: full, phase: PHASE[i], mode: 0, glow };
+      if (!zv.members.has(i)) return { col, amt: full * 0.16, phase: PHASE[i], mode: 0, glow: 0 };
+      if (!selected) return { col, amt: 1, phase: ZONE_PHASE, mode: 1, glow };
+      return m.id === selected ? { col, amt: 1, phase: PHASE[i], mode: 2, glow } : { col, amt: full * 0.6, phase: PHASE[i], mode: 0, glow };
     });
   }, [map.marks, filter, catById, selected, zv, paint, showGoals, dimRest]);
 
   // Everything the draw needs that React owns, for the animation loop.
-  const live = useRef({ look, selPart, zv, active, W, H, base });
-  live.current = { look, selPart, zv, active, W, H, base };
+  const glowing = look.some(l => l.glow > 0.01);
+  const live = useRef({ look, selPart, zv, active, W, H, base, glowing });
+  live.current = { look, selPart, zv, active, W, H, base, glowing };
 
   // ── drawing ────────────────────────────────────────────────────────────
   const draw = () => {
@@ -354,6 +363,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     gl.uniformMatrix3fv(u.uRot, false, rot);
     gl.uniform1f(u.uCell, CELL * (gl.drawingBufferWidth / w));
     gl.uniform3f(u.uLight, LIGHT[0], LIGHT[1], LIGHT[2]);
+    gl.uniform1f(u.uTime, (Date.now() % 600_000) / 1000);
     // The ring starts from the muscle's centre, or the zone's.
     const st = Date.now() - selT0.current;
     const from = sp ?? z;
@@ -365,6 +375,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
       gl.uniform3f(u.uCol, l.col[0], l.col[1], l.col[2]);
       gl.uniform1f(u.uAmt, l.amt);
       gl.uniform1f(u.uMode, l.mode);
+      gl.uniform1f(u.uGlow, l.glow);
       gl.uniform2f(u.uPhase, l.phase[0], l.phase[1]);
       gl.vertexAttribPointer(S.aPos, 3, gl.FLOAT, false, 24, p.vStart * 24);
       gl.vertexAttribPointer(S.aNrm, 3, gl.FLOAT, false, 24, p.vStart * 24 + 12);
@@ -375,6 +386,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     gl.uniform3f(u.uCol, ink[0], ink[1], ink[2]);
     gl.uniform1f(u.uAmt, z ? 0.1 : 0.42);
     gl.uniform1f(u.uMode, 0);
+    gl.uniform1f(u.uGlow, 0);
     gl.uniform2f(u.uPhase, ZONE_PHASE[0], ZONE_PHASE[1]);
     for (const p of MESH.decor) {
       gl.vertexAttribPointer(S.aPos, 3, gl.FLOAT, false, 24, p.vStart * 24);
@@ -431,6 +443,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
       more = true;
     }
     if ((L.selPart || L.zv) && now - selT0.current < FILL[1] + 40) more = true; // ring / fill / callout still playing
+    if (L.active && L.glowing) more = true; // the worn-muscle glow breathes
     settle();
     draw();
     if (live.current.selPart || live.current.zv) setFrame(f => f + 1); // the callout follows the muscle / zone
@@ -440,7 +453,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   useEffect(() => () => { if (raf.current != null) cancelAnimationFrame(raf.current); }, []);
 
   // Colours / size changed → redraw once.
-  useEffect(() => { draw(); placeHud(); }, [look, W, H]);
+  useEffect(() => { draw(); placeHud(); if (glowing) kick(); }, [look, W, H]);
 
   // Moves the readouts' lines to where their points now are on screen —
   // only when one has moved, so a still figure re-renders nothing.
