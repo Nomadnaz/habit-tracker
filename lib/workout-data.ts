@@ -65,7 +65,8 @@ export type WorkoutExercise = {
   orderIndex: number;
 };
 
-export type DoneEntry = { date: string; templateId: string };
+/** skip: exercises in the template that rested that day (tired muscles) — not counted as trained. */
+export type DoneEntry = { date: string; templateId: string; skip?: string[] };
 
 // ── ID helper ──────────────────────────────────────────────────────────────
 export function genId(): string {
@@ -384,14 +385,14 @@ export async function removeExerciseFromTemplate(junctionId: string): Promise<vo
   });
 }
 
-export async function markDoneToday(templateId: string): Promise<void> {
+export async function markDoneToday(templateId: string, skip: string[] = []): Promise<void> {
   const today = todayKey();
   const entry = { id: genId(), templateId, date: today };
 
   const wasAlreadyDone = await withStorageLock(K.doneLog, async () => {
     const log = await getDoneLog();
     const filtered = log.filter(e => !(e.templateId === templateId && e.date === today));
-    await save(K.doneLog, [...filtered, { date: today, templateId }]);
+    await save(K.doneLog, [...filtered, { date: today, templateId, ...(skip.length ? { skip } : {}) }]);
     return filtered.length !== log.length;
   });
 
@@ -509,7 +510,7 @@ export async function getTrainingSessions(days = 21): Promise<Session[]> {
     if (e.date < since || !/^\d{4}-\d\d-\d\d$/.test(e.date)) continue;
     for (const j of junctions) {
       const ex = j.templateId === e.templateId ? byId[j.exerciseId] : undefined;
-      if (!ex) continue;
+      if (!ex || e.skip?.includes(ex.id)) continue;
       const reps = parseInt(ex.reps, 10);
       out.set(`${ex.id}|${e.date}`, {
         exerciseId: ex.id, name: ex.name, muscleGroups: ex.muscleGroups, date: e.date, at: evening(e.date),

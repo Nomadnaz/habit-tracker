@@ -48,13 +48,16 @@ function FactorChip({ f }: { f: Factor }) {
   );
 }
 
-export function CoachCard({ today, lifts, onStart, onConnect }: {
-  today: Today; lifts: number; onStart: () => void; onConnect: () => void;
+export function CoachCard({ today, lifts, resting, onStart, onConnect }: {
+  today: Today; lifts: number;
+  /** Lifts in the session sitting this one out for a tired muscle. */
+  resting: { name: string; muscle: string; pct: number }[];
+  onStart: () => void; onConnect: () => void;
 }) {
   const [why, setWhy] = useState(false);
   const r = today.readiness;
   const lvl = LEVEL[r.level];
-  const resting = !today.scheduled || today.done;
+  const offDay = !today.scheduled || today.done;
   const onlyLoad = r.factors.length === 1;
 
   return (
@@ -62,8 +65,8 @@ export function CoachCard({ today, lifts, onStart, onConnect }: {
       <View style={st.head}>
         <View style={{ flex: 1 }}>
           <View style={st.eyebrowRow}>
-            <View style={[st.dot, { backgroundColor: resting ? C.faint : C.live }]} />
-            <Text style={st.eyebrow}>{today.done ? 'DONE TODAY · UP NEXT' : resting ? `REST DAY · NEXT ${today.when}` : 'TODAY'}</Text>
+            <View style={[st.dot, { backgroundColor: offDay ? C.faint : C.live }]} />
+            <Text style={st.eyebrow}>{today.done ? 'DONE TODAY · UP NEXT' : offDay ? `REST DAY · NEXT ${today.when}` : 'TODAY'}</Text>
           </View>
           <Text style={st.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{today.title}</Text>
           <Text style={st.meta}>{`${lifts} LIFTS · ${today.fresh}% FRESH${today.setDelta ? ' · ONE SET LESS' : ''}`}</Text>
@@ -80,6 +83,15 @@ export function CoachCard({ today, lifts, onStart, onConnect }: {
           <Text style={st.reasonText}>{x}</Text>
         </View>
       ))}
+
+      {resting.length > 0 && (
+        <View style={st.resting}>
+          <MaterialCommunityIcons name="sleep" size={14} color={C.alert} />
+          <Text style={st.restingText}>
+            {`RESTING  ${resting.map(r => r.name).join(', ')} — ${[...new Set(resting.map(r => `${r.muscle} ${r.pct}%`))].join(', ')}`}
+          </Text>
+        </View>
+      )}
 
       <View style={st.factors}>{r.factors.map(f => <FactorChip key={f.id} f={f} />)}</View>
 
@@ -99,9 +111,9 @@ export function CoachCard({ today, lifts, onStart, onConnect }: {
         </Pressable>
       )}
 
-      <Pressable onPress={onStart} style={({ pressed }) => [st.start, resting && st.startGhost, pressed && { opacity: 0.8 }]}>
-        <Text style={[st.startText, resting && { color: C.ink }]}>{resting ? `PREVIEW ${today.title}` : `START ${today.title}`}</Text>
-        <MaterialCommunityIcons name="arrow-right" size={18} color={resting ? C.ink : C.onHot} />
+      <Pressable onPress={onStart} style={({ pressed }) => [st.start, offDay && st.startGhost, pressed && { opacity: 0.8 }]}>
+        <Text style={[st.startText, offDay && { color: C.ink }]}>{offDay ? `PREVIEW ${today.title}` : `START ${today.title}`}</Text>
+        <MaterialCommunityIcons name="arrow-right" size={18} color={offDay ? C.ink : C.onHot} />
       </Pressable>
     </View>
   );
@@ -122,6 +134,8 @@ const st = StyleSheet.create({
   reasonMark: { width: 14, marginTop: 1 },
   reasonText: { flex: 1, fontFamily: F.mono, fontSize: 12, color: C.ink, lineHeight: 16 },
   factors: { flexDirection: 'row', gap: 6 },
+  resting: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10 },
+  restingText: { flex: 1, fontFamily: F.mono, fontSize: 11, color: C.dim, lineHeight: 15 },
   factor: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 8, gap: 3, backgroundColor: C.bg },
   factorLabel: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1 },
   factorValue: { fontFamily: F.dot, fontSize: 15, color: C.ink },

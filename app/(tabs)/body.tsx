@@ -11,7 +11,7 @@
 // lib/body-map.ts.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Animated, TextInput, Modal,
   useWindowDimensions, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
@@ -33,10 +33,11 @@ import {
 } from '@/lib/workout-data';
 import {
   baseOf, byExercise, hasBattery, muscleStatus, suggestionsFor, withIntensity, cardioSessions, loadOf, lastDay, daysSince,
-  runSteps, type MuscleStatus, type Session, type Run,
+  runSteps, RECOVERY_MUSCLES, type MuscleStatus, type Session, type Run,
 } from '@/lib/muscle-recovery';
 import { loadCoach } from '@/lib/routine';
-import { fitFor, focusOfName } from '@/lib/coach';
+import { fitFor, focusOfName, muscleWord, planSession } from '@/lib/coach';
+import { RecoveryAura, RecoveryToggle, useRecoveryMix } from '@/components/body/RecoveryToggle';
 import { getActivitiesInRange } from '@/lib/activity-data';
 import { MUSCLES } from '@/lib/body-mesh';
 import { guideFor, goalOf, type Guide } from '@/lib/exercise-guide';
@@ -57,7 +58,8 @@ const SIDES: Facing[] = ['front', 'back'];
 // What the figure is coloured by. GOALS = the user's categories; the rest
 // are lenses over the training history (lib/muscle-recovery.ts).
 type Lens = 'goals' | 'next' | 'last' | 'since';
-type UpNext = { title: string; when: string; exercises: Exercise[] };
+/** The coach's next session: the lifts going ahead, and those resting for a tired muscle. */
+type UpNext = { title: string; when: string; exercises: Exercise[]; resting: { name: string; muscle: string; pct: number }[] };
 const LENSES: FanOption<Lens>[] = [
   { id: 'goals', label: 'GOALS', color: C.ink, icon: 'target' },
   { id: 'next', label: 'UP NEXT', color: C.live, icon: 'calendar-arrow-right' },
@@ -91,6 +93,8 @@ export default function BodyScreen() {
   const [next, setNext] = useState<UpNext | null>(null);
   const [lens, setLens] = useState<Lens>('goals');
   const [recovery, setRecovery] = useState(false);
+  const [mix, setMix] = useState(0);
+  const recMix = useRecoveryMix(recovery, setMix);
   const [profile, setProfile] = useState<BodyProfile>({ heightCm: null, sex: null, weightKg: null });
 
   useEffect(() => { loadBodyMap().then(setMap); }, []);
@@ -113,10 +117,12 @@ export default function BodyScreen() {
       .catch(() => {});
     // UP NEXT is the coach's pick (lib/coach.ts) — the same session TRAIN shows.
     void (async () => {
-      const [{ today }, templates, library] = await Promise.all([loadCoach(), getTemplates(), getExercises()]);
+      const [{ today, sessions: worn }, templates, library] = await Promise.all([loadCoach(), getTemplates(), getExercises()]);
       const t = templates.find(x => !x.isArchived && focusOfName(x.name) === today.focus);
-      const exercises = t ? await getTemplateExercises(t.id) : library.filter(e => fitFor(today.focus, e.name, e.muscleGroups) >= 0.5);
-      setNext({ title: today.title, when: today.when, exercises });
+      const lineup = t ? await getTemplateExercises(t.id) : library.filter(e => fitFor(today.focus, e.name, e.muscleGroups) >= 0.5);
+      // Only what's recovered by then goes ahead; lifts on a tired muscle rest.
+      const { keep, rest } = planSession(lineup, worn, today.at);
+      setNext({ title: today.title, when: today.when, exercises: keep, resting: rest.map(r => ({ name: r.lift.name, muscle: muscleWord(r.muscle), pct: r.pct })) });
     })().catch(() => {});
     setFocused(true);
     return () => setFocused(false);
@@ -169,6 +175,13 @@ export default function BodyScreen() {
     });
   };
 
+  // Each muscle's battery, for the RECOVERY paint — once per data change, not per fade frame.
+  const recPct = useMemo(() => {
+    const t = Date.now();
+    const worn = [...withIntensity(sessions), ...cardioSessions(body?.stepsHistory ?? {}, [...(body?.runs ?? []), ...appRuns], t)];
+    return Object.fromEntries(RECOVERY_MUSCLES.map(m => [m, muscleStatus(m, worn, t).pct]));
+  }, [sessions, body, appRuns]);
+
   if (!map) return <SafeAreaView style={styles.safe} />;
 
   // Everything that wears muscles: lifts (lighter days count for less), and
@@ -190,13 +203,14 @@ export default function BodyScreen() {
     : lens === 'since' ? Object.fromEntries(Object.entries(daysSince(worn, now)).map(([m, d]) => [m, d == null ? 1 : Math.min(1, d / SINCE_FULL_DAYS)]))
     : null;
   const lensTone = lens === 'next' ? C.live : lens === 'last' ? C.alert : C.stale;
-  const paint: Record<string, Paint> | null = (recovery || lensLoad) ? {} : null;
+  // RECOVERY fades in and out: `mix` runs 0 → 1, scaling every red.
+  const paint: Record<string, Paint> | null = (mix > 0.01 || lensLoad) ? {} : null;
   if (paint) {
     for (const m of MUSCLES) {
       const b = baseOf(m.id);
       const l = lensLoad?.[b];
       if (l != null && l > 0.02) paint[m.id] = { tone: lensTone, t: lens === 'since' ? l : 0.25 + 0.75 * l };
-      else if (recovery && hasBattery(b)) paint[m.id] = { tone: C.alert, t: 1 - muscleStatus(b, worn, now).pct / 100 };
+      else if (mix > 0.01 && hasBattery(b)) paint[m.id] = { tone: C.alert, t: (1 - (recPct[b] ?? 100) / 100) * mix };
     }
   }
   const lensInfo = lensCaption(lens, recovery, next, worn, runs, body?.stepsHistory ?? {}, now);
@@ -292,16 +306,13 @@ export default function BodyScreen() {
           hud={hud}
           pulse={heart?.bpm ?? null}
           paint={paint}
-          showGoals={lens === 'goals' && !recovery}
+          showGoals={lens === 'goals' && mix < 0.02}
           dimRest={lens !== 'goals'}
         />
-        {/* NORMAL ↔ RECOVERY: white, or white → red by how worn each muscle is. */}
-        <Pressable onPress={() => { Haptics.selectionAsync(); setRecovery(r => !r); }} hitSlop={6}
-          style={[styles.recovery, recovery && { borderColor: C.alert }]}
-          accessibilityLabel={recovery ? 'Normal colours' : 'Recovery colours'}>
-          <MaterialCommunityIcons name="thermometer" size={14} color={recovery ? C.alert : C.dim} />
-          <Text style={[styles.recoveryText, recovery && { color: C.alert }]}>{recovery ? 'RECOVERY' : 'NORMAL'}</Text>
-        </Pressable>
+        {/* RECOVERY: muscles fade white → red by how worn each is, with a red aura round the stage. */}
+        <RecoveryAura mix={recMix} w={width} h={stageH} />
+        <RecoveryToggle on={recovery} mix={recMix} onToggle={() => setRecovery(r => !r)}
+          style={[styles.recovery, { right: stageZoomed || zone ? 64 : 12 }]} />
         </View>
 
         <Text style={styles.hint}>DRAG TO SPIN · PINCH TO ZOOM · TAP TO ZOOM IN</Text>
@@ -774,11 +785,7 @@ const styles = StyleSheet.create({
   hint: { fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: 1, textAlign: 'center', marginTop: 2 },
   credit: { fontFamily: F.mono, fontSize: 9, color: C.faint, textAlign: 'center', marginHorizontal: 24, marginTop: 16, lineHeight: 13 },
   lens: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 20, marginTop: 4, marginBottom: 6 },
-  recovery: {
-    position: 'absolute', top: 6, left: 12, flexDirection: 'row', alignItems: 'center', gap: 5, height: 30,
-    paddingHorizontal: 11, borderRadius: 15, borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.surface,
-  },
-  recoveryText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5 },
+  recovery: { position: 'absolute', bottom: 12 },
   lensTitle: { fontFamily: F.dot, fontSize: 26, color: C.hot, letterSpacing: 1 },
   lensSub: { fontFamily: F.mono, fontSize: 11, color: C.dim, marginTop: 2 },
   scale: { alignItems: 'flex-end', gap: 4, marginBottom: 2 },
@@ -858,7 +865,9 @@ function lensCaption(
 ): { title: string; sub: string; tone: string; from: number; scale: string } | null {
   if (lens === 'next') {
     if (!next) return { title: 'NOTHING PLANNED', sub: 'Set your routine on TRAIN to see what is up next.', tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
-    return { title: next.title, sub: `${next.when} · ${next.exercises.length} EXERCISES`, tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
+    const r = next.resting;
+    const resting = r.length ? ` · ${r.length} RESTING (${[...new Set(r.map(x => `${x.muscle} ${x.pct}%`))].slice(0, 2).join(', ')})` : '';
+    return { title: next.title, sub: `${next.when} · ${next.exercises.length} EXERCISES${resting}`, tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
   }
   if (lens === 'last') {
     const ld = lastDay(worn);

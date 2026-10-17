@@ -15,10 +15,10 @@ import {
   loadBodyData, pullRemoteBody, todaySteps, refreshAppleHealthIfConnected,
   type BodyData,
 } from '@/lib/body-data';
-import { getDoneLog, getTemplates, getTemplateExercises } from '@/lib/workout-data';
+import { getDoneLog, getExercises, getTemplates, getTemplateExercises } from '@/lib/workout-data';
 import { getActivitiesInRange, getRecentActivities, formatDistance } from '@/lib/activity-data';
 import { loadCoach, saveRoutine, type CoachState } from '@/lib/routine';
-import { focusOfName, FOCUS_LINEUP, type Routine } from '@/lib/coach';
+import { focusOfName, FOCUS_LINEUP, muscleWord, planSession, type Routine } from '@/lib/coach';
 import { ActionSquare, RunGlyph, WeekDots } from '@/components/train/ActionSquare';
 import { CoachCard } from '@/components/train/CoachCard';
 import { RoutineCard } from '@/components/train/RoutineCard';
@@ -47,6 +47,7 @@ export default function TrainScreen() {
   const [data, setData] = useState<BodyData | null>(null);
   const [coach, setCoach] = useState<CoachState | null>(null);
   const [lifts, setLifts] = useState(0);
+  const [resting, setResting] = useState<{ name: string; muscle: string; pct: number }[]>([]);
   const [week, setWeek] = useState<Week>({ route: null, km: 0, runs: 0, sets: [0, 0, 0, 0, 0, 0, 0], done: [] });
 
   const refreshCoach = useCallback(async () => {
@@ -54,7 +55,12 @@ export default function TrainScreen() {
     setCoach(c);
     const live = (await getTemplates()).filter(t => !t.isArchived);
     const t = live.find(x => focusOfName(x.name) === c.today.focus);
-    setLifts(t ? (await getTemplateExercises(t.id)).length : FOCUS_LINEUP[c.today.focus].length);
+    const lib = await getExercises();
+    const lineup = t ? await getTemplateExercises(t.id)
+      : FOCUS_LINEUP[c.today.focus].map(name => lib.find(e => e.name === name) ?? { name, muscleGroups: [] });
+    const plan = planSession(lineup, c.sessions, c.today.at);
+    setLifts(plan.keep.length);
+    setResting(plan.rest.map(r => ({ name: r.lift.name, muscle: muscleWord(r.muscle), pct: r.pct })));
     // This week, Monday first: sets per day (lifts only) and days with a finished session.
     const mon = weekStart();
     const idx = (date: string) => Math.round((new Date(`${date}T12:00:00`).getTime() - mon.getTime()) / 86_400_000 - 0.5);
@@ -145,7 +151,7 @@ export default function TrainScreen() {
 
         {/* ── Coach: today ───────────────────────────────── */}
         {today && (
-          <CoachCard today={today} lifts={lifts} onStart={openLog} onConnect={() => router.push('/settings/wearables')} />
+          <CoachCard today={today} lifts={lifts} resting={resting} onStart={openLog} onConnect={() => router.push('/settings/wearables')} />
         )}
 
         {/* ── Routine ────────────────────────────────────── */}

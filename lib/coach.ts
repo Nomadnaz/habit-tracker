@@ -21,10 +21,14 @@
 //             Missing inputs drop out and the rest are reweighted. A breathing
 //             rate well above baseline (an early sign of getting ill) caps it at 45.
 //
-//   TODAY     the next focus in the rotation, unless its muscles are still
-//             tired (<70%) and another focus in the split is clearly fresher
-//             — then they swap. Readiness sets the dose: PUSH, TRAIN, EASY
-//             (a set less, stop two reps short) or RECOVER (core + mobility).
+//   TODAY     judged at the session's time (now, or the next training day at
+//             5pm — muscles keep recharging till then). The rotation's foci in
+//             order of how long each has waited; the first whose prime movers
+//             are ALL recovered (≥90%) is the pick, so a depleted muscle is
+//             never what's up next. Inside it, any lift whose main muscle is
+//             still tired rests (planSession) and isn't counted when the day is
+//             ticked off. Readiness sets the dose: PUSH, TRAIN, EASY (a set
+//             less, stop two reps short) or RECOVER (core + mobility).
 // ─────────────────────────────────────────────────────────────────────────
 
 import { CATALOGUE, muscleStatus, musclesFor, RECOVERY_MUSCLES, type Session } from './muscle-recovery';
@@ -149,17 +153,6 @@ export function freshness(focus: Focus, sessions: Session[], now: number): numbe
   return w ? Math.round(sum / w) : 100;
 }
 
-/** The focus's most tired important muscle. */
-function weakest(focus: Focus, sessions: Session[], now: number): { id: string; pct: number } {
-  let best = { id: '', pct: 101 };
-  for (const [m, k] of Object.entries(FOCUS_MUSCLES[focus])) {
-    if (k < 0.8) continue;
-    const pct = muscleStatus(m, sessions, now).pct;
-    if (pct < best.pct) best = { id: m, pct };
-  }
-  return best;
-}
-
 const MUSCLE_WORD: Record<string, string> = {
   'pec.upper': 'UPPER CHEST', 'pec.lower': 'CHEST', 'delt.front': 'FRONT DELTS', 'delt.side': 'SIDE DELTS',
   'triceps.lat': 'TRICEPS', 'triceps.long': 'TRICEPS', lat: 'LATS', 'traps.mid': 'MID BACK', 'delt.rear': 'REAR DELTS',
@@ -277,18 +270,44 @@ export type Today = {
   /** Training day per the routine (false = a rest day; the focus is then the next session). */
   scheduled: boolean;
   done: boolean;
-  /** When the next session is if today is off or already done. */
+  /** When the session is: TODAY, TOMORROW, or a weekday. */
   when: string;
+  /** The moment recovery is judged at — now, or the next training day at 5pm. */
+  at: number;
   planned: Focus;
   swapped: boolean;
-  fresh: number;                     // 0–100, the focus's muscles
+  fresh: number;                     // 0–100, the focus's muscles at `at`
   freshBy: Partial<Record<Focus, number>>;
+  /** Lowest prime mover per focus at `at` — what decides whether it can be trained. */
+  readyBy: Partial<Record<Focus, number>>;
   readiness: Readiness;
   setDelta: number;                  // −1 on EASY days
   reasons: string[];
 };
 
 const SHORT = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+/** A muscle at or above this is recovered enough to train again. The battery
+ *  recharges linearly, so the last few percent is inside the model's noise. */
+export const READY = 90;
+const PRIME = 0.8;
+
+/** A focus's most tired prime mover (weight ≥ 0.8) at time `at`. */
+export function primeReady(focus: Focus, sessions: Session[], at: number): { id: string; pct: number; readyAt: number | null } {
+  let worst = { id: '', pct: 101, readyAt: null as number | null };
+  for (const [m, k] of Object.entries(FOCUS_MUSCLES[focus])) {
+    if (k < PRIME) continue;
+    const st = muscleStatus(m, sessions, at);
+    if (st.pct < worst.pct) worst = { id: m, pct: st.pct, readyAt: st.readyAt };
+  }
+  return worst;
+}
+
+const dayWord = (at: number, from: Date) => {
+  const d = new Date(at);
+  const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()) / 86_400_000);
+  return days <= 0 ? 'LATER TODAY' : days === 1 ? 'TOMORROW' : SHORT[d.getDay()];
+};
 
 export function coachToday(input: {
   routine: Routine;
@@ -299,69 +318,95 @@ export function coachToday(input: {
   now: Date;
 }): Today {
   const { routine, doneFoci, sessions, vitals, now } = input;
-  const t = now.getTime();
   const rot = rotation(routine);
   const todayKey = toDateKey(now);
   const done = doneFoci.some(d => d.date === todayKey);
   const scheduled = routine.days.length === 0 || routine.days.includes(DOW[now.getDay()]);
+  const trains = (d: Date) => routine.days.length === 0 || routine.days.includes(DOW[d.getDay()]);
   const reasons: string[] = [];
 
-  // Next in the rotation after the last finished session that belongs to it
-  // (today's, once it's done — then this is tomorrow's).
-  const last = doneFoci.find(d => rot.includes(d.focus));
-  let idx = 0;
-  if (last) {
-    // A rotation can repeat a focus (7-day PPL ×2): step from its latest slot.
-    const at = rot.lastIndexOf(last.focus);
-    idx = (at + 1) % rot.length;
-  } else {
-    const onPaper = weekPlan(routine)[DOW[now.getDay()]];
-    if (onPaper && rot.includes(onPaper as Focus)) idx = rot.indexOf(onPaper as Focus);
-  }
-  const planned = rot[idx];
-
-  const freshBy: Partial<Record<Focus, number>> = {};
-  for (const f of new Set(rot)) freshBy[f] = freshness(f, sessions, t);
-  if (!rot.includes('core')) freshBy.core = freshness('core', sessions, t);
-
-  let focus = planned;
-  if ((freshBy[planned] ?? 100) < 70) {
-    const best = [...new Set(rot)].sort((a, b) => (freshBy[b] ?? 0) - (freshBy[a] ?? 0))[0];
-    if (best !== planned && (freshBy[best] ?? 0) - (freshBy[planned] ?? 0) >= 15) {
-      const w = weakest(planned, sessions, t);
-      reasons.push(`${muscleWord(w.id)} only ${w.pct}% recovered — ${FOCUS_TITLE[planned]} moved back`);
-      reasons.push(`${FOCUS_TITLE[best]} muscles are ${freshBy[best]}% fresh`);
-      focus = best;
+  // When the session is — and so when to judge recovery: muscles keep
+  // recharging until then, so tomorrow's session is planned with tomorrow's numbers.
+  let when = 'TODAY';
+  let at = now.getTime();
+  if (done || !scheduled) {
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, 17);
+      if (trains(d)) { when = i === 1 ? 'TOMORROW' : SHORT[d.getDay()]; at = d.getTime(); break; }
     }
   }
 
-  const r = readiness(vitals, systemicLoad(sessions, t), now);
+  // The rotation's order of preference: whatever's waited longest first (a focus
+  // skipped for tired muscles stays at the front), ties in rotation order
+  // starting after the last finished session.
+  const last = doneFoci.find(d => rot.includes(d.focus));
+  const start = last ? (rot.lastIndexOf(last.focus) + 1) % rot.length
+    : Math.max(0, rot.indexOf(weekPlan(routine)[DOW[new Date(at).getDay()]] as Focus));
+  const lastDone = (f: Focus) => doneFoci.find(d => d.focus === f)?.date ?? '';
+  const order = [...new Set([...rot.slice(start), ...rot.slice(0, start)])]
+    .sort((x, y) => lastDone(x).localeCompare(lastDone(y)));
+  const planned = order[0];
+
+  const freshBy: Partial<Record<Focus, number>> = {};
+  const readyBy: Partial<Record<Focus, number>> = {};
+  for (const f of [...order, 'core' as Focus]) {
+    freshBy[f] = freshness(f, sessions, at);
+    readyBy[f] = primeReady(f, sessions, at).pct;
+  }
+
+  // First in that order whose prime movers are all recovered by then.
+  let focus = order.find(f => (readyBy[f] ?? 100) >= READY)
+    // None are: the least tired, or core if that's readier.
+    ?? [...order, 'core' as Focus].sort((x, y) => (readyBy[y] ?? 0) - (readyBy[x] ?? 0))[0];
+
+  if (focus !== planned) {
+    const w = primeReady(planned, sessions, at);
+    reasons.push(`${muscleWord(w.id)} ${w.pct}% — ${FOCUS_TITLE[planned]} waits${w.readyAt ? ` till ${dayWord(w.readyAt, now)}` : ''}`);
+  }
+  if ((readyBy[focus] ?? 100) >= READY) {
+    reasons.push(`${FOCUS_TITLE[focus]} muscles are recovered${when === 'TODAY' ? '' : ` by ${when}`}`);
+  } else {
+    const w = primeReady(focus, sessions, at);
+    reasons.push(`Everything is still recovering — ${muscleWord(w.id)} lowest at ${w.pct}%. Lifts on tired muscles rest.`);
+  }
+
+  const r = readiness(vitals, systemicLoad(sessions, now.getTime()), now);
   let setDelta = 0;
   if (r.level === 'easy') setDelta = -1;
   if (r.level === 'recover' && scheduled && !done) {
     reasons.unshift(`Readiness ${r.score} — swap today for core and mobility`);
     focus = 'core';
   }
-  if (focus === planned && reasons.length === 0) {
-    reasons.push(last ? `Next in your ${SPLIT_NAME[splitOf(routine)]} rotation` : `First session of your ${SPLIT_NAME[splitOf(routine)]} week`);
-    if ((freshBy[focus] ?? 100) >= 85) reasons.push(`${FOCUS_TITLE[focus]} muscles are ${freshBy[focus]}% fresh`);
-  }
-
-  // When is it, if not now.
-  let when = 'TODAY';
-  if (done || !scheduled) {
-    when = 'NEXT';
-    for (let i = 1; i <= 7; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-      if (routine.days.length === 0 || routine.days.includes(DOW[d.getDay()])) { when = i === 1 ? 'TOMORROW' : SHORT[d.getDay()]; break; }
-    }
-  }
 
   return {
-    focus, title: FOCUS_TITLE[focus], scheduled, done, when, planned, swapped: focus !== planned,
-    fresh: freshBy[focus] ?? freshness(focus, sessions, t), freshBy, readiness: r, setDelta, reasons,
+    focus, title: FOCUS_TITLE[focus], scheduled, done, when, at, planned, swapped: focus !== planned,
+    fresh: freshBy[focus] ?? freshness(focus, sessions, at), freshBy, readyBy, readiness: r, setDelta, reasons,
   };
 }
+
+export type Resting<T> = { lift: T; muscle: string; pct: number; readyAt: number | null };
+
+/** Split a session's lifts into those whose main muscles (share ≥ 0.5) are
+ *  recovered by `at`, and those that would hit a tired one — they rest today. */
+export function planSession<T extends Lift>(lifts: T[], sessions: Session[], at: number): { keep: T[]; rest: Resting<T>[] } {
+  const keep: T[] = [];
+  const rest: Resting<T>[] = [];
+  for (const lift of lifts) {
+    let worst: Resting<T> | null = null;
+    for (const [m, share] of Object.entries(musclesFor(lift.name, lift.muscleGroups))) {
+      if (share < 0.5) continue;
+      const st = muscleStatus(m, sessions, at);
+      if (st.pct < READY && (!worst || st.pct < worst.pct)) worst = { lift, muscle: m, pct: st.pct, readyAt: st.readyAt };
+    }
+    if (worst) rest.push(worst); else keep.push(lift);
+  }
+  return { keep, rest };
+}
+
+/** True if every main muscle of a lift is recovered by `at`. */
+export const liftReady = (lift: Lift, sessions: Session[], at: number) => planSession([lift], sessions, at).rest.length === 0;
+
+export { dayWord };
 
 // ── chips: what fits a focus, and what can stand in for a lift ───────────
 

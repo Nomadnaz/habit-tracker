@@ -87,16 +87,30 @@ describe('coachToday', () => {
     expect(t.scheduled).toBe(true);
     expect(t.when).toBe('TODAY');
   });
-  it('swaps to a fresher focus when the planned muscles are still tired', () => {
-    const sessions = [lift('BARBELL ROW', 20, 5), lift('LAT PULLDOWN', 20, 5), lift('BARBELL CURL', 20, 4), lift('FACE PULL', 20, 4)];
-    const t = coachToday({ routine: ppl, doneFoci: [{ focus: 'push', date: day(2) }], sessions, vitals: null, now: NOW });
-    expect(t.planned).toBe('pull');
-    expect(t.swapped).toBe(true);
-    expect(t.focus).not.toBe('pull');
-    expect(t.reasons[0]).toMatch(/recovered/);
+  it('skips a focus whose prime movers are not recovered, even if the rest of it is fresh', () => {
+    // Heavy quads only, last night: legs as a whole still averages high, but quads are empty.
+    const sessions = [lift('LEG EXTENSION', 14, 6), lift('BACK SQUAT', 14, 5)];
+    const legsDue: Routine = { days: ['monday', 'wednesday', 'friday'], split: 'ppl' };
+    const t = coachToday({ routine: legsDue, doneFoci: [{ focus: 'pull', date: day(2) }, { focus: 'push', date: day(4) }], sessions, vitals: null, now: NOW });
+    expect(t.planned).toBe('legs');
+    expect(t.focus).not.toBe('legs');
+    expect(t.reasons[0]).toMatch(/QUADS \d+% — LEG DAY waits/);
+    expect(t.readyBy[t.focus]).toBeGreaterThanOrEqual(90);
+  });
+  it('keeps the skipped focus at the front for next time', () => {
+    const t = coachToday({ routine: ppl, doneFoci: [{ focus: 'push', date: day(1) }, { focus: 'pull', date: day(3) }], sessions: [], vitals: null, now: NOW });
+    // legs never done → it waited longest.
+    expect(t.focus).toBe('legs');
+  });
+  it('judges a later session by recovery at that time, not now', () => {
+    // Pull trained this morning; next session is FRI — by then the back is recovered.
+    const sessions = [lift('LAT PULLDOWN', 2, 4), lift('BARBELL ROW', 2, 4)];
+    const t = coachToday({ routine: ppl, doneFoci: [{ focus: 'pull', date: day(0) }, { focus: 'push', date: day(5) }, { focus: 'legs', date: day(3) }], sessions, vitals: null, now: NOW });
+    expect(t.when).toBe('FRI');
+    expect(t.at).toBeGreaterThan(NOW.getTime() + 48 * H);
   });
   it('moves on once today is done', () => {
-    const t = coachToday({ routine: ppl, doneFoci: [{ focus: 'pull', date: day(0) }, { focus: 'push', date: day(2) }], sessions: [], vitals: null, now: NOW });
+    const t = coachToday({ routine: ppl, doneFoci: [{ focus: 'pull', date: day(0) }, { focus: 'legs', date: day(4) }, { focus: 'push', date: day(2) }], sessions: [], vitals: null, now: NOW });
     expect(t.done).toBe(true);
     expect(t.focus).toBe('legs');
     expect(t.when).toBe('FRI');
@@ -133,5 +147,17 @@ describe('chips', () => {
     const alts = alternativesFor({ name: 'LAT PULLDOWN', muscleGroups: ['lats'] }, [], []).map(p => p.name);
     expect(alts[0]).toMatch(/PULL UP|CHIN UP/);
     expect(alts).not.toContain('BACK SQUAT');
+  });
+});
+
+describe('planSession', () => {
+  it('rests lifts that would hit a tired muscle, keeps the rest', async () => {
+    const { planSession } = await import('./coach');
+    const sessions = [lift('LEG EXTENSION', 10, 6)];
+    const lineup = ['BACK SQUAT', 'LEG PRESS', 'ROMANIAN DEADLIFT', 'LYING LEG CURL', 'STANDING CALF RAISE'].map(name => ({ name, muscleGroups: [] }));
+    const { keep, rest } = planSession(lineup, sessions, NOW.getTime());
+    expect(rest.map(r => r.lift.name)).toEqual(['BACK SQUAT', 'LEG PRESS']);
+    expect(keep.map(k => k.name)).toEqual(['ROMANIAN DEADLIFT', 'LYING LEG CURL', 'STANDING CALF RAISE']);
+    expect(rest[0].pct).toBeLessThan(90);
   });
 });

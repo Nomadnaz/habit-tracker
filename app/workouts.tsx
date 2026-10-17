@@ -24,9 +24,12 @@ import {
   removeExerciseFromTemplate, replaceExerciseInTemplate, unmarkDoneToday, updateExercise, getSetsForDay,
   type Exercise, type Focus, type WorkoutTemplate,
 } from '@/lib/workout-data';
-import { alternativesFor, FOCI, FOCUS_TITLE, focusOfName, LEVEL, muscleWord, suggestFor, type Pick as Choice, type Today } from '@/lib/coach';
+import {
+  alternativesFor, dayWord, FOCI, FOCUS_TITLE, focusOfName, LEVEL, liftReady, muscleWord, planSession, suggestFor,
+  type Pick as Choice, type Resting, type Today,
+} from '@/lib/coach';
 import { ensureFocusTemplate, exerciseFor, loadCoach } from '@/lib/routine';
-import { musclesFor } from '@/lib/muscle-recovery';
+import { musclesFor, type Session } from '@/lib/muscle-recovery';
 import { equipmentOf, guideFor, patternOf } from '@/lib/exercise-guide';
 import { getBodyProfile, latestWeight, loadBodyData, type BodyProfile } from '@/lib/body-data';
 import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
@@ -62,6 +65,9 @@ export default function LogWorkout() {
   const { unitSystem } = useUnitPreference();
 
   const [today, setToday] = useState<Today | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  /** Resting lifts the user chose to train anyway. */
+  const [forced, setForced] = useState<Set<string>>(new Set());
   const [sel, setSel] = useState<Sel | null>(null);
   const [template, setTemplate] = useState<WorkoutTemplate | null>(null);
   const [custom, setCustom] = useState<WorkoutTemplate[]>([]);
@@ -98,6 +104,7 @@ export default function LogWorkout() {
     setSel(next);
     setOpen(null);
     setSwapping(null);
+    setForced(new Set());
     const id = 'focus' in next ? await ensureFocusTemplate(next.focus) : next.templateId;
     await loadTemplate(id);
   }, [loadTemplate]);
@@ -107,6 +114,7 @@ export default function LogWorkout() {
     void (async () => {
       const c = await loadCoach();
       setToday(c.today);
+      setSessions(c.sessions);
       const asked = FOCI.find(f => f === params.focus);
       await choose({ focus: asked ?? c.today.focus });
     })();
@@ -125,6 +133,14 @@ export default function LogWorkout() {
 
   const focus: Focus | null = sel && 'focus' in sel ? sel.focus : template ? focusOfName(template.name) : null;
   const inSession = rows.map(r => r.ex.name);
+  // Recovery is judged at the session's time (now, or the next training day).
+  const at = today?.at ?? Date.now();
+  const restOf = useMemo(() => {
+    const { rest } = planSession(rows.map(r => r.ex), sessions, at);
+    return Object.fromEntries(rest.map(r => [r.lift.id, r])) as Record<string, Resting<Exercise>>;
+  }, [rows, sessions, at]);
+  const isResting = (ex: Exercise) => !!restOf[ex.id] && !forced.has(ex.id);
+  const active = rows.filter(r => !isResting(r.ex));
   const tray = useMemo(() => {
     const q = query.trim().toUpperCase();
     // A catalogue lift that's the same movement on the same kit as one already in
@@ -133,10 +149,19 @@ export default function LogWorkout() {
     const have = new Set(rows.map(r => sig(r.ex.name)));
     const base = (focus ? suggestFor(focus, library, inSession) : suggestFor('full', library, inSession))
       .filter(p => p.mine || !have.has(sig(p.name)));
-    return (q ? base.filter(p => p.name.includes(q)) : base).slice(0, q ? 20 : 14);
-  }, [focus, library, rows, query]);
-  const minutes = Math.round(rows.reduce((a, r) => a + Math.max(1, r.ex.sets + (today?.setDelta ?? 0)), 0) * 2.5);
+    // Only lifts whose muscles are recovered — unless you're searching for something specific.
+    return (q ? base.filter(p => p.name.includes(q)) : base.filter(p => liftReady(p, sessions, at))).slice(0, q ? 20 : 14);
+  }, [focus, library, rows, query, sessions, at]);
+  const minutes = Math.round(active.reduce((a, r) => a + Math.max(1, r.ex.sets + (today?.setDelta ?? 0)), 0) * 2.5);
   const easy = (today?.setDelta ?? 0) < 0;
+
+  /** Swaps for a lift: same muscles, recovered by session time. A resting lift's own muscles are
+   *  tired, so it gets recovered lifts that fit the day instead. */
+  function swapsFor(ex: Exercise): Choice[] {
+    if (isResting(ex)) return suggestFor(focus ?? 'full', library, inSession).filter(p => liftReady(p, sessions, at)).slice(0, 6);
+    const same = alternativesFor(ex, library, inSession, 12).filter(p => liftReady(p, sessions, at));
+    return same.length ? same.slice(0, 6) : alternativesFor(ex, library, inSession);
+  }
 
   async function resolve(p: Choice): Promise<Exercise> {
     return library.find(e => e.name.toUpperCase() === p.name.toUpperCase()) ?? exerciseFor(p.name, p.muscleGroups);
@@ -207,7 +232,8 @@ export default function LogWorkout() {
       setDone(false);
       return;
     }
-    await markDoneToday(template.id);
+    // Lifts that rested for a tired muscle aren't counted as trained.
+    await markDoneToday(template.id, rows.filter(r => isResting(r.ex)).map(r => r.ex.id));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     animate();
     setDone(true);
@@ -258,7 +284,7 @@ export default function LogWorkout() {
         {/* ── hero ── */}
         <View style={st.hero}>
           <Text style={st.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{title}</Text>
-          <Text style={st.meta}>{`${rows.length} LIFTS · ~${minutes} MIN${focus && today?.freshBy[focus] != null ? ` · MUSCLES ${today.freshBy[focus]}% FRESH` : ''}`}</Text>
+          <Text style={st.meta}>{`${active.length} LIFTS${rows.length > active.length ? ` · ${rows.length - active.length} RESTING` : ''} · ~${minutes} MIN${focus && today?.freshBy[focus] != null ? ` · MUSCLES ${today.freshBy[focus]}% FRESH` : ''}`}</Text>
           {today && (
             isPick
               ? <Text style={st.coach}>{`${LEVEL[today.readiness.level].word} ${today.readiness.score} · ${today.reasons[0] ?? LEVEL[today.readiness.level].dose}`}</Text>
@@ -287,7 +313,9 @@ export default function LogWorkout() {
               logged={logged[r.ex.id] ?? 0}
               open={open === r.jid}
               swapping={swapping === r.jid}
-              alternatives={swapping === r.jid ? alternativesFor(r.ex, library, inSession) : []}
+              resting={isResting(r.ex) ? restOf[r.ex.id] : null}
+              onForce={() => { animate(); setForced(f => new Set([...f, r.ex.id])); }}
+              alternatives={swapping === r.jid ? swapsFor(r.ex) : []}
               unit={unitSystem}
               puckSent={puck === r.ex.id}
               onToggle={() => { animate(); setOpen(o => (o === r.jid ? null : r.jid)); setSwapping(null); }}
@@ -314,6 +342,13 @@ export default function LogWorkout() {
           </View>
         </View>
         <View style={st.tray}>
+          {tray.length === 0 && !query.trim() && (
+            <Text style={st.empty}>
+              {today && focus !== today.focus
+                ? `Nothing for these muscles is recovered yet — ${today.title} is ready.`
+                : 'Nothing else here is recovered yet.'}
+            </Text>
+          )}
           {tray.map(p => (
             <Pressable key={p.name} onPress={() => add(p)} style={({ pressed }) => [st.trayChip, pressed && { backgroundColor: C.raised }]}>
               <MaterialCommunityIcons name="plus" size={13} color={p.mine ? C.hot : C.dim} />
@@ -331,7 +366,7 @@ export default function LogWorkout() {
 
       {/* ── finish ── */}
       <View style={[st.footer, { paddingBottom: 12 + insets.bottom }]}>
-        <Pressable onPress={finish} disabled={!rows.length} style={({ pressed }) => [st.finish, done && st.finishDone, !rows.length && { opacity: 0.4 }, pressed && { opacity: 0.8 }]}>
+        <Pressable onPress={finish} disabled={!done && !active.length} style={({ pressed }) => [st.finish, done && st.finishDone, !done && !active.length && { opacity: 0.4 }, pressed && { opacity: 0.8 }]}>
           <MaterialCommunityIcons name={done ? 'check-circle' : 'flag-checkered'} size={18} color={done ? C.onHot : C.onHot} />
           <Text style={st.finishText}>{done ? 'LOGGED TODAY · TAP TO UNDO' : 'FINISH SESSION'}</Text>
         </Pressable>
@@ -366,11 +401,13 @@ function Stepper({ label, value, onDec, onInc }: { label: string; value: string;
 }
 
 function LiftChip({
-  index, row, sets, logged, open, swapping, alternatives, unit, puckSent,
+  index, row, sets, logged, open, swapping, alternatives, unit, puckSent, resting, onForce,
   onToggle, onSwapToggle, onSwap, onRemove, onPatch, onPuck, onHowTo, onHistory,
 }: {
   index: number; row: Row; sets: number; logged: number; open: boolean; swapping: boolean; alternatives: Choice[];
   unit: 'metric' | 'imperial'; puckSent: boolean;
+  /** Set when a main muscle won't be recovered — the lift sits this session out. */
+  resting: Resting<Exercise> | null; onForce: () => void;
   onToggle: () => void; onSwapToggle: () => void; onSwap: (p: Choice) => void; onRemove: () => void;
   onPatch: (p: LiftEdit) => void; onPuck: () => void; onHowTo: () => void; onHistory: () => void;
 }) {
@@ -383,11 +420,11 @@ function LiftChip({
   const weight = ex.weightKg > 0 ? formatWeightWithUnit(ex.weightKg, unit) : 'BODYWEIGHT';
 
   return (
-    <Animated.View style={[st.chip, open && st.chipOpen, { transform: [{ scale: pop }] }]}>
+    <Animated.View style={[st.chip, open && st.chipOpen, resting && st.chipResting, { transform: [{ scale: pop }] }]}>
       <Pressable onPress={onToggle} style={st.chipHead}>
         <Text style={st.chipIndex}>{String(index + 1).padStart(2, '0')}</Text>
         <View style={{ flex: 1, gap: 3 }}>
-          <Text style={st.chipName} numberOfLines={1}>{ex.name}</Text>
+          <Text style={[st.chipName, resting && { color: C.dim }]} numberOfLines={1}>{ex.name}</Text>
           <Text style={st.chipMeta} numberOfLines={1}>{`${sets} × ${ex.reps} · ${weight}`}</Text>
         </View>
         <Pressable onPress={onSwapToggle} hitSlop={8} style={[st.iconBtn, swapping && st.iconBtnOn]} accessibilityLabel="Swap">
@@ -398,7 +435,17 @@ function LiftChip({
         </Pressable>
       </Pressable>
 
-      <View style={st.chipFoot}>
+      {resting && (
+        <View style={st.restRow}>
+          <MaterialCommunityIcons name="sleep" size={13} color={C.alert} />
+          <Text style={st.restText} numberOfLines={1}>
+            {`RESTING · ${muscleWord(resting.muscle)} ${resting.pct}%${resting.readyAt ? ` · BACK ${dayWord(resting.readyAt, new Date())}` : ''}`}
+          </Text>
+          <Pressable onPress={onForce} hitSlop={6}><Text style={st.force}>TRAIN ANYWAY</Text></Pressable>
+        </View>
+      )}
+
+      {!resting && <View style={st.chipFoot}>
         <View style={st.tags}>
           {topMuscles(ex).map(m => <Text key={m} style={st.tag}>{m}</Text>)}
         </View>
@@ -407,7 +454,7 @@ function LiftChip({
             <View key={i} style={[st.setDot, i < logged && st.setDotOn]} />
           ))}
         </View>
-      </View>
+      </View>}
 
       {swapping && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.alts}>
@@ -474,6 +521,10 @@ const st = StyleSheet.create({
 
   chip: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
   chipOpen: { borderColor: C.lineHi, backgroundColor: C.raised },
+  chipResting: { backgroundColor: C.bg, borderStyle: 'dashed' },
+  restRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 30 },
+  restText: { flex: 1, fontFamily: F.dot, fontSize: 8, color: C.alert, letterSpacing: 1 },
+  force: { fontFamily: F.dot, fontSize: 8, color: C.ink, letterSpacing: 1, textDecorationLine: 'underline' },
   chipHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   chipIndex: { fontFamily: F.dot, fontSize: 11, color: C.faint, letterSpacing: 1, width: 20 },
   chipName: { fontFamily: F.dot, fontSize: 14, color: C.hot, letterSpacing: 0.8 },
