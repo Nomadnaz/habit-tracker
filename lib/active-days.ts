@@ -69,21 +69,38 @@ export function streakFrom(active: Set<number>, today: number) {
   return n;
 }
 
+// The last full (local + server) answer, kept in memory and on disk so a
+// fresh visit opens on it instead of the smaller local-only set — which made
+// the count jump (20 → 51) and the dots fill in a beat after the screen drew.
+const CACHE = '@active_days_cache';
+let memo: { year: number; days: number[] } | null = null;
+
 export function useActiveDays(): ActiveDays {
   const now = new Date();
   const year = now.getFullYear();
   const today = dayOfYear(now);
-  const [active, setActive] = useState<Set<number>>(new Set());
+  const [active, setActive] = useState<Set<number>>(() => new Set(memo?.year === year ? memo.days : []));
 
   useFocusEffect(useCallback(() => {
     let live = true;
-    localActiveDays(year).then(local => {
+    const keep = (days: Set<number>) => {
+      memo = { year, days: [...days] };
+      void AsyncStorage.setItem(CACHE, JSON.stringify(memo));
+    };
+    void (async () => {
+      const cached = memo ?? await readJson<{ year: number; days: number[] }>(CACHE);
+      const base = new Set(cached?.year === year ? cached.days : []);
+      const local = await localActiveDays(year);
       if (!live) return;
-      setActive(local);
-      remoteActiveDays(year).then(remote => {
-        if (live && remote) setActive(new Set([...local, ...remote]));
-      });
-    });
+      // Until the server answers, only ever add to what's showing.
+      const first = new Set([...base, ...local]);
+      setActive(prev => (prev.size === first.size && [...first].every(d => prev.has(d)) ? prev : first));
+      const remote = await remoteActiveDays(year);
+      if (!live) return;
+      const full = remote ? new Set([...local, ...remote]) : first;
+      setActive(prev => (prev.size === full.size && [...full].every(d => prev.has(d)) ? prev : full));
+      if (remote) keep(full);
+    })();
     return () => { live = false; };
   }, [year]));
 

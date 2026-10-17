@@ -44,17 +44,20 @@ export type CoachState = {
 };
 
 /** Training (lifts weighted by how heavy, plus runs and big walking days) and wearable numbers → today. */
-export async function loadCoach(now = new Date()): Promise<CoachState> {
+export async function loadCoach(): Promise<CoachState> {
   await ensureSeeded();
-  const since = new Date(now.getTime() - 14 * 86_400_000).toISOString();
+  const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const [routine, body, lifts, appRuns, done, templates] = await Promise.all([
     getRoutine(),
     loadBodyData(),
     getTrainingSessions().catch(() => [] as Session[]),
-    getActivitiesInRange(since, now.toISOString()).catch(() => []),
+    getActivitiesInRange(since, new Date(Date.now() + 60_000).toISOString()).catch(() => []),
     getDoneLog(),
     getTemplates(),
   ]);
+  // Taken after the reads: a session just ticked off is stamped "now" by
+  // getTrainingSessions, and an earlier clock would see it as in the future and skip it.
+  const now = new Date();
   const runs = [
     ...(body.runs ?? []),
     ...appRuns.filter(a => a.type === 'run').map(a => ({ start: Date.parse(a.startTime), end: Date.parse(a.endTime), distanceM: a.distanceM })),

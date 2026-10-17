@@ -136,7 +136,11 @@ export default function LogWorkout() {
   // Recovery is judged at the session's time (now, or the next training day).
   const at = today?.at ?? Date.now();
   const restOf = useMemo(() => {
-    const { rest } = planSession(rows.map(r => r.ex), sessions, at);
+    // Today's own training of these lifts is this session — it can't make itself rest.
+    const todayKey = toDateKey(new Date());
+    const mine = new Set(rows.map(r => r.ex.id));
+    const before = sessions.filter(x => !(x.date === todayKey && mine.has(x.exerciseId)));
+    const { rest } = planSession(rows.map(r => r.ex), before, at);
     return Object.fromEntries(rest.map(r => [r.lift.id, r])) as Record<string, Resting<Exercise>>;
   }, [rows, sessions, at]);
   const isResting = (ex: Exercise) => !!restOf[ex.id] && !forced.has(ex.id);
@@ -227,9 +231,12 @@ export default function LogWorkout() {
 
   async function finish() {
     if (!template) return;
+    const refresh = () => loadCoach().then(c => { setToday(c.today); setSessions(c.sessions); });
     if (done) {
       await unmarkDoneToday(template.id);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setDone(false);
+      void refresh();
       return;
     }
     // Lifts that rested for a tired muscle aren't counted as trained.
@@ -237,6 +244,7 @@ export default function LogWorkout() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     animate();
     setDone(true);
+    void refresh();
   }
 
   function newTemplate() {

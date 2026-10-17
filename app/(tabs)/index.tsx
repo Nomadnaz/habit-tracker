@@ -91,7 +91,7 @@ import {
 } from '@/lib/apple-sync';
 import { defaultReminderTime } from '@/lib/reminder-time';
 import { useAppleReminderSync } from '@/lib/use-apple-reminder-sync';
-import { TaskModalFields } from '@/components/TaskModalFields';
+import { TaskSheet } from '@/components/TaskSheet';
 import { buildDateOptions, findTaskDateKey, moveTaskInMap } from '@/lib/task-schedule';
 import { TASKS_CHANGED_EVENT } from '@/lib/use-remote-task-sync';
 import { TASK_SELECT_COLUMNS, taskFromDbRow, taskToDbRow } from '@/lib/task-supabase';
@@ -291,6 +291,15 @@ export default function TodayScreen() {
   const [sheetDateIndex, setSheetDateIndex] = useState(0);
   const [sheetLocation, setSheetLocation] = useState('');
   const dateOptions = useMemo(() => buildDateOptions(new Date()), []);
+  // Places used on recent tasks, newest first — offered as chips in the task sheet.
+  const recentLocations = useMemo(() => {
+    const out: string[] = [];
+    for (const key of Object.keys(taskMap).sort().reverse()) {
+      for (const t of taskMap[key] ?? []) if (t.location && !out.includes(t.location)) out.push(t.location);
+      if (out.length >= 8) break;
+    }
+    return out.slice(0, 8);
+  }, [taskMap]);
   const sheetAnim = useRef(new Animated.Value(0)).current; // 0 = hidden, 1 = visible
   const sheetHourRef = useRef(sheetHour);
   const sheetMinuteRef = useRef(sheetMinute);
@@ -1311,62 +1320,26 @@ export default function TodayScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal
+      <TaskSheet
         visible={sheetMode === 'task'}
-        transparent
-        animationType="fade"
-        onRequestClose={closeSheet}
-      >
-        <View style={{ flex: 1 }}>
-          <Pressable style={styles.taskModalBackdrop} onPress={closeSheet}>
-            <Pressable style={styles.taskModalCard} onPress={e => e.stopPropagation()}>
-              <Text style={styles.sheetLabel}>
-                {editingTaskId ? 'EDIT TASK' : 'NEW TASK'}
-              </Text>
-              <TextInput
-                style={[styles.sheetInput, styles.sheetInputTask]}
-                value={sheetText}
-                onChangeText={setSheetText}
-                placeholder="TASK NAME..."
-                placeholderTextColor={C.faint}
-                autoFocus={!editingTaskId}
-                autoCapitalize="characters"
-                returnKeyType="done"
-                onSubmitEditing={confirmSheet}
-              />
-              <TaskModalFields
-                dateIndex={sheetDateIndex}
-                onDatePreview={onSheetDatePreview}
-                onDateCommit={onSheetDateCommit}
-                hour={sheetHour}
-                minute={sheetMinute}
-                onHourPreview={onSheetHourPreview}
-                onHourCommit={onSheetHourCommit}
-                onMinutePreview={onSheetMinutePreview}
-                onMinuteCommit={onSheetMinuteCommit}
-                location={sheetLocation}
-                onLocationChange={setSheetLocation}
-                priority={sheetPriority}
-                onPriorityChange={setSheetPriority}
-                footer={
-                  <>
-                    <View style={styles.sheetCardDivider} />
-                    <TouchableOpacity
-                      style={[styles.sheetConfirm, styles.sheetConfirmBottom]}
-                      onPress={confirmSheet}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.sheetConfirmText}>
-                        {editingTaskId ? 'SAVE TASK' : 'ADD TASK'}
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                }
-              />
-            </Pressable>
-          </Pressable>
-        </View>
-      </Modal>
+        editing={!!editingTaskId}
+        text={sheetText}
+        onText={setSheetText}
+        dateOptions={dateOptions}
+        todayIndex={Math.max(0, dateOptions.findIndex(d => d.key === todayDateKey))}
+        dateIndex={sheetDateIndex}
+        onDate={onSheetDateCommit}
+        hour={sheetHour}
+        minute={sheetMinute}
+        onTime={(h, m) => { onSheetHourCommit(h); onSheetMinuteCommit(m); }}
+        priority={sheetPriority}
+        onPriority={setSheetPriority}
+        location={sheetLocation}
+        onLocation={setSheetLocation}
+        recentLocations={recentLocations}
+        onSubmit={confirmSheet}
+        onClose={closeSheet}
+      />
 
     </SafeAreaView>
   );
