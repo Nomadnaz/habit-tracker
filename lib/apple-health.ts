@@ -18,6 +18,7 @@ export type AppleHealthActivityToday = {
 
 export type AppleHealthSyncResult = {
   dailySteps: Record<string, number>;
+  hourlySteps: Record<string, number>;   // 'YYYY-MM-DDTHH' → steps — STEPS' weekly climb times
   activityToday: AppleHealthActivityToday;
   sleepMins: number | null;
   weightKg: number | null;
@@ -147,14 +148,22 @@ function sumSamplesToday(samples: HealthSample[]): number {
     .reduce((sum, s) => sum + s.value, 0);
 }
 
-async function fetchDailySteps(kit: HealthKitModule, days: number): Promise<Record<string, number>> {
+// HealthKit hands these back in hourly buckets (period defaults to 60 min):
+// summed per day for the totals, kept per hour for the weekly climb.
+async function fetchDailySteps(kit: HealthKitModule, days: number): Promise<{ daily: Record<string, number>; hourly: Record<string, number> }> {
   const end = new Date();
   const start = addDays(startOfToday(), -(days - 1));
   const samples = await promisify<HealthSample[]>(
     kit.getDailyStepCountSamples.bind(kit),
-    { startDate: start.toISOString(), endDate: end.toISOString() },
+    { startDate: start.toISOString(), endDate: end.toISOString(), period: 60 },
   ).catch(() => [] as HealthSample[]);
-  return aggregateSamplesByDay(samples);
+  const hourly: Record<string, number> = {};
+  for (const s of samples) {
+    const d = new Date(s.startDate);
+    const k = `${dateKey(d)}T${String(d.getHours()).padStart(2, '0')}`;
+    hourly[k] = (hourly[k] ?? 0) + Math.round(s.value);
+  }
+  return { daily: aggregateSamplesByDay(samples), hourly };
 }
 
 async function fetchTodayActivity(kit: HealthKitModule): Promise<AppleHealthActivityToday> {
@@ -290,7 +299,7 @@ export async function fetchAppleHealthMetrics(historyDays = 56): Promise<AppleHe
   const kit = getHealthKit();
   if (!kit) return null;
 
-  const [dailySteps, activityToday, sleepMins, weight, heart, runs, { vitals }] = await Promise.all([
+  const [{ daily: dailySteps, hourly: hourlySteps }, activityToday, sleepMins, weight, heart, runs, { vitals }] = await Promise.all([
     fetchDailySteps(kit, historyDays),
     fetchTodayActivity(kit),
     fetchLastNightSleepMins(kit),
@@ -302,7 +311,7 @@ export async function fetchAppleHealthMetrics(historyDays = 56): Promise<AppleHe
 
   // Last night from the wearable's sleep stages beats the longest raw segment.
   const staged = vitals.sleep[dateKey(startOfToday())]?.asleep ?? null;
-  return { dailySteps, activityToday, sleepMins: staged ?? sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null, heart, runs, vitals };
+  return { dailySteps, hourlySteps, activityToday, sleepMins: staged ?? sleepMins, weightKg: weight?.kg ?? null, weightAt: weight?.at ?? null, heart, runs, vitals };
 }
 
 /** Writes a manually-logged weight into HealthKit so it shows up in the Health app too. */
@@ -334,9 +343,13 @@ export function mergeAppleHealthIntoBodyData(
   sync: AppleHealthSyncResult,
 ): BodyData {
   const stepsHistory = { ...data.stepsHistory, ...sync.dailySteps };
+  // Hourly steps: merge, keep the last ~9 weeks.
+  const cutoff = dateKey(addDays(startOfToday(), -63));
+  const stepsHourly = Object.fromEntries(Object.entries({ ...(data.stepsHourly ?? {}), ...sync.hourlySteps }).filter(([k]) => k >= cutoff));
   const next: BodyData = {
     ...data,
     stepsHistory,
+    stepsHourly,
     stepsThisYear: stepsThisYearFromHistory(stepsHistory),
     activityToday: sync.activityToday,
     heart: sync.heart,

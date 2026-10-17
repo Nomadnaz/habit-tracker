@@ -86,6 +86,7 @@ export type BodyData = {
   // 1.2 Steps
   stepsGoal: number;
   stepsHistory: Record<string, number>; // dateKey → step count
+  stepsHourly?: Record<string, number>; // 'YYYY-MM-DDTHH' → steps, ~9 weeks (lib/climb.ts)
 
   // 1.3 Training
   nextSession: NextSession | null;
@@ -196,7 +197,7 @@ type CoreBodyData = Pick<
   BodyData,
   | 'stepsGoal' | 'stepsHistory' | 'activeMovement' | 'weightLogs' | 'waterLogs'
   | 'waterGoalMl' | 'workoutsTotal' | 'appleHealthConnected' | 'appleHealthLastSync'
-  | 'activityToday' | 'sleepMins' | 'heart' | 'runs' | 'vitals'
+  | 'activityToday' | 'sleepMins' | 'heart' | 'runs' | 'vitals' | 'stepsHourly'
 >;
 
 // stepsGoal/waterGoalMl are user-configurable GOALS (sane defaults), not
@@ -216,6 +217,7 @@ const EMPTY_CORE: CoreBodyData = {
   heart: undefined,
   runs: [],
   vitals: undefined,
+  stepsHourly: {},
 };
 
 async function loadCore(): Promise<CoreBodyData> {
@@ -238,6 +240,7 @@ async function loadCore(): Promise<CoreBodyData> {
         heart: parsed.heart,
         runs: parsed.runs ?? [],
         vitals: parsed.vitals,
+        stepsHourly: parsed.stepsHourly ?? {},
       };
     }
   } catch { /* fall through */ }

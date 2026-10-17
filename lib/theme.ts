@@ -39,6 +39,15 @@ export const C = {
   scrim:    'rgba(0,0,0,0.72)',
 };
 
+/** STEPS' ASCII mountain only (components/steps/Mountain.tsx): snow to meadow,
+ *  hut timber, and the five prayer-flag colours (blue, white, red, green, yellow). */
+export const MTN = {
+  snow: '#F4F4F4', snowShade: '#BFC6CE', rock: '#9A9A9A', rockShade: '#5E5E5E',
+  scree: '#8C7B68', meadow: '#6FB46A', forest: '#3F8048', ground: '#3A3A3A',
+  hut: '#D9A86C', leaf: '#E0A040', sun: '#FFE6A8',
+  flags: ['#3F7FE0', '#F4F4F4', '#E5483B', '#4CB45A', '#F2C230'],
+};
+
 export const F = {
   dot:      'LondonUnderground_Heavy',
   num:      'Doto_900Black',

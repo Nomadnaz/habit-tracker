@@ -11,10 +11,13 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform, Share, Alert } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import * as Haptics from 'expo-haptics';
+import { captureRef } from 'react-native-view-shot';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ReceiptPrinter, ReceiptRow, ReceiptRule, type ReceiptPrinterStage } from '@/components/ReceiptPrinter';
+import { ReceiptPrinter, ReceiptRow, ReceiptRule, RECEIPT_PAPER, type ReceiptPrinterStage } from '@/components/ReceiptPrinter';
 import { PixelRouteMap } from '@/components/PixelRouteMap';
 import {
   getActivityById, computeSplits, formatDuration, formatPace, formatDistance,
@@ -61,6 +64,26 @@ export default function ActivityReceiptScreen() {
   const [stage, setStage] = useState<ReceiptPrinterStage>('processing');
   const [mapWidth, setMapWidth] = useState(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const paper = useRef<View>(null);
+  const [sharing, setSharing] = useState(false);
+
+  // The printed receipt as an image, into the share sheet.
+  async function share() {
+    if (!activity || sharing) return;
+    setSharing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      if (Platform.OS !== 'web' && paper.current && (await Sharing.isAvailableAsync())) {
+        const uri = await captureRef(paper, { format: 'png', quality: 1, result: 'tmpfile' });
+        await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png', dialogTitle: 'Route receipt' });
+      } else {
+        await Share.share({ message: `${activity.type.toUpperCase()} · ${formatDistance(activity.distanceM)} in ${formatDuration(activity.durationSecs)} · ${formatPace(activity.avgPacePerKm)}` });
+      }
+    } catch (e: any) {
+      if (!/cancel/i.test(String(e?.message))) Alert.alert('Could not share', String(e?.message ?? e));
+    }
+    setSharing(false);
+  }
 
   useEffect(() => {
     if (!activityId) { setNotFound(true); return; }
@@ -133,6 +156,7 @@ export default function ActivityReceiptScreen() {
 
           <ReceiptPrinter.Output>
             <ReceiptPrinter.Paper>
+              <View ref={paper} collapsable={false} style={s.capture}>
               <View style={s.paperHead}>
                 <Text style={s.brand}>HABIT TRACKER</Text>
                 <Text style={s.brandSub}>ROUTE RECEIPT</Text>
@@ -193,13 +217,17 @@ export default function ActivityReceiptScreen() {
                 </View>
                 <Text style={s.footText}>{activity.id.toUpperCase()}</Text>
               </View>
+              </View>
             </ReceiptPrinter.Paper>
           </ReceiptPrinter.Output>
         </ReceiptPrinter.Root>
 
         <View style={s.actions}>
-          <TouchableOpacity style={s.primaryBtn} onPress={() => router.back()}>
-            <Text style={s.primaryBtnText}>DONE</Text>
+          <TouchableOpacity style={[s.primaryBtn, !printed && { opacity: 0.5 }]} onPress={share} disabled={!printed || sharing}>
+            <Text style={s.primaryBtnText}>{sharing ? 'SHARING' : 'SHARE RECEIPT'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.secondaryBtn} onPress={() => router.back()}>
+            <Text style={s.secondaryBtnText}>DONE</Text>
           </TouchableOpacity>
           <View style={s.secondaryRow}>
             <TouchableOpacity
@@ -233,6 +261,7 @@ const s = StyleSheet.create({
   meter: { height: 4, borderRadius: 2, backgroundColor: 'rgba(244,242,238,0.18)', marginTop: 10, overflow: 'hidden' },
   meterFill: { height: 4, borderRadius: 2, backgroundColor: C.hot },
 
+  capture: { backgroundColor: RECEIPT_PAPER, gap: 12 },
   paperHead: { alignItems: 'center', gap: 3 },
   brand: { fontFamily: BOLD, fontSize: 13, color: C.ink, letterSpacing: 2 },
   brandSub: { fontFamily: REG, fontSize: 10, color: C.ink, letterSpacing: 1 },
