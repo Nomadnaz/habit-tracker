@@ -14,7 +14,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import Svg, { Circle, Polyline } from 'react-native-svg';
 
 import { loadBodyData, todaySteps, refreshAppleHealthIfConnected, type BodyData } from '@/lib/body-data';
 import { getRecentActivities, computeSplits, formatDuration, formatPace, type Activity } from '@/lib/activity-data';
@@ -23,6 +22,7 @@ import { toDateKey } from '@/lib/dateKey';
 import { C, F, MTN, numFace } from '@/lib/theme';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 import { Mountain, type Checkpoint } from '@/components/steps/Mountain';
+import { RouteMap } from '@/components/RouteMap';
 
 const BESTS_KEY = '@climb_bests';
 const STRIDE_M = 0.762;
@@ -48,30 +48,6 @@ function GoalBar({ label, value, goal }: { label: string; value: number; goal: n
         ))}
       </View>
     </View>
-  );
-}
-
-/** A route as a white dashed line, fitted to the box (longitude scaled for latitude). */
-function DashedRoute({ a, w, h }: { a: Activity; w: number; h: number }) {
-  const pts = a.waypoints;
-  if (pts.length < 2) return <View style={{ width: w, height: h }} />;
-  const lats = pts.map(p => p.lat), lngs = pts.map(p => p.lng);
-  const [la0, la1, lo0, lo1] = [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)];
-  const kx = Math.cos(((la0 + la1) / 2) * Math.PI / 180);
-  const pad = 14;
-  const k = Math.min((w - pad * 2) / (((lo1 - lo0) * kx) || 1e-9), (h - pad * 2) / ((la1 - la0) || 1e-9));
-  const ox = (w - (lo1 - lo0) * kx * k) / 2, oy = (h - (la1 - la0) * k) / 2;
-  const xy = pts.map(p => [ox + (p.lng - lo0) * kx * k, h - oy - (p.lat - la0) * k]);
-  const G = 10;
-  const grid = [];
-  for (let x = G / 2; x < w; x += G) for (let y = G / 2; y < h; y += G) grid.push(<Circle key={`${x}.${y}`} cx={x} cy={y} r={0.7} fill={C.ghost} />);
-  return (
-    <Svg width={w} height={h}>
-      {grid}
-      <Polyline points={xy.map(p => p.join(',')).join(' ')} fill="none" stroke={C.hot} strokeWidth={2.2} strokeDasharray="6 4" strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={xy[0][0]} cy={xy[0][1]} r={4} fill={C.live} />
-      <Circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r={4} fill="none" stroke={C.hot} strokeWidth={1.6} />
-    </Svg>
   );
 }
 
@@ -201,7 +177,7 @@ export default function StepsScreen() {
               <Text style={st.runDate}>{`${new Date(shown.startTime).getDate()} ${MON[new Date(shown.startTime).getMonth()]} · ${new Date(shown.startTime).toTimeString().slice(0, 5)}`}</Text>
             </View>
             <View style={st.runBody}>
-              <View style={st.routeBox}><DashedRoute a={shown} w={stageW * 0.46} h={stageW * 0.46} /></View>
+              <View style={st.routeBox}><RouteMap key={shown.id} waypoints={shown.waypoints} width={Math.round(stageW * 0.46)} height={Math.round(stageW * 0.46)} durationMs={1400} /></View>
               <View style={st.stats}>
                 <Stat label="DISTANCE" value={`${km(shown.distanceM)}`} unit="KM" />
                 <Stat label="TIME" value={formatDuration(shown.durationSecs)} />

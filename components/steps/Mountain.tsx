@@ -1,129 +1,71 @@
 // ─────────────────────────────────────────────────────────────────────────
-// The weekly climb's mountain — a 3D heightfield drawn as coloured ASCII
-// (lit snow, rock, scree, meadow, '^' trees) over a dithered sky and sun,
-// with a white dashed route spiralling to the summit, prayer flags at each
-// checkpoint, huts at the camps, wind streaks, snow blowing off the peak and
-// leaves drifting down. Drag sideways to turn it; let go and it coasts, then
-// drifts round on its own.
+// The weekly climb's mountain (lib/mountain-geo.ts) on screen: twin peaks in
+// coloured ASCII, the white dashed trail up to the summit, tagged checkpoint
+// markers, prayer-flag strings at the camps, a few slow ASCII clouds.
 //
-// Software-rendered: ~9k surface points projected into a character grid with
-// a depth buffer each frame (only when the angle moves), shaded by a fixed
-// sun so faces change as it turns. Overlays are depth-tested against the
-// same buffer, so the route and flags hide behind the mountain.
+// Drag sideways to turn it (it coasts, then drifts on its own). Pinch,
+// double-tap or the +/− buttons zoom: close up the camera moves to you on
+// the trail and the meadow becomes swaying grass with flowers, trees and
+// huts as little ASCII sprites. Frames are only drawn when something moves:
+// on a turn, or ~9 fps for the grass while zoomed in. The clouds run on the
+// native driver, so they cost no renders.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Polygon, Polyline } from 'react-native-svg';
+import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, G, Line, Path, Polygon, Polyline } from 'react-native-svg';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { C, F, MTN } from '@/lib/theme';
-import { render, type Checkpoint, type Frame } from '@/lib/mountain-geo';
+import { render, type Checkpoint, type Flagline, type Frame } from '@/lib/mountain-geo';
 
 export type { Checkpoint };
 
-// ── sky: an ordered-dither gradient and a halftone sun, drawn once ──────
+const FS = 10;     // ASCII font size
+const LH = 10;     // line height = cell height
+const ZMIN = 1, ZMAX = 3.2;
 
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
-function Sky({ w, h }: { w: number; h: number }) {
-  const dots = useMemo(() => {
-    const out: { x: number; y: number; r: number; c: string }[] = [];
-    const G = 6, sx = w * 0.8, sy = h * 0.2, R = w * 0.1;
-    for (let i = 0; i * G < w; i++) for (let j = 0; j * G < h * 0.75; j++) {
-      const x = i * G + G / 2, y = j * G + G / 2;
-      const dsun = Math.hypot(x - sx, y - sy) / R;
-      if (dsun < 1.6) {
-        const r = Math.max(0, (1.6 - dsun) / 1.6) * 2.4;
-        if (r > 0.35) out.push({ x, y, r, c: MTN.sun });
-        continue;
-      }
-      // Faint glow towards the horizon, dithered.
-      const g = (y / (h * 0.75)) * 0.32;
-      if (g > BAYER[(j % 4) * 4 + (i % 4)]) out.push({ x, y, r: 0.8, c: C.faint });
-    }
-    return out;
-  }, [w, h]);
-  return (
-    <Svg width={w} height={h} style={StyleSheet.absoluteFill}>
-      {dots.map((d, k) => <Circle key={k} cx={d.x} cy={d.y} r={d.r} fill={d.c} />)}
-    </Svg>
-  );
-}
+const CLOUDS = [
+  ['  .--.   ', '.(    ). ', '(___.__)'],
+  [' .-.  ', '(   ).', ' `--\''],
+  ['   _.--._  ', ' (        ) ', '(__.__.___)'],
+];
 
-// ── weather: wind streaks, snow off the summit, falling leaves ──────────
-
-function Loop({ duration, delay = 0, children }: { duration: number; delay?: number; children: (v: Animated.Value) => React.ReactNode }) {
-  const v = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const l = Animated.loop(Animated.sequence([
-      Animated.delay(delay),
-      Animated.timing(v, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true }),
-      Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
-    ]));
-    l.start();
-    return () => l.stop();
-  }, []);
-  return <>{children(v)}</>;
-}
-
-function Weather({ w, h, peak }: { w: number; h: number; peak: { x: number; y: number } }) {
-  const gusts = [0.16, 0.34, 0.5, 0.7];
-  const leaves = [0.12, 0.3, 0.62, 0.8, 0.9, 0.45];
+/** A few ASCII clouds sliding slowly across the sky (native driver — no re-renders). */
+function Clouds({ w }: { w: number }) {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {gusts.map((y, i) => (
-        <Loop key={`g${i}`} duration={4200 + i * 900} delay={i * 700}>
-          {v => (
-            <Animated.Text style={[st.gust, {
-              top: y * h, opacity: v.interpolate({ inputRange: [0, 0.15, 0.85, 1], outputRange: [0, 0.7, 0.7, 0] }),
-              transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [-90, w + 20] }) }],
-            }]}>{i % 2 ? '~  ~~~  ~' : '~~ ~ ~~~~'}</Animated.Text>
-          )}
-        </Loop>
-      ))}
-      {[0, 1, 2, 3].map(i => (
-        <Loop key={`s${i}`} duration={1800 + i * 300} delay={i * 450}>
-          {v => (
-            <Animated.Text style={[st.spin, {
-              left: peak.x, top: peak.y - 4,
-              opacity: v.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.9, 0] }),
-              transform: [
-                { translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, 60 + i * 14] }) },
-                { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -6 + i * 5] }) },
-              ],
-            }]}>{i % 2 ? '·' : '.'}</Animated.Text>
-          )}
-        </Loop>
-      ))}
-      {leaves.map((x, i) => (
-        <Loop key={`l${i}`} duration={5200 + i * 700} delay={i * 1100}>
-          {v => (
-            <Animated.Text style={[st.leaf, {
-              left: x * w, top: h * 0.6, color: i % 3 ? MTN.leaf : MTN.meadow,
-              opacity: v.interpolate({ inputRange: [0, 0.1, 0.8, 1], outputRange: [0, 1, 1, 0] }),
-              transform: [
-                { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, h * 0.36] }) },
-                { translateX: v.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, 10, -4, 12, 22] }) },
-                { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${i % 2 ? 300 : -260}deg`] }) },
-              ],
-            }]}>{i % 2 ? '*' : '\''}</Animated.Text>
-          )}
-        </Loop>
-      ))}
+      {CLOUDS.map((c, i) => <Cloud key={i} lines={c} w={w} top={14 + i * 34} dur={70_000 + i * 22_000} start={i / CLOUDS.length} />)}
     </View>
   );
 }
-
-// ── the stage ───────────────────────────────────────────────────────────
-
-const FS = 10;     // ASCII font size
-const LH = 10;     // line height = cell height
+function Cloud({ lines, w, top, dur, start }: { lines: string[]; w: number; top: number; dur: number; start: number }) {
+  const x = useRef(new Animated.Value(start)).current;
+  useEffect(() => {
+    let from = start;
+    const run = () => {
+      Animated.timing(x, { toValue: 1, duration: dur * (1 - from), easing: Easing.linear, useNativeDriver: true })
+        .start(({ finished }) => { if (finished) { from = 0; x.setValue(0); run(); } });
+    };
+    run();
+    return () => x.stopAnimation();
+  }, []);
+  return (
+    <Animated.View style={{ position: 'absolute', top, transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [-90, w + 10] }) }] }}>
+      {lines.map((l, i) => <Text key={i} style={st.cloud}>{l}</Text>)}
+    </Animated.View>
+  );
+}
 
 export function Mountain({ width, progress, checkpoints }: { width: number; progress: number; checkpoints: Checkpoint[] }) {
-  const H = Math.round(width * 0.86);
+  const H = Math.round(width * 0.9);
   const [cw, setCw] = useState(0);
   const [frame, setFrame] = useState<Frame | null>(null);
-  const yaw = useRef(0.6), pitch = useRef(0.42), vel = useRef(0), touching = useRef(false), idleAt = useRef(0);
-  const drawn = useRef({ yaw: NaN, t: 0 });
-  const startYaw = useRef(0);
+  const [zoomUi, setZoomUi] = useState(1);
+  const yaw = useRef(0.55), pitch = useRef(0.42), vel = useRef(0), touching = useRef(false), idleAt = useRef(0);
+  const zoom = useRef(1), zoomTo = useRef<number | null>(null);
+  const drawn = useRef({ yaw: NaN, zoom: NaN, t: 0 });
+  const startYaw = useRef(0), pinch = useRef<{ d: number; z: number } | null>(null), lastTap = useRef(0);
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -132,24 +74,33 @@ export function Mountain({ width, progress, checkpoints }: { width: number; prog
     return () => l.stop();
   }, []);
 
-  // Turn: drag, coast, then a slow drift once left alone for a bit.
   useEffect(() => {
     if (!cw) return;
     drawn.current.yaw = NaN; // new data → draw straight away
     let raf = 0, last = Date.now();
+    const t0 = Date.now();
     const tick = () => {
       const now = Date.now(), dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      // Zoom glides to a double-tap / button target.
+      if (zoomTo.current != null) {
+        zoom.current += (zoomTo.current - zoom.current) * Math.min(1, dt * 9);
+        if (Math.abs(zoomTo.current - zoom.current) < 0.01) { zoom.current = zoomTo.current; zoomTo.current = null; }
+      }
       if (!touching.current) {
         if (Math.abs(vel.current) > 0.02) { yaw.current += vel.current * dt; vel.current *= Math.pow(0.04, dt); }
-        else if (now - idleAt.current > 2500) yaw.current += 0.14 * dt;
+        else if (now - idleAt.current > 2500 && zoom.current < 1.5) yaw.current += 0.12 * dt;
       }
-      const moved = Math.abs(yaw.current - drawn.current.yaw);
+      const near = zoom.current >= 1.9;
+      const moving = touching.current || Math.abs(vel.current) > 0.02 || zoomTo.current != null || pinch.current != null;
       const gap = now - drawn.current.t;
-      // Redraw on a real change — fast while dragging/coasting, ~12 fps for the idle drift.
-      if (Number.isNaN(drawn.current.yaw) || (moved > 0.003 && gap > (touching.current || Math.abs(vel.current) > 0.02 ? 33 : 80))) {
-        drawn.current = { yaw: yaw.current, t: now };
-        setFrame(render(yaw.current, pitch.current, width, H, cw, LH, progress, checkpoints));
+      const changed = Math.abs(yaw.current - drawn.current.yaw) > 0.003 || Math.abs(zoom.current - drawn.current.zoom) > 0.005;
+      // Moving: up to 30 fps. Grass up close: ~9 fps. Idle drift far out: ~12 fps. Otherwise nothing.
+      if (Number.isNaN(drawn.current.yaw) || (changed && gap > (moving ? 33 : 80)) || (near && gap > 110)) {
+        drawn.current = { yaw: yaw.current, zoom: zoom.current, t: now };
+        setFrame(render(yaw.current, pitch.current, width, H, cw, LH, progress, checkpoints, zoom.current, (now - t0) / 1000));
+        const zr = Math.round(zoom.current * 10) / 10;
+        setZoomUi(z => (z === zr ? z : zr));
       }
       raf = requestAnimationFrame(tick);
     };
@@ -157,18 +108,41 @@ export function Mountain({ width, progress, checkpoints }: { width: number; prog
     return () => cancelAnimationFrame(raf);
   }, [cw, width, progress, checkpoints]);
 
+  const setZoom = (z: number) => { zoomTo.current = Math.max(ZMIN, Math.min(ZMAX, z)); Haptics.selectionAsync(); };
+  const doubleTap = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 280) setZoom(zoom.current > 1.5 ? 1 : 2.6);
+    lastTap.current = now;
+  };
+
   const pan = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy),
+    onStartShouldSetPanResponder: e => e.nativeEvent.touches.length >= 2,
+    onMoveShouldSetPanResponder: (e, g) => e.nativeEvent.touches.length >= 2 || (Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy)),
     onPanResponderGrant: () => { touching.current = true; startYaw.current = yaw.current; vel.current = 0; },
-    onPanResponderMove: (_, g) => { yaw.current = startYaw.current + g.dx * 0.011; },
-    onPanResponderRelease: (_, g) => { touching.current = false; vel.current = g.vx * 11; idleAt.current = Date.now(); },
-    onPanResponderTerminate: () => { touching.current = false; idleAt.current = Date.now(); },
+    onPanResponderMove: (e, g) => {
+      const ts = e.nativeEvent.touches;
+      if (ts.length >= 2) {
+        const d = Math.hypot(ts[0].pageX - ts[1].pageX, ts[0].pageY - ts[1].pageY);
+        if (!pinch.current) pinch.current = { d, z: zoom.current };
+        zoomTo.current = null;
+        zoom.current = Math.max(ZMIN, Math.min(ZMAX, pinch.current.z * (d / pinch.current.d)));
+        return;
+      }
+      if (!pinch.current) yaw.current = startYaw.current + g.dx * 0.011;
+    },
+    onPanResponderRelease: (_, g) => {
+      touching.current = false; idleAt.current = Date.now();
+      if (!pinch.current) vel.current = g.vx * 11;
+      pinch.current = null;
+    },
+    onPanResponderTerminate: () => { touching.current = false; pinch.current = null; idleAt.current = Date.now(); },
     onPanResponderTerminationRequest: () => false,
   }), []);
 
   return (
     <View style={[st.stage, { width, height: H }]} {...pan.panHandlers}>
-      <Sky w={width} h={H} />
+      <Pressable style={StyleSheet.absoluteFill} onPress={doubleTap} />
+      {!frame?.near && <Clouds w={width} />}
       {/* One hidden line to learn the mono face's advance at this size. */}
       <Text style={[st.ascii, st.probe]} onLayout={e => setCw(e.nativeEvent.layout.width / 40)}>{'M'.repeat(40)}</Text>
       {frame && (
@@ -183,22 +157,25 @@ export function Mountain({ width, progress, checkpoints }: { width: number; prog
       {frame && (
         <Svg width={width} height={H} style={StyleSheet.absoluteFill} pointerEvents="none">
           {frame.route.map((seg, k) => (
-            <Polyline key={k} points={seg.pts} fill="none" stroke={C.hot} strokeOpacity={seg.done ? 1 : 0.35}
-              strokeWidth={seg.done ? 2 : 1.4} strokeDasharray={seg.done ? '5 4' : '2 5'} strokeLinecap="round" />
+            <Polyline key={`b${k}`} points={seg.pts} fill="none" stroke={C.bg} strokeWidth={seg.done ? 4.5 : 3} strokeLinecap="round" strokeLinejoin="round" />
           ))}
-          {frame.huts.map((h, k) => (
-            <Polygon key={`h${k}`} points={`${h.x - 6},${h.y} ${h.x + 6},${h.y} ${h.x + 6},${h.y - 6} ${h.x},${h.y - 11} ${h.x - 6},${h.y - 6}`}
-              fill={MTN.hut} stroke={C.bg} strokeWidth={1} />
+          {frame.route.map((seg, k) => (
+            <Polyline key={k} points={seg.pts} fill="none" stroke={C.hot} strokeOpacity={seg.done ? 1 : 0.4}
+              strokeWidth={seg.done ? 2.2 : 1.4} strokeDasharray={seg.done ? '6 4' : '2 5'} strokeLinecap="round" strokeLinejoin="round" />
           ))}
-          {frame.flags.map(({ x, y, cp }, k) => (
-            <PrayerFlags key={`f${k}`} x={x} y={y} on={cp.reached} />
+          {frame.strings.map((s, k) => <FlagString key={`s${k}`} s={s} scale={Math.min(1.8, 0.8 + zoomUi * 0.3)} />)}
+          {frame.flags.map(({ x, y, cp }) => (
+            <G key={`m${cp.label}`}>
+              <Line x1={x} y1={y} x2={x} y2={y - 26} stroke={cp.reached ? C.hot : C.dim} strokeWidth={1.4} />
+              <Circle cx={x} cy={y} r={cp.reached ? 5 : 4} fill={cp.reached ? C.live : C.bg} stroke={cp.reached ? C.bg : C.dim} strokeWidth={1.5} />
+            </G>
           ))}
         </Svg>
       )}
       {frame?.flags.map(({ x, y, cp }) => (
-        <View key={cp.label} pointerEvents="none" style={[st.flagLabel, { left: x + 4, top: y - 34 }]}>
-          <Text style={[st.flagText, !cp.reached && { color: C.dim }]}>{cp.label}</Text>
-          {!!cp.time && <Text style={st.flagTime}>{cp.time}</Text>}
+        <View key={cp.label} pointerEvents="none" style={[st.tag, cp.reached ? st.tagOn : st.tagOff, { left: x - 2, top: y - 46 }]}>
+          <Text style={[st.tagText, cp.reached && { color: C.onHot }]}>{cp.label}</Text>
+          {!!cp.time && <Text style={[st.tagTime, cp.reached && { color: 'rgba(0,0,0,0.6)' }]}>{cp.time}</Text>}
         </View>
       ))}
       {frame?.climber && (
@@ -210,22 +187,33 @@ export function Mountain({ width, progress, checkpoints }: { width: number; prog
           <View style={st.meDot} />
         </View>
       )}
-      {frame && <Weather w={width} h={H} peak={frame.peak} />}
+      <View style={st.zoom}>
+        <Pressable onPress={() => setZoom(zoom.current + 0.7)} hitSlop={6} style={({ pressed }) => [st.zoomBtn, pressed && { backgroundColor: C.raised }]} accessibilityLabel="Zoom in">
+          <MaterialCommunityIcons name="plus" size={16} color={C.ink} />
+        </Pressable>
+        <Pressable onPress={() => setZoom(zoom.current - 0.7)} hitSlop={6} style={({ pressed }) => [st.zoomBtn, pressed && { backgroundColor: C.raised }]} accessibilityLabel="Zoom out">
+          <MaterialCommunityIcons name="minus" size={16} color={C.ink} />
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-/** A pole with a string of the five prayer-flag colours running off it; grey until reached. */
-function PrayerFlags({ x, y, on }: { x: number; y: number; on: boolean }) {
-  const top = y - 22;
+/** A sagging string between two poles with small flags in the five prayer-flag colours. */
+function FlagString({ s, scale }: { s: Flagline; scale: number }) {
+  const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2 + 7 * scale;
+  const at = (t: number) => ({ x: (1 - t) ** 2 * s.x1 + 2 * (1 - t) * t * mx + t * t * s.x2, y: (1 - t) ** 2 * s.y1 + 2 * (1 - t) * t * my + t * t * s.y2 });
+  const n = 7;
+  const fw = 3.4 * scale, fh = 4.4 * scale;
   return (
     <>
-      <Line x1={x} y1={y} x2={x} y2={top} stroke={on ? C.hot : C.dim} strokeWidth={1.2} />
-      {MTN.flags.map((c, i) => {
-        const fx = x + 3 + i * 5.5, fy = top + 2 + i * 2.4;
-        return <Polygon key={i} points={`${fx},${fy} ${fx + 5},${fy} ${fx + 2.5},${fy + 5}`} fill={on ? c : C.faint} />;
+      <Line x1={s.x1} y1={s.y1} x2={s.x1} y2={s.y1 + 12 * scale} stroke={C.dim} strokeWidth={1} />
+      <Line x1={s.x2} y1={s.y2} x2={s.x2} y2={s.y2 + 12 * scale} stroke={C.dim} strokeWidth={1} />
+      <Path d={`M${s.x1} ${s.y1} Q${mx} ${my} ${s.x2} ${s.y2}`} stroke={s.on ? C.ink : C.faint} strokeWidth={0.8} fill="none" />
+      {Array.from({ length: n }, (_, i) => {
+        const p = at((i + 1) / (n + 1));
+        return <Polygon key={i} points={`${p.x - fw / 2},${p.y} ${p.x + fw / 2},${p.y} ${p.x + fw / 2},${p.y + fh} ${p.x - fw / 2},${p.y + fh}`} fill={s.on ? MTN.flags[i % 5] : C.faint} />;
       })}
-      <Circle cx={x} cy={y} r={1.8} fill={on ? C.hot : C.dim} />
     </>
   );
 }
@@ -234,13 +222,15 @@ const st = StyleSheet.create({
   stage: { overflow: 'hidden', borderRadius: 22, backgroundColor: C.bg, borderWidth: 1, borderColor: C.line },
   ascii: { fontFamily: F.mono, fontSize: FS, lineHeight: LH, height: LH, includeFontPadding: false, color: C.ink },
   probe: { position: 'absolute', opacity: 0, top: -100 },
-  gust: { position: 'absolute', fontFamily: F.mono, fontSize: 11, color: C.dim, letterSpacing: 1 },
-  spin: { position: 'absolute', fontFamily: F.mono, fontSize: 12, color: MTN.snow },
-  leaf: { position: 'absolute', fontFamily: F.mono, fontSize: 12 },
-  flagLabel: { position: 'absolute' },
-  flagText: { fontFamily: F.dot, fontSize: 9, color: C.hot, letterSpacing: 1 },
-  flagTime: { fontFamily: F.mono, fontSize: 9, color: C.dim },
+  cloud: { fontFamily: F.mono, fontSize: 10, lineHeight: 10, color: MTN.cloud, opacity: 0.55 },
+  tag: { position: 'absolute', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1 },
+  tagOn: { backgroundColor: C.hot, borderColor: C.hot },
+  tagOff: { backgroundColor: C.bg, borderColor: C.lineHi },
+  tagText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1 },
+  tagTime: { fontFamily: F.mono, fontSize: 8, color: C.dim },
   me: { position: 'absolute', width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   meRing: { position: 'absolute', width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: C.live },
-  meDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.live, borderWidth: 1.5, borderColor: C.bg },
+  meDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: C.live, borderWidth: 1.5, borderColor: C.bg },
+  zoom: { position: 'absolute', right: 10, bottom: 10, gap: 6 },
+  zoomBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
 });

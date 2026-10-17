@@ -32,6 +32,7 @@ import {
 
 import { C, F, numFace } from '@/lib/theme';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
+import { RouteMap } from '@/components/RouteMap';
 
 const TYPES: { key: ActivityType; label: string; icon: string }[] = [
   { key: 'run', label: 'RUN', icon: 'run' },
@@ -178,7 +179,9 @@ export default function ActivityScreen() {
 
       {/* ── the stage: dot grid, live route, status ── */}
       <View style={styles.stage} onLayout={(e: LayoutChangeEvent) => setStage({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-        {stage.w > 0 && <Route pts={shown} w={stage.w} h={stage.h} live={recording} />}
+        {stage.w > 0 && shown && shown.length > 1
+          ? <RouteMap key={recording ? 'live' : 'last'} waypoints={shown} width={stage.w} height={stage.h} live={recording} durationMs={1600} />
+          : stage.w > 0 && <Route pts={null} w={stage.w} h={stage.h} live={false} />}
         <View style={styles.stageTop}>
           <View style={styles.status}>
             {recording

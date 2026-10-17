@@ -51,11 +51,15 @@ export function TypeLine({ text, style, delay = 0, speed = 22, cursor, numberOfL
 
   const size = StyleSheet.flatten(style)?.fontSize ?? 12;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <Text style={style} numberOfLines={numberOfLines}>{text.slice(0, n)}</Text>
-      {showCursor && (
-        <Animated.View style={{ width: Math.max(4, size * 0.45), height: size * 0.9, marginLeft: 2, backgroundColor: cursor, opacity: blink }} />
-      )}
+    // The full line, invisible, holds its space so nothing around it shifts while it types.
+    <View>
+      <Text style={[style, { opacity: 0 }]} numberOfLines={numberOfLines}>{text}</Text>
+      <View style={{ position: 'absolute', left: 0, top: 0, flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={style} numberOfLines={numberOfLines}>{text.slice(0, n)}</Text>
+        {showCursor && (
+          <Animated.View style={{ width: Math.max(4, size * 0.45), height: size * 0.9, marginLeft: 2, backgroundColor: cursor, opacity: blink }} />
+        )}
+      </View>
     </View>
   );
 }

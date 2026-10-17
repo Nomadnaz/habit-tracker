@@ -45,7 +45,8 @@ export const C = {
 export const MTN = {
   snow: '#F4F4F4', snowShade: '#BFC6CE', rock: '#9A9A9A', rockShade: '#5E5E5E',
   scree: '#8C7B68', meadow: '#6FB46A', forest: '#3F8048', ground: '#3A3A3A',
-  hut: '#D9A86C', leaf: '#E0A040', sun: '#FFE6A8',
+  hut: '#D9A86C', hutRoof: '#A8553A', leaf: '#E0A040', sun: '#FFE6A8',
+  grassHi: '#9AD98A', grassLo: '#2F6B3A', flower: '#B9A7E8', trunk: '#8A6A4A', cloud: '#9A9A9A',
   flags: ['#3F7FE0', '#F4F4F4', '#E5483B', '#4CB45A', '#F2C230'],
 };
 

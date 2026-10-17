@@ -38,7 +38,7 @@ import {
 import { loadCoach } from '@/lib/routine';
 import { fitFor, focusOfName, muscleWord, planSession } from '@/lib/coach';
 import { RecoveryThermo, useRecoveryMix } from '@/components/body/RecoveryToggle';
-import { TypeLine } from '@/components/body/TypeLine';
+import { TypeLine } from '@/components/TypeLine';
 import { getActivitiesInRange } from '@/lib/activity-data';
 import { MUSCLES } from '@/lib/body-mesh';
 import { guideFor, goalOf, type Guide } from '@/lib/exercise-guide';
