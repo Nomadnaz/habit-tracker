@@ -392,6 +392,17 @@ export async function addWater(amountMl: number): Promise<BodyData> {
   return data;
 }
 
+/** The twin's daily steps and water targets (lib/twin.ts) — written into the
+ *  blob so BODY, STEPS and the water sheet show the same numbers. */
+export async function setDailyGoals(stepsGoal: number, waterGoalMl: number): Promise<void> {
+  await withStorageLock(BODY_KEY, async () => {
+    const raw = await AsyncStorage.getItem(BODY_KEY);
+    const blob = raw ? JSON.parse(raw) : { ...EMPTY_CORE };
+    if (blob.stepsGoal === stepsGoal && blob.waterGoalMl === waterGoalMl) return;
+    await AsyncStorage.setItem(BODY_KEY, JSON.stringify({ ...blob, stepsGoal, waterGoalMl }));
+  });
+}
+
 export async function logWeight(weightKg: number): Promise<BodyData> {
   const data = await loadBodyData();
   const entry = { weightKg, at: new Date().toISOString() };
@@ -607,8 +618,29 @@ export function getTrackerBarItems(d: BodyData) {
 
 // ── Body profile (for starting weights) ──────────────────────────────────
 
-export type BodyProfile = { heightCm: number | null; sex: string | null; weightKg: number | null };
+export type BodyProfile = {
+  heightCm: number | null; sex: string | null; weightKg: number | null; age?: number | null; goalWeightKg?: number | null;
+};
 const PROFILE_KEY = '@body_profile';
+
+/** Saves age / height / sex / goal weight (TODAY's goal sheet): cached locally first, then user_profiles. */
+export async function saveBodyProfile(patch: Partial<Pick<BodyProfile, 'heightCm' | 'sex' | 'age' | 'goalWeightKg'>>): Promise<void> {
+  let cached: BodyProfile = { heightCm: null, sex: null, weightKg: null };
+  try { cached = JSON.parse((await AsyncStorage.getItem(PROFILE_KEY)) ?? 'null') ?? cached; } catch { /* keep empty */ }
+  await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify({ ...cached, ...patch }));
+  // Awaited, not fire-and-forget: getBodyProfile prefers the server row, so a
+  // read straight after would otherwise bring the old numbers back.
+  try {
+    const userId = await getUid();
+    if (!userId) return;
+    const row: Record<string, unknown> = {};
+    if (patch.heightCm !== undefined) row.height_cm = patch.heightCm;
+    if (patch.sex !== undefined) row.sex = patch.sex;
+    if (patch.age !== undefined) row.age = patch.age;
+    if (patch.goalWeightKg !== undefined) row.goal_weight_kg = patch.goalWeightKg;
+    await supabase.from('user_profiles').update(row).eq('user_id', userId);
+  } catch { /* offline: the cache holds it */ }
+}
 
 /** Height, sex and onboarding weight from user_profiles; the last good read is kept for offline. */
 export async function getBodyProfile(): Promise<BodyProfile> {
@@ -617,9 +649,12 @@ export async function getBodyProfile(): Promise<BodyProfile> {
   try {
     const userId = await getUid();
     if (!userId) return cached;
-    const { data } = await supabase.from('user_profiles').select('height_cm, sex, weight_kg').eq('user_id', userId).maybeSingle();
+    const { data } = await supabase.from('user_profiles').select('height_cm, sex, weight_kg, age, goal_weight_kg').eq('user_id', userId).maybeSingle();
     if (!data) return cached;
-    const fresh = { heightCm: data.height_cm ?? null, sex: data.sex ?? null, weightKg: data.weight_kg ?? null };
+    const fresh = {
+      heightCm: data.height_cm ?? null, sex: data.sex ?? null, weightKg: data.weight_kg ?? null,
+      age: data.age ?? null, goalWeightKg: data.goal_weight_kg ?? null,
+    };
     await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(fresh));
     return fresh;
   } catch { return cached; }

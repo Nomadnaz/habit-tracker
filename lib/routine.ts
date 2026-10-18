@@ -14,7 +14,7 @@ import {
   type Routine, type Today, type Vitals,
 } from './coach';
 import { CATALOGUE, cardioSessions, withIntensity, type Session } from './muscle-recovery';
-import { loadBodyData, getBodyProfile, latestWeight } from './body-data';
+import { loadBodyData, getBodyProfile, latestWeight, type BodyData } from './body-data';
 import { getActivitiesInRange } from './activity-data';
 import { equipmentOf, guideFor, patternOf } from './exercise-guide';
 
@@ -41,6 +41,7 @@ export type CoachState = {
   today: Today;
   sessions: Session[];
   vitals: Vitals | undefined;
+  body: BodyData;
 };
 
 /** Training (lifts weighted by how heavy, plus runs and big walking days) and wearable numbers → today. */
@@ -69,7 +70,7 @@ export async function loadCoach(): Promise<CoachState> {
     .filter((d): d is { focus: Focus; date: string } => d.focus != null)
     .sort((a, b) => b.date.localeCompare(a.date));
   const today = coachToday({ routine: routine ?? { days: [], split: 'auto' }, doneFoci, sessions, vitals: body.vitals, now });
-  return { routine, today, sessions, vitals: body.vitals };
+  return { routine, today, sessions, vitals: body.vitals, body };
 }
 
 // ── a template per focus ──────────────────────────────────────────────────
