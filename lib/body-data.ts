@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { postWrite } from './postWrite';
 import { withStorageLock } from './storageLock';
+import type { AppleHealthSyncResult } from './apple-health';
 import { mergeRemote } from './syncMerge';
 import { toDateKey as dateKey, addDaysToKey } from './dateKey';
 export { dateKey };
@@ -71,10 +72,12 @@ export type BodyActivityToday = {
 
 /** Latest heart readings from Apple Health (a watch writes these). */
 export type HeartNow = {
-  bpm: number | null;       // newest heart-rate sample, last 24h
+  bpm: number | null;       // newest heart-rate sample, last 7 days
+  bpmAt?: string | null;    // when it was taken
   avgBpm: number | null;    // mean of the last 24h
-  hrvMs: number | null;     // newest HRV (SDNN), last 7 days
-  hrvAvgMs: number | null;  // mean HRV over those 7 days
+  hrvMs: number | null;     // newest HRV (SDNN), last 30 days
+  hrvAt?: string | null;
+  hrvAvgMs: number | null;  // mean HRV over the last 7 days
 };
 
 export type BodyData = {
@@ -292,18 +295,28 @@ export async function saveBodyData(data: BodyData): Promise<void> {
   await save(data);
 }
 
+/** Lays a Health read onto the freshest blob, under the lock. The read takes
+ *  seconds; saving the copy loaded before it undid water or weight logged in
+ *  the meantime, and a pull saving its older copy undid the heart readings. */
+export async function applyHealthSync(sync: AppleHealthSyncResult): Promise<BodyData> {
+  const { mergeAppleHealthIntoBodyData } = await import('./apple-health');
+  return withStorageLock(BODY_KEY, async () => {
+    const merged = mergeAppleHealthIntoBodyData(await loadBodyData(), sync);
+    await save(merged);
+    return merged;
+  });
+}
+
 /** Sync from Apple Health when already connected (no permission dialog). */
 export async function refreshAppleHealthIfConnected(): Promise<BodyData | null> {
   const data = await loadBodyData();
   if (!data.appleHealthConnected) return null;
-  const { fetchAppleHealthMetrics, mergeAppleHealthIntoBodyData, initAppleHealth } = await import('./apple-health');
+  const { fetchAppleHealthMetrics, initAppleHealth } = await import('./apple-health');
   const granted = await initAppleHealth();
   if (!granted) return null;
   const metrics = await fetchAppleHealthMetrics(56);
   if (!metrics) return null;
-  const merged = mergeAppleHealthIntoBodyData(data, metrics);
-  await save(merged);
-  return merged;
+  return applyHealthSync(metrics);
 }
 
 // ── Down-sync ────────────────────────────────────────────────────────────────

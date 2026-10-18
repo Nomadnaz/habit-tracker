@@ -116,7 +116,7 @@ export async function loadToday(): Promise<{ view: TodayView; input: TwinInput }
       sleepMin: sleep[back(0)] ?? null,
       activeKcal: body.activityToday?.caloriesKcal ?? null, activeMin: body.activityToday?.activeMinutes ?? null,
       rhr: vit?.rhr[back(0)] ?? vit?.rhr[back(1)] ?? null,
-      hrv: vit?.hrv[back(0)] ?? vit?.hrv[back(1)] ?? body.heart?.hrvMs ?? null,
+      hrv: vit?.hrv[back(0)] ?? vit?.hrv[back(1)] ?? (body.heart?.hrvAt && Date.parse(body.heart.hrvAt) > now.getTime() - 2 * 86_400_000 ? body.heart.hrvMs : null),
       weightKg: kg, weightDelta: kg && weekAgo ? Math.round((kg - weekAgo.weightKg) * 10) / 10 : null,
     },
     healthConnected: !!body.appleHealthConnected,

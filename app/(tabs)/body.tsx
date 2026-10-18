@@ -50,7 +50,7 @@ import {
   loadBodyData, pullRemoteBody, refreshAppleHealthIfConnected,
   todaySteps, todayWaterMl, latestWeight, formatSleep, getBodyProfile, type BodyData, type BodyProfile,
 } from '@/lib/body-data';
-import { connectAndSyncAppleHealth } from '@/lib/apple-health';
+import { connectAndSyncAppleHealth, probeHeart } from '@/lib/apple-health';
 import { getMealsForDate, dailyTotals, getTargets, todayKey } from '@/lib/meals-data';
 import { getTodayMood } from '@/lib/mood-data';
 
@@ -71,6 +71,17 @@ const SINCE_FULL_DAYS = 14; // LONGEST SINCE is fully yellow at two weeks
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 type Vitals = { kcal: number; kcalGoal: number; mood: number | null };
+
+/** Taken within the last `hours` (pre-timestamp readings count as fresh). */
+const fresh = (at: string | null | undefined, hours: number) => at === undefined || (!!at && Date.now() - Date.parse(at) < hours * 3_600_000);
+const mins = (at: string) => Math.max(1, Math.round((Date.now() - Date.parse(at)) / 60_000));
+/** "3H", "2D" — a readout's age. */
+const ago = (at: string) => { const m = mins(at); return m < 60 ? `${m}M` : m < 2880 ? `${Math.round(m / 60)}H` : `${Math.round(m / 1440)}D`; };
+const agoWords = (at: string) => {
+  const m = mins(at);
+  const [n, u] = m < 60 ? [m, 'minute'] : m < 2880 ? [Math.round(m / 60), 'hour'] : [Math.round(m / 1440), 'day'];
+  return `${n} ${u}${n === 1 ? '' : 's'} ago`;
+};
 
 export default function BodyScreen() {
   const router = useRouter();
@@ -139,22 +150,31 @@ export default function BodyScreen() {
   }
 
   // HEART / HRV: ask for every watch permission (iOS only shows the ones not
-  // yet decided), re-read, and say why if it's still empty. iOS hides a denied
-  // read, so "switched off" and "no samples yet" look the same from here.
+  // yet decided), re-read, and if a reading is missing or old, find out why.
+  // iOS hides a denied read, so the newest sample Health will give us *ever*
+  // tells "access off" (none at all) from "watch not syncing" (an old one).
   async function checkHeart() {
     if (healthSyncing) return;
     setHealthSyncing(true);
     const result = await connectAndSyncAppleHealth(56, true);
-    setHealthSyncing(false);
-    if (!result.ok || !result.data) { Alert.alert('Apple Health', result.error ?? 'Could not connect to Apple Health.'); return; }
+    if (!result.ok || !result.data) { setHealthSyncing(false); Alert.alert('Apple Health', result.error ?? 'Could not connect to Apple Health.'); return; }
     setBody(result.data);
     const h = result.data.heart;
-    if (h?.bpm != null && h.hrvMs != null) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); return; }
-    Alert.alert(h?.bpm == null ? 'No heart rate yet' : 'No HRV yet', [
-      h?.bpm == null && 'Apple Health has no heart rate from the last 24 hours. A watch you\'ve just put on sends its first reading within a few minutes.',
-      h?.hrvMs == null && 'Your watch measures HRV a few times a day and while you sleep. A one-minute session in the Mindfulness app on the watch records one now.',
-      'Still blank after that? In the Health app, tap your photo (top right) → Apps → habit-tracker, and turn on Heart Rate, Heart Rate Variability and Resting Heart Rate.',
-    ].filter(Boolean).join('\n\n'));
+    if (h?.bpm != null && fresh(h.bpmAt, 2) && h.hrvMs != null && fresh(h.hrvAt, 24 * 7)) { setHealthSyncing(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); return; }
+    const probe = await probeHeart();
+    setHealthSyncing(false);
+    const turnOn = 'iPhone Settings → Privacy & Security → Health → habit-tracker, and turn on Heart Rate, Heart Rate Variability and Resting Heart Rate';
+    const lines: string[] = [];
+    if (!probe.hr) {
+      lines.push(`Apple Health gives habit-tracker no heart rate at all. With a watch on, that means its access is off (iOS shows an app without access an empty Health, not an error). Open ${turnOn}.`);
+      lines.push('If the Health app itself shows no heart rate (Browse → Heart), the watch isn\'t syncing to this iPhone: check it\'s paired in the Watch app with Bluetooth on.');
+    } else {
+      if (!fresh(probe.hr.at, 2)) lines.push(`The newest heart rate in Health is from ${agoWords(probe.hr.at)} (${probe.hr.source}). The watch hasn't sent a newer one: keep it unlocked on your wrist with Bluetooth on, and open the Health app once to nudge a sync.`);
+      if (!probe.hrv) lines.push(`Heart rate comes through but there's no HRV at all. The watch measures HRV a few times a day and overnight; a one-minute Mindfulness session records one now. If you've done that, open ${turnOn}.`);
+      else if (!fresh(probe.hrv.at, 24 * 7)) lines.push(`The newest HRV is from ${agoWords(probe.hrv.at)}. A one-minute Mindfulness session on the watch records a new one.`);
+    }
+    if (!lines.length) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); return; }
+    Alert.alert(!probe.hr ? 'No heart data reaches the app' : !fresh(probe.hr.at, 2) ? 'Heart rate is out of date' : 'No recent HRV', lines.join('\n\n'));
   }
 
   const update = useCallback((fn: (m: BodyMap) => BodyMap) => {
@@ -254,9 +274,9 @@ export default function BodyScreen() {
   const toGoal = (v: number, goal: number) => (goal > 0 ? Math.round((v / goal) * 100) : 0);
   const hud: HudStat[] = body ? [
     { id: 'hr', label: 'HEART', value: heart?.bpm != null ? String(heart.bpm) : '—', unit: 'BPM',
-      sub: heart?.avgBpm != null ? `AVG ${heart.avgBpm}` : noHeart, onPress: checkHeart },
+      sub: heart?.bpm == null ? noHeart : !fresh(heart.bpmAt, 2) && heart.bpmAt ? `${ago(heart.bpmAt)} AGO` : heart.avgBpm != null ? `AVG ${heart.avgBpm}` : 'NOW', onPress: checkHeart },
     { id: 'hrv', label: 'HRV', value: heart?.hrvMs != null ? String(heart.hrvMs) : '—', unit: 'MS',
-      sub: heart?.hrvAvgMs != null ? `7 DAY AVG ${heart.hrvAvgMs}` : noHeart, onPress: checkHeart },
+      sub: heart?.hrvAvgMs != null ? `7 DAY AVG ${heart.hrvAvgMs}` : heart?.hrvAt ? `${ago(heart.hrvAt)} AGO` : noHeart, onPress: checkHeart },
     { id: 'kcal', label: 'CALORIES', value: vitals.kcal.toLocaleString('en-US'), unit: 'KCAL',
       sub: vitals.kcalGoal ? `OF ${vitals.kcalGoal.toLocaleString('en-US')}` : 'TODAY', onPress: () => router.push('/calorie'),
       // Over the goal goes red — the one readout where more isn't better.

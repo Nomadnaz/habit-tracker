@@ -225,19 +225,43 @@ async function fetchLatestWeightKg(kit: HealthKitModule): Promise<{ kg: number; 
 
 async function fetchHeart(kit: HealthKitModule): Promise<HeartNow> {
   const now = Date.now();
-  const range = (days: number) => ({ startDate: new Date(now - days * 86_400_000).toISOString(), endDate: new Date(now).toISOString(), ascending: false });
-  const [hr, hrv] = await Promise.all([
+  const range = (days: number, limit?: number) => ({
+    startDate: new Date(now - days * 86_400_000).toISOString(), endDate: new Date(now).toISOString(), ascending: false, ...(limit ? { limit } : {}),
+  });
+  const [latest, day, hrv] = await Promise.all([
+    promisify<HealthSample[]>(kit.getHeartRateSamples.bind(kit), range(7, 1)).catch(() => [] as HealthSample[]),
     promisify<HealthSample[]>(kit.getHeartRateSamples.bind(kit), range(1)).catch(() => [] as HealthSample[]),
-    promisify<HealthSample[]>(kit.getHeartRateVariabilitySamples.bind(kit), range(7)).catch(() => [] as HealthSample[]),
+    promisify<HealthSample[]>(kit.getHeartRateVariabilitySamples.bind(kit), range(30)).catch(() => [] as HealthSample[]),
   ]);
   const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
-  // Newest first. HRV comes back in seconds.
+  const week = now - 7 * 86_400_000;
+  // Newest first. HRV comes back in seconds. An older newest reading still
+  // shows, with its age, rather than a blank.
   return {
-    bpm: hr.length ? Math.round(hr[0].value) : null,
-    avgBpm: mean(hr.map(x => x.value)),
+    bpm: latest.length ? Math.round(latest[0].value) : null,
+    bpmAt: latest[0]?.endDate ?? null,
+    avgBpm: mean(day.map(x => x.value)),
     hrvMs: hrv.length ? Math.round(hrv[0].value * 1000) : null,
-    hrvAvgMs: mean(hrv.map(x => x.value * 1000)),
+    hrvAt: hrv[0]?.endDate ?? null,
+    hrvAvgMs: mean(hrv.filter(x => Date.parse(x.endDate) >= week).map(x => x.value * 1000)),
   };
+}
+
+export type HeartProbe = { at: string; source: string } | null;
+
+/** The newest heart-rate and HRV sample Health will give this app, ever. None
+ *  at all while a watch is worn means read access is off — iOS shows an app
+ *  with no access an empty store rather than an error. */
+export async function probeHeart(): Promise<{ hr: HeartProbe; hrv: HeartProbe }> {
+  const kit = getHealthKit();
+  if (!kit) return { hr: null, hrv: null };
+  const ever = { startDate: new Date(2014, 0, 1).toISOString(), endDate: new Date().toISOString(), ascending: false, limit: 1 };
+  type S = HealthSample & { sourceName?: string };
+  const one = (fn: string) => promisify<S[]>(kit[fn].bind(kit), ever)
+    .then(xs => (xs[0] ? { at: xs[0].endDate, source: xs[0].sourceName ?? 'a device' } : null))
+    .catch(() => null);
+  const [hr, hrv] = await Promise.all([one('getHeartRateSamples'), one('getHeartRateVariabilitySamples')]);
+  return { hr, hrv };
 }
 
 /** Running workouts (any app or watch) — the BODY tab counts their steps as leg training. */
@@ -397,10 +421,8 @@ export async function connectAndSyncAppleHealth(historyDays = 56, vitals = false
     if (!metrics) {
       return { ok: false, error: 'Could not read Apple Health data.' };
     }
-    const { loadBodyData, saveBodyData, syncTodayStepsToSupabase, todaySteps } = await import('./body-data');
-    const current = await loadBodyData();
-    const merged = mergeAppleHealthIntoBodyData(current, metrics);
-    await saveBodyData(merged);
+    const { applyHealthSync, syncTodayStepsToSupabase, todaySteps } = await import('./body-data');
+    const merged = await applyHealthSync(metrics);
     syncTodayStepsToSupabase(todaySteps(merged));
     return { ok: true, data: merged };
   } catch (e) {
