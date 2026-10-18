@@ -18,6 +18,7 @@ import {
   type SleepLog, type PhoneLog,
 } from '@/lib/sleep-data';
 import { toDateKey } from '@/lib/dateKey';
+import { loadBodyData } from '@/lib/body-data';
 
 import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -62,14 +63,21 @@ export default function SleepDetailModal() {
 
   const refresh = useCallback(async () => {
     await pullRemoteSleep(); // voice-logged sleep is written server-side
-    const [log, week, t, phoneLogs] = await Promise.all([
-      getSleepLog(today), getRecentSleepLogs(7), getPhoneDownTarget(), getRecentPhoneLogs(30),
+    const [log, week, t, phoneLogs, body] = await Promise.all([
+      getSleepLog(today), getRecentSleepLogs(7), getPhoneDownTarget(), getRecentPhoneLogs(30), loadBodyData(),
     ]);
+    // The watch's nights too, as TODAY reads them: where both exist, the watch wins.
+    const from = toDateKey(new Date(Date.now() - 6 * 86_400_000));
+    const nights = new Map(week.map(l => [l.date, l]));
+    for (const [date, n] of Object.entries(body.vitals?.sleep ?? {})) {
+      if (date < from || n.asleep <= 0) continue;
+      nights.set(date, { ...(nights.get(date) ?? { id: date, date, createdAt: '' }), totalHours: n.asleep / 60 });
+    }
     setTonight(log);
     setBedtime(log?.bedtime ?? '');
     setWakeTime(log?.wakeTime ?? '');
     setQuality(log?.qualityScore ?? 3);
-    setWeekly(week);
+    setWeekly([...nights.values()].sort((a, b) => a.date.localeCompare(b.date)));
     setTarget(t);
     setRecentPhone(phoneLogs);
     setChallengeStreak(computeChallengeStreak(phoneLogs));

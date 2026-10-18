@@ -375,8 +375,9 @@ export function mergeAppleHealthIntoBodyData(
   return next;
 }
 
-/** Request HealthKit access and pull latest metrics into BodyData. */
-export async function connectAndSyncAppleHealth(historyDays = 56): Promise<{
+/** Request HealthKit access and pull latest metrics into BodyData. `vitals`
+ *  also asks for what only a watch or ring writes (resting HR and friends). */
+export async function connectAndSyncAppleHealth(historyDays = 56, vitals = false): Promise<{
   ok: boolean;
   data?: BodyData;
   error?: string;
@@ -388,7 +389,7 @@ export async function connectAndSyncAppleHealth(historyDays = 56): Promise<{
     };
   }
   try {
-    const granted = await initAppleHealth();
+    const granted = await initAppleHealth(vitals);
     if (!granted) {
       return { ok: false, error: 'Apple Health is not available on this device.' };
     }

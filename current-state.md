@@ -262,3 +262,9 @@ After a task is implemented, deployed, and tested:
   - *Counts:* WORKOUTS reads the local done log like the streak; PROGRESS all-time STEPS sums local history (nothing ever wrote `total_steps`).
   - *RECORD:* the timer reads the clock (JS ticks pause in a locked pocket), and a double-tap START can't start two GPS watchers or timers.
   - *Misc:* root stack's `calorie` → `calorie/index`.
+- 2026-10-18 — **Follow-ups to the sweep.**
+  - *Heart and HRV:* tapping HEART or HRV on BODY asks for every watch permission, including resting HR, re-reads Health, and if still empty explains why: no samples yet (HRV is only measured a few times a day and overnight) or read access off (Health app → photo → Apps → habit-tracker). iOS hides denied reads, so the app can't tell these apart.
+  - *FUEL:* macros in food orange like TODAY; the hardcoded amber hex is gone.
+  - *SLEEP:* THIS WEEK includes the watch's nights.
+  - *LIFE and Settings:* LIFE shortcuts are now SLEEP / MOOD / CYCLE / PROGRESS / WEARABLE / PUCK (focus, calendar, goals, finance and library left the grid; screens and data untouched). Settings lists only the health companions, labelled by area, because habitCoach and gym are both named Coach.
+  - *LIFT RECEIPT:* says so when the lift is missing instead of sitting blank.

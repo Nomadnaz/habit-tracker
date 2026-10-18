@@ -36,6 +36,10 @@ const AREA: Record<string, string> = {
   mood: 'Mood', medication: 'Meds', finance: 'Money', library: 'Library',
 };
 
+// Health and fitness companions only since the 2026-10-18 pivot (the rest
+// stay configured). Rows go by area: two of them are both called Coach.
+const HEALTH = new Set(['habitCoach', 'gym', 'calorie', 'activity', 'sleep', 'mood', 'medication']);
+
 const ARROW = <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />;
 
 export default function Settings() {
@@ -157,12 +161,12 @@ export default function Settings() {
         </Board>
 
         <Board title="COMPANIONS">
-          {Object.entries(companions).map(([type, cfg], i, all) => (
+          {Object.entries(companions).filter(([type]) => HEALTH.has(type)).map(([type, cfg], i, all) => (
             <BoardRow
               key={type}
               index={i + 1}
-              label={cfg.defaultName.toUpperCase()}
-              sub={AREA[type] ?? type}
+              label={(AREA[type] ?? type).toUpperCase()}
+              sub={cfg.defaultName}
               last={i === all.length - 1}
               right={ARROW}
               onPress={() => router.push({ pathname: '/settings/companion-persona', params: { companionType: type } })}

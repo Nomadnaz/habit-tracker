@@ -138,6 +138,25 @@ export default function BodyScreen() {
     Alert.alert('Apple Health', result.error ?? 'Could not connect to Apple Health.');
   }
 
+  // HEART / HRV: ask for every watch permission (iOS only shows the ones not
+  // yet decided), re-read, and say why if it's still empty. iOS hides a denied
+  // read, so "switched off" and "no samples yet" look the same from here.
+  async function checkHeart() {
+    if (healthSyncing) return;
+    setHealthSyncing(true);
+    const result = await connectAndSyncAppleHealth(56, true);
+    setHealthSyncing(false);
+    if (!result.ok || !result.data) { Alert.alert('Apple Health', result.error ?? 'Could not connect to Apple Health.'); return; }
+    setBody(result.data);
+    const h = result.data.heart;
+    if (h?.bpm != null && h.hrvMs != null) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); return; }
+    Alert.alert(h?.bpm == null ? 'No heart rate yet' : 'No HRV yet', [
+      h?.bpm == null && 'Apple Health has no heart rate from the last 24 hours. A watch you\'ve just put on sends its first reading within a few minutes.',
+      h?.hrvMs == null && 'Your watch measures HRV a few times a day and while you sleep. A one-minute session in the Mindfulness app on the watch records one now.',
+      'Still blank after that? In the Health app, tap your photo (top right) → Apps → habit-tracker, and turn on Heart Rate, Heart Rate Variability and Resting Heart Rate.',
+    ].filter(Boolean).join('\n\n'));
+  }
+
   const update = useCallback((fn: (m: BodyMap) => BodyMap) => {
     setMap(prev => {
       if (!prev) return prev;
@@ -231,13 +250,13 @@ export default function BodyScreen() {
 
   // Today's numbers around the figure, each tied to where it lives on the body.
   const heart = body?.heart;
-  const noHeart = body?.appleHealthConnected ? 'NO READING' : 'TAP TO CONNECT';
+  const noHeart = body?.appleHealthConnected ? 'TAP TO CHECK' : 'TAP TO CONNECT';
   const toGoal = (v: number, goal: number) => (goal > 0 ? Math.round((v / goal) * 100) : 0);
   const hud: HudStat[] = body ? [
     { id: 'hr', label: 'HEART', value: heart?.bpm != null ? String(heart.bpm) : '—', unit: 'BPM',
-      sub: heart?.avgBpm != null ? `AVG ${heart.avgBpm}` : noHeart, onPress: syncAppleHealth },
+      sub: heart?.avgBpm != null ? `AVG ${heart.avgBpm}` : noHeart, onPress: checkHeart },
     { id: 'hrv', label: 'HRV', value: heart?.hrvMs != null ? String(heart.hrvMs) : '—', unit: 'MS',
-      sub: heart?.hrvAvgMs != null ? `7 DAY AVG ${heart.hrvAvgMs}` : noHeart, onPress: syncAppleHealth },
+      sub: heart?.hrvAvgMs != null ? `7 DAY AVG ${heart.hrvAvgMs}` : noHeart, onPress: checkHeart },
     { id: 'kcal', label: 'CALORIES', value: vitals.kcal.toLocaleString('en-US'), unit: 'KCAL',
       sub: vitals.kcalGoal ? `OF ${vitals.kcalGoal.toLocaleString('en-US')}` : 'TODAY', onPress: () => router.push('/calorie'),
       // Over the goal goes red — the one readout where more isn't better.

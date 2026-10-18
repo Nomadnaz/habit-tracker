@@ -67,6 +67,7 @@ export default function LiftReceiptScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const [session, setSession] = useState<LiftSession | null>(null);
+  const [missing, setMissing] = useState(false);
   const [stage, setStage] = useState<ReceiptPrinterStage>('processing');
   const [setIdx, setSetIdx] = useState<number | null>(null); // which set's curve; null = the latest
   const [heart, setHeart] = useState<Heart | null>(null);
@@ -78,9 +79,9 @@ export default function LiftReceiptScreen() {
 
   // This receipt is the one on screen: new sets for it land here.
   useEffect(() => {
-    if (!id) return;
+    if (!id) { setMissing(true); return; }
     setOpenReceipt(id);
-    getLiftSession(id).then(setSession);
+    getLiftSession(id).then(x => { setSession(x); setMissing(!x); });
     const off = onLiftSession((s, kind) => {
       if (s.id !== id) return;
       setSession(s);
@@ -103,7 +104,13 @@ export default function LiftReceiptScreen() {
     return () => timers.current.forEach(clearTimeout);
   }, [nSets]);
 
-  if (!session) return <SafeAreaView style={s.container} edges={['top']}><ScreenHeader title="LIFT RECEIPT" /></SafeAreaView>;
+  // A deleted lift or a stale link: say so rather than sit blank.
+  if (!session) return (
+    <SafeAreaView style={s.container} edges={['top']}>
+      <ScreenHeader title="LIFT RECEIPT" />
+      {missing && <Text style={s.missing}>This lift isn't on this phone any more.</Text>}
+    </SafeAreaView>
+  );
 
   const st = sessionStats(session);
   const { start, end } = sessionSpan(session);
@@ -300,6 +307,7 @@ export default function LiftReceiptScreen() {
 }
 
 const s = StyleSheet.create({
+  missing: { fontFamily: F.mono, fontSize: 12, color: C.dim, paddingHorizontal: 20, paddingTop: 16 },
   container: { flex: 1, backgroundColor: C.bg },
   content: { paddingHorizontal: 16, paddingBottom: 48, alignItems: 'center' },
 

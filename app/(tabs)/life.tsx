@@ -25,12 +25,14 @@ import {
 
 type Icon = keyof typeof MaterialCommunityIcons.glyphMap;
 
+// Health and fitness only since the 2026-10-18 pivot. FOCUS, CALENDAR, GOALS,
+// FINANCE and LIBRARY left this grid; their screens and data are untouched.
 const SHORTCUTS: { label: string; icon: Icon; route: string }[] = [
-  { label: 'FOCUS', icon: 'timer-outline', route: '/focus-timer' },
-  { label: 'CALENDAR', icon: 'calendar-month-outline', route: '/calendar' },
-  { label: 'GOALS', icon: 'flag-outline', route: '/modals/goals' },
-  { label: 'FINANCE', icon: 'wallet-outline', route: '/modals/finance' },
-  { label: 'LIBRARY', icon: 'bookshelf', route: '/modals/library' },
+  { label: 'SLEEP', icon: 'power-sleep', route: '/modals/sleep-detail' },
+  { label: 'MOOD', icon: 'emoticon-outline', route: '/modals/mood' },
+  { label: 'CYCLE', icon: 'calendar-heart', route: '/modals/cycle-tracking' },
+  { label: 'PROGRESS', icon: 'trophy-outline', route: '/(tabs)/progress' },
+  { label: 'WEARABLE', icon: 'watch-variant', route: '/settings/wearables' },
   { label: 'PUCK', icon: 'checkbox-blank', route: '/ble-bridge' },
 ];
 

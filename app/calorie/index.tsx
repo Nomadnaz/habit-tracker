@@ -29,9 +29,10 @@ const BOLD = F.mono;
 const REG = F.mono;
 
 const MACROS = [
-  { key: 'proteinG' as const, label: 'PROTEIN', tKey: 'proteinG' as const, color: C.alert },
-  { key: 'carbsG'   as const, label: 'CARBS',   tKey: 'carbsG'   as const, color: C.live },
-  { key: 'fatG'     as const, label: 'FAT',     tKey: 'fatG'     as const, color: '#C98A1B' },
+  // Food orange, as TODAY's MACROS draws them — red means over/destructive, green means done.
+  { key: 'proteinG' as const, label: 'PROTEIN', tKey: 'proteinG' as const, color: C.food },
+  { key: 'carbsG'   as const, label: 'CARBS',   tKey: 'carbsG'   as const, color: C.food },
+  { key: 'fatG'     as const, label: 'FAT',     tKey: 'fatG'     as const, color: C.food },
 ];
 
 function ProgressBar({ value, goal, color }: { value: number; goal: number; color: string }) {
