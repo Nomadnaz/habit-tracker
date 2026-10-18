@@ -238,15 +238,16 @@ export default function BodyScreen() {
       sub: heart?.avgBpm != null ? `AVG ${heart.avgBpm}` : noHeart, onPress: syncAppleHealth },
     { id: 'hrv', label: 'HRV', value: heart?.hrvMs != null ? String(heart.hrvMs) : '—', unit: 'MS',
       sub: heart?.hrvAvgMs != null ? `7 DAY AVG ${heart.hrvAvgMs}` : noHeart, onPress: syncAppleHealth },
-    { id: 'kcal', label: 'CALORIES', value: String(vitals.kcal), unit: 'KCAL',
-      sub: vitals.kcalGoal ? `OF ${vitals.kcalGoal}` : 'TODAY', onPress: () => router.push('/calorie'),
+    { id: 'kcal', label: 'CALORIES', value: vitals.kcal.toLocaleString('en-US'), unit: 'KCAL',
+      sub: vitals.kcalGoal ? `OF ${vitals.kcalGoal.toLocaleString('en-US')}` : 'TODAY', onPress: () => router.push('/calorie'),
       // Over the goal goes red — the one readout where more isn't better.
       fill: vitals.kcalGoal ? { pct: toGoal(vitals.kcal, vitals.kcalGoal), tone: vitals.kcal > vitals.kcalGoal ? C.alert : C.food, icon: 'fire' } : undefined },
-    { id: 'water', label: 'WATER', value: (todayWaterMl(body) / 1000).toFixed(1), unit: 'L',
-      sub: 'TAP TO ADD', onPress: () => setSheet('water'),
+    // Millilitres, as TODAY counts them.
+    { id: 'water', label: 'WATER', value: todayWaterMl(body).toLocaleString('en-US'), unit: 'ML',
+      sub: `OF ${body.waterGoalMl.toLocaleString('en-US')}`, onPress: () => setSheet('water'),
       fill: { pct: toGoal(todayWaterMl(body), body.waterGoalMl), tone: C.water, icon: 'water' } },
-    { id: 'steps', label: 'STEPS', value: todaySteps(body).toLocaleString(), unit: '',
-      sub: `OF ${body.stepsGoal.toLocaleString()}`, onPress: () => router.push('/steps'),
+    { id: 'steps', label: 'STEPS', value: todaySteps(body).toLocaleString('en-US'), unit: '',
+      sub: `OF ${body.stepsGoal.toLocaleString('en-US')}`, onPress: () => router.push('/steps'),
       fill: { pct: toGoal(todaySteps(body), body.stepsGoal), tone: C.live, icon: 'shoe-print' } },
   ] : [];
 
@@ -777,7 +778,7 @@ const styles = StyleSheet.create({
   viewText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5 },
   viewTextOn: { color: C.onHot },
 
-  hint: { fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: 1, textAlign: 'center', marginTop: 2 },
+  hint: { fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: 1, textAlign: 'center', marginTop: 2, marginBottom: 14 },
   credit: { fontFamily: F.mono, fontSize: 9, color: C.faint, textAlign: 'center', marginHorizontal: 24, marginTop: 16, lineHeight: 13 },
   lensSlot: { height: 66, justifyContent: 'flex-end', marginTop: 2, marginBottom: 6 },
   lens: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingHorizontal: 20 },

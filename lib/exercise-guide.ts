@@ -175,3 +175,47 @@ export function difficulty(kg: number, reps: number, e1rmKg: number): Difficulty
   const word = rir >= 4 ? 'EASY' : rir >= 2 ? 'MODERATE' : rir === 1 ? 'HARD' : rir === 0 ? 'MAX' : 'TOO HEAVY';
   return { rir, level, word };
 }
+
+/** "8-10" → [8, 10]; "12" → [12, 12]. */
+export const repRange = (reps: string): [number, number] => {
+  const [a, b] = reps.split('-').map(x => parseInt(x, 10));
+  const lo = Number.isFinite(a) ? a : 10;
+  return [lo, Number.isFinite(b) ? b : lo];
+};
+export const repText = ([a, b]: [number, number]) => (a === b ? `${a}` : `${a}-${b}`);
+
+/** Moves a rep range as one piece, keeping it inside 1–50 so it never collapses. */
+export function shiftReps(reps: string, d: number): string {
+  const [lo, hi] = repRange(reps);
+  const k = Math.max(1 - lo, Math.min(50 - hi, d));
+  return repText([lo + k, hi + k]);
+}
+
+const LB = 2.2046226218;
+/** The plate grid in the unit shown: 2.5 kg on a bar, stack or cable; dumbbells
+ *  go by 1 kg up to 10 and by 2 kg after; 5 lb for everything in imperial. */
+const grid = (v: number, up: boolean, eq: Equipment, unit: 'metric' | 'imperial') =>
+  unit === 'imperial' ? 5 : eq === 'dumbbell' ? ((up ? v < 10 : v <= 10) ? 1 : 2) : 2.5;
+
+/** `steps` notches of the weight stepper from `kg`: an off-grid weight first
+ *  lands on the grid, so every value shown is a weight you can load. */
+export function nextWeight(kg: number, steps: number, eq: Equipment, unit: 'metric' | 'imperial'): number {
+  const up = steps > 0;
+  // Hundredths in the shown unit, so 45 LB stored as 20.412 KG reads back as 45 exactly.
+  let v = Math.round(Math.max(0, kg) * (unit === 'imperial' ? LB : 1) * 100) / 100;
+  for (let i = 0; i < Math.abs(steps); i++) {
+    const g = grid(v, up, eq, unit);
+    v = up ? Math.floor(v / g + 1e-9) * g + g : Math.ceil(v / g - 1e-9) * g - g;
+    v = Math.max(0, Math.min(unit === 'imperial' ? 1100 : 500, v));
+  }
+  return Math.round((unit === 'imperial' ? v / LB : v) * 1000) / 1000;
+}
+
+/** The nearest weight on that grid — what the coach recommends in the unit you read. */
+export function snapWeight(kg: number, eq: Equipment, unit: 'metric' | 'imperial'): number {
+  if (kg <= 0) return 0;
+  const v = kg * (unit === 'imperial' ? LB : 1);
+  const g = grid(v, true, eq, unit);
+  const snapped = Math.max(g, Math.round(v / g) * g);
+  return Math.round((unit === 'imperial' ? snapped / LB : snapped) * 1000) / 1000;
+}

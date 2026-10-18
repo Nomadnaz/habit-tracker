@@ -14,6 +14,7 @@ import { loadBodyData, getMuscleGroupBreakdown, type BodyData, type MuscleGroupT
 
 import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { formatWeightFromKg, weightUnitLabel } from '@/lib/unit-preference';
 const CARD   = C.surface;
 const BOLD = F.mono;
 const REG = F.mono;
@@ -45,9 +46,10 @@ export default function StrengthScreen() {
           <View key={lift.name} style={s.liftCard}>
             <View style={s.liftHeader}>
               <Text style={s.liftName}>{lift.name}</Text>
-              <Text style={s.liftValue}>{lift.topSetKg}<Text style={s.liftUnit}>KG</Text></Text>
+              <Text style={s.liftValue}>{formatWeightFromKg(lift.topSetKg)}<Text style={s.liftUnit}>{weightUnitLabel()}</Text></Text>
             </View>
-            <Text style={s.liftSub}>TOP SET — max weight logged, not a calculated 1RM</Text>
+            {/* With no PBs the figure is the weight the plan sets, not one you've logged. */}
+            <Text style={s.liftSub}>{lift.history.length ? 'TOP SET — max weight logged, not a calculated 1RM' : 'WORKING WEIGHT — what your plan sets, not a PB yet'}</Text>
             {lift.history.length > 0 ? (
               <Spark points={lift.history} dots width={280} height={60} />
             ) : (

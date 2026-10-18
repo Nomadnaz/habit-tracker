@@ -58,6 +58,7 @@ export default function ActivityScreen() {
   const [week, setWeek] = useState({ m: 0, n: 0 });
   const subRef = useRef<Location.LocationSubscription | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const starting = useRef(false);
   const hold = useRef(new Animated.Value(0)).current;
   const rec = useRef(new Animated.Value(1)).current;
 
@@ -86,6 +87,14 @@ export default function ActivityScreen() {
   }, [recording]);
 
   async function start() {
+    // A second tap while the permission prompt is up would start a second GPS
+    // watch and timer, and the orphaned timer keeps counting after STOP.
+    if (starting.current || subRef.current) return;
+    starting.current = true;
+    try { await begin(); } finally { starting.current = false; }
+  }
+
+  async function begin() {
     const perm = await Location.requestForegroundPermissionsAsync();
     if (perm.status !== 'granted') {
       Alert.alert('Location access needed', 'Enable location access in Settings to track an activity.');
@@ -107,7 +116,10 @@ export default function ActivityScreen() {
         }]);
       },
     );
-    tickRef.current = setInterval(() => setElapsedSecs(s => s + 1), 1000);
+    // From the clock, not by counting ticks: iOS pauses JS timers while the
+    // phone is locked in a pocket, which froze the time and pace mid-run.
+    const t0 = Date.now();
+    tickRef.current = setInterval(() => setElapsedSecs(Math.round((Date.now() - t0) / 1000)), 1000);
 
     // Best-effort background tracking alongside the foreground subscription
     // above — if permission is denied or the OS task fails to start, the
@@ -119,6 +131,7 @@ export default function ActivityScreen() {
     subRef.current?.remove();
     subRef.current = null;
     if (tickRef.current) clearInterval(tickRef.current);
+    tickRef.current = null;
     setRecording(false);
     await stopBackgroundLocation();
     const bgWaypoints = await drainBackgroundWaypoints();

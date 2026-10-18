@@ -7,11 +7,11 @@
 // the green today-dot is the one accent. Red is reserved for destructive.
 //
 // Type system — three faces, each with one job:
-//   DOT  London Underground Heavy (SIL OFL, petykowski) — the "bold stuff".
-//        Arrival-board dot-matrix: screen titles, section labels, tab labels,
-//        board rows (next task, reps), category tags. Covers A–Z a–z 0–9 and
-//        - ' , * ( ) : only — no . / % ? ! — so never set prose or decimals in it.
-//   NUM  Doto (SIL OFL) — dot-matrix numerals that need . / % (72.5 KG, 3/5).
+//   DOT  Puck Dot — London Underground Heavy (SIL OFL, petykowski) with
+//        . · / % × + ! added in its own dot grid (scripts/fonts/puck-dot.py),
+//        renamed as the OFL requires. The "bold stuff" and every number:
+//        screen titles, section labels, tab labels, values (72.5 KG, 3/5, 75%).
+//        Still no ? or prose punctuation, so sentences stay MONO.
 //   MONO Share Tech Mono (SIL OFL) — everything read as a sentence; same
 //        face the puck uses for its small text.
 // The puck's Ndot57 is NOT used: its embedded licence restricts it to
@@ -63,19 +63,15 @@ export const MTN = {
 };
 
 export const F = {
-  dot:      'LondonUnderground_Heavy',
-  num:      'Doto_900Black',
-  numLight: 'Doto_700Bold',
+  dot:      'PuckDot_Heavy',
   mono:     'ShareTechMono_400Regular',
 };
 
-/** Dot-matrix face for a displayed value: the Underground face unless the
- *  string needs a glyph it lacks (. / % ×), then Doto at a size bumped to
- *  match the Underground cap height (Doto digits are 0.70 em vs 0.83 em). */
-export function numFace(value: string | number, size: number) {
-  return /[.\/%×]/.test(String(value))
-    ? { fontFamily: F.num, fontSize: Math.round(size * 1.18) }
-    : { fontFamily: F.dot, fontSize: size };
+/** Dot-matrix face for a displayed value. One face for every value now that
+ *  Puck Dot has . / % × — a number never changes font as it counts. (Doto,
+ *  used before for decimals, drew its full stop as a plus: 84.1 read 84+1.) */
+export function numFace(_value: string | number, size: number) {
+  return { fontFamily: F.dot, fontSize: size };
 }
 
 // Type scale. Dot sizes are for numerals/headings; anything a user has to
@@ -83,7 +79,7 @@ export function numFace(value: string | number, size: number) {
 export const T = {
   hero:    { fontFamily: F.dot,  fontSize: 44, color: C.ink, letterSpacing: 1 },
   title:   { fontFamily: F.dot,  fontSize: 30, color: C.ink, letterSpacing: 1 },
-  num:     { fontFamily: F.num,  fontSize: 24, color: C.ink },
+  num:     { fontFamily: F.dot,  fontSize: 20, color: C.ink },
   eyebrow: { fontFamily: F.mono, fontSize: 11, color: C.dim, letterSpacing: 2 },
   body:    { fontFamily: F.mono, fontSize: 14, color: C.ink },
   small:   { fontFamily: F.mono, fontSize: 12, color: C.dim },

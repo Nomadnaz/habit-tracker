@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   avatar: { width: 8, height: 8, backgroundColor: C.hot, marginTop: 7 },
   theirsText: { fontFamily: F.mono, fontSize: 15, color: C.ink, lineHeight: 22 },
   statRow: { flexDirection: 'row', gap: 20, marginTop: 12 },
-  statVal: { fontFamily: F.num, fontSize: 26, color: C.hot },
+  statVal: { fontFamily: F.dot, fontSize: 22, color: C.hot },
   statUnit: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 2 },
   pending: { marginTop: 10, borderWidth: 1, borderColor: C.hot, borderRadius: 14, padding: 12, gap: 4 },
   pendingType: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2 },

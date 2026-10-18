@@ -120,7 +120,7 @@ const st = StyleSheet.create({
   bulb: { width: BULB, height: BULB, borderRadius: BULB / 2, borderWidth: 1, marginBottom: 9, alignItems: 'center', justifyContent: 'center' },
   bulbCore: { width: 10, height: 10, borderRadius: 5 },
   reading: { position: 'absolute', right: W + 10, top: 6, alignItems: 'flex-end' },
-  readNum: { fontFamily: F.num, fontSize: 26, color: C.hot },
+  readNum: { fontFamily: F.dot, fontSize: 22, color: C.hot },
   readLabel: { fontFamily: F.dot, fontSize: 9, color: C.alert, letterSpacing: 2 },
   readSub: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1.5, marginTop: 2 },
 });

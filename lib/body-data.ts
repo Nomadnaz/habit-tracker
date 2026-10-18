@@ -251,7 +251,7 @@ async function loadCore(): Promise<CoreBodyData> {
 
 export async function loadBodyData(): Promise<BodyData> {
   const core = await loadCore();
-  const [trainingHistory, headlineLifts, leastTrainedMuscle, nextSession, sleepFromLog, protein, streak] =
+  const [trainingHistory, headlineLifts, leastTrainedMuscle, nextSession, sleepFromLog, protein, streak, doneCount] =
     await Promise.all([
       computeTrainingHistory(),
       computeHeadlineLifts(),
@@ -260,21 +260,25 @@ export async function loadBodyData(): Promise<BodyData> {
       computeSleepMins(),
       computeProteinToday(),
       computeGymStreak(),
+      getDoneLog().then(l => l.length),
     ]);
   const strengthTrend = computeStrengthTrendFromLifts(headlineLifts);
 
   return {
     ...core,
     stepsThisYear: stepsThisYearFromHistory(core.stepsHistory),
+    // The server count only refreshes after the next logged workout; the
+    // phone's done log (what the streak reads) is never behind it.
+    workoutsTotal: Math.max(core.workoutsTotal, doneCount),
     streak,
     nextSession,
     trainingHistory,
     headlineLifts,
     leastTrainedMuscle,
     strengthTrend,
-    // Prefer the explicit sleep-domain log; fall back to whatever Apple
-    // Health last synced onto the core blob; else honest null.
-    sleepMins: sleepFromLog ?? core.sleepMins,
+    // The wearable's staged night first (what TODAY's twin reads), then the
+    // explicit sleep-domain log, then whatever Health last synced; else null.
+    sleepMins: (core.vitals?.sleep[dateKey(new Date())]?.asleep || null) ?? sleepFromLog ?? core.sleepMins,
     proteinTodayG: protein.today,
     proteinGoalG: protein.goal,
   };

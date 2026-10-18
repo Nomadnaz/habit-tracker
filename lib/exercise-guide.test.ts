@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { guideFor, patternOf, equipmentOf, goalOf, videoUrl } from './exercise-guide';
+import { guideFor, patternOf, equipmentOf, goalOf, videoUrl, nextWeight, snapWeight, shiftReps } from './exercise-guide';
 import { CATALOGUE } from './muscle-recovery';
 
 const me = { goal: 'size' as const, bodyKg: 80, heightCm: 180, sex: 'Male' };
@@ -70,5 +70,36 @@ describe('difficulty', () => {
     expect(['EASY', 'MODERATE']).toContain(difficulty(g.startKg!, g.reps[1], e.kg)!.word);
     // A seeded 100 kg bench is not.
     expect(['MAX', 'TOO HEAVY']).toContain(difficulty(100, g.reps[1], e.kg)!.word);
+  });
+});
+
+describe('steppers', () => {
+  const lb = (kg: number) => Math.round(kg * 2.2046226218 * 100) / 100;
+  it('moves a bar by 2.5 kg and lands off-grid weights on the grid first', () => {
+    expect(nextWeight(60, 1, 'barbell', 'metric')).toBe(62.5);
+    expect(nextWeight(62.5, -1, 'barbell', 'metric')).toBe(60);
+    expect(nextWeight(61.3, 1, 'barbell', 'metric')).toBe(62.5);
+    expect(nextWeight(61.3, -1, 'barbell', 'metric')).toBe(60);
+    expect(nextWeight(60, 4, 'barbell', 'metric')).toBe(70);
+    expect(nextWeight(1, -1, 'barbell', 'metric')).toBe(0);
+  });
+  it('steps dumbbells 1 kg to 10, 2 kg after — the same either way', () => {
+    expect([8, 9, 10, 12].map(k => nextWeight(k, 1, 'dumbbell', 'metric'))).toEqual([9, 10, 12, 14]);
+    expect([14, 12, 10, 9].map(k => nextWeight(k, -1, 'dumbbell', 'metric'))).toEqual([12, 10, 9, 8]);
+    expect(nextWeight(11, -1, 'dumbbell', 'metric')).toBe(10);
+  });
+  it('steps 5 lb in imperial, round trip clean', () => {
+    const k45 = nextWeight(40 / 2.2046226218, 1, 'barbell', 'imperial');
+    expect(lb(k45)).toBe(45);
+    expect(lb(nextWeight(k45, -1, 'barbell', 'imperial'))).toBe(40);
+    expect(lb(nextWeight(20, 1, 'barbell', 'imperial'))).toBe(45); // 44.09 lb → 45
+    expect(lb(snapWeight(22.5, 'barbell', 'imperial'))).toBe(50);
+  });
+  it('shifts a rep range whole and never collapses it', () => {
+    expect(shiftReps('8-12', 1)).toBe('9-13');
+    expect(shiftReps('2-6', -3)).toBe('1-5');
+    expect(shiftReps('1-5', -1)).toBe('1-5');
+    expect(shiftReps('12', -1)).toBe('11');
+    expect(shiftReps('46-50', 1)).toBe('46-50');
   });
 });

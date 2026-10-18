@@ -30,11 +30,11 @@ import {
 } from '@/lib/coach';
 import { bestE1rms, ensureFocusTemplate, exerciseFor, loadCoach, recalibrateStarterLifts } from '@/lib/routine';
 import { musclesFor, type Session } from '@/lib/muscle-recovery';
-import { difficulty, e1rmFor, equipmentOf, guideFor, patternOf, type Guide } from '@/lib/exercise-guide';
+import { difficulty, e1rmFor, equipmentOf, guideFor, nextWeight, patternOf, repRange, shiftReps, snapWeight, type Guide } from '@/lib/exercise-guide';
 import { Stepper } from '@/components/train/Stepper';
 import { DifficultyBar } from '@/components/train/DifficultyBar';
 import { getBodyProfile, latestWeight, loadBodyData, type BodyProfile } from '@/lib/body-data';
-import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
+import { useUnitPreference, formatWeightFromKg, formatWeightWithUnit } from '@/lib/unit-preference';
 import { bleBridge } from '@/lib/ble-bridge';
 import { toDateKey } from '@/lib/dateKey';
 import { C, F, SPRING } from '@/lib/theme';
@@ -50,13 +50,6 @@ type Row = { jid: string; ex: Exercise };
 /** A focus, or one of your own templates by id. */
 type Sel = { focus: Focus } | { templateId: string };
 
-/** "8-10" → [8, 10]; "12" → [12, 12]. */
-const repRange = (reps: string): [number, number] => {
-  const [a, b] = reps.split('-').map(x => parseInt(x, 10));
-  const lo = Number.isFinite(a) ? a : 10;
-  return [lo, Number.isFinite(b) ? b : lo];
-};
-const repText = ([a, b]: [number, number]) => (a === b ? `${a}` : `${a}-${b}`);
 const topMuscles = (ex: { name: string; muscleGroups: Exercise['muscleGroups'] }) =>
   [...new Set(Object.entries(musclesFor(ex.name, ex.muscleGroups)).sort((a, b) => b[1] - a[1]).map(([m]) => muscleWord(m)))].slice(0, 2);
 
@@ -430,13 +423,12 @@ function LiftChip({
   const pop = useRef(new Animated.Value(0.92)).current;
   useEffect(() => { Animated.spring(pop, { toValue: 1, ...SPRING.pop }).start(); }, []);
   const kit = equipmentOf(ex.name, patternOf(ex.name));
-  const step = unit === 'imperial' ? 2.268 : kit === 'dumbbell' ? (ex.weightKg < 10 ? 1 : 2) : 2.5;
   const range = repRange(ex.reps);
   const weight = ex.weightKg > 0 ? formatWeightWithUnit(ex.weightKg, unit) : 'BODYWEIGHT';
   const e1 = e1rmFor(guide, bestE1rm);
   const diff = e1 && ex.weightKg > 0 ? difficulty(ex.weightKg, range[1], e1.kg) : null;
   const recReps = `${guide.reps[0]}-${guide.reps[1]}`;
-  const recKg = guide.startKg ?? 0;
+  const recKg = snapWeight(guide.startKg ?? 0, kit, unit);
   const onRec = ex.sets === guide.sets && ex.reps === recReps && Math.abs(ex.weightKg - recKg) < 0.01;
 
   return (
@@ -505,9 +497,9 @@ function LiftChip({
           </View>
           <View style={st.steppers}>
             <Stepper label="SETS" value={`${ex.sets}`} onStep={d => onPatch({ sets: Math.max(1, Math.min(10, ex.sets + d)) })} />
-            <Stepper label="REPS" value={ex.reps} onStep={d => onPatch({ reps: repText([Math.max(1, range[0] + d), Math.max(1, range[1] + d)]) })} />
-            <Stepper label="WEIGHT" unit={unit === 'imperial' ? 'LB' : 'KG'} value={ex.weightKg > 0 ? formatWeightWithUnit(ex.weightKg, unit).replace(/\s*(KG|LB)$/i, '') : '0'}
-              onStep={d => onPatch({ weightKg: Math.max(0, Math.round((ex.weightKg + d * step) * 100) / 100) })} />
+            <Stepper label="REPS" value={ex.reps} onStep={d => onPatch({ reps: shiftReps(ex.reps, d) })} />
+            <Stepper label={unit === 'imperial' ? 'WEIGHT LB' : 'WEIGHT KG'} value={formatWeightFromKg(ex.weightKg, unit)}
+              onStep={d => onPatch({ weightKg: nextWeight(ex.weightKg, d, kit, unit) })} />
           </View>
           <View style={st.actions}>
             <Pressable onPress={onPuck} style={({ pressed }) => [st.action, st.actionHot, pressed && { opacity: 0.8 }]}>

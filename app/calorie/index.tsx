@@ -155,7 +155,7 @@ export default function CalorieScreen() {
               {recent.map(m => (
                 <TouchableOpacity key={m.id} style={styles.chip} onPress={() => quickAdd(m)} activeOpacity={0.8}>
                   <Text style={styles.chipName} numberOfLines={1}>{m.name}</Text>
-                  <Text style={styles.chipKcal}>{m.calories} KCAL</Text>
+                  <Text style={styles.chipKcal}>{m.calories.toLocaleString('en-US')} KCAL</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -172,7 +172,7 @@ export default function CalorieScreen() {
             <View key={type} style={styles.group}>
               <View style={styles.groupHead}>
                 <Text style={styles.groupTitle}>{type.toUpperCase()}</Text>
-                <Text style={styles.groupKcal}>{groupKcal} KCAL</Text>
+                <Text style={styles.groupKcal}>{groupKcal.toLocaleString('en-US')} KCAL</Text>
               </View>
               {group.map(m => (
                 <Pressable key={m.id} style={styles.mealRow} onPress={() => openEdit(m)}>

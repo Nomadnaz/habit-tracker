@@ -21,7 +21,6 @@ import { Session } from '@supabase/supabase-js';
 
 // Our custom fonts. Pixeloid Sans is a pixel font used throughout the app.
 import { useFonts } from 'expo-font';
-import { Doto_700Bold, Doto_900Black } from '@expo-google-fonts/doto';
 import { ShareTechMono_400Regular } from '@expo-google-fonts/share-tech-mono';
 import { C } from '@/lib/theme';
 
@@ -130,9 +129,7 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     PixeloidSans_400Regular: require('@/assets/fonts/PixeloidSans.ttf'),
     PixeloidSans_700Bold: require('@/assets/fonts/PixeloidSans-Bold.ttf'), // receipt printer only
-    LondonUnderground_Heavy: require('@/assets/fonts/LondonUnderground-Heavy.ttf'), // SIL OFL, see LondonUnderground-OFL.txt
-    Doto_700Bold,
-    Doto_900Black,
+    PuckDot_Heavy: require('@/assets/fonts/PuckDot-Heavy.ttf'), // London Underground Heavy + . · / % × + ! (SIL OFL, see LondonUnderground-OFL.txt)
     ShareTechMono_400Regular,
   });
 
@@ -267,7 +264,7 @@ export default function RootLayout() {
         <Stack.Screen name="lift-receipt" />
         <Stack.Screen name="steps" />
         <Stack.Screen name="focus-timer" />
-        <Stack.Screen name="calorie" />
+        <Stack.Screen name="calorie/index" />
         <Stack.Screen name="ble-bridge" />
         <Stack.Screen name="pair-device" />
         <Stack.Screen name="modals/sleep-detail" options={{ presentation: 'modal' }} />

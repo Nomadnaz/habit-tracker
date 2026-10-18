@@ -17,13 +17,14 @@ import {
 } from '@/lib/body-data';
 import { getDoneLog, getExercises, getTemplates, getTemplateExercises } from '@/lib/workout-data';
 import { getActivitiesInRange, getRecentActivities, formatDistance } from '@/lib/activity-data';
-import { loadCoach, saveRoutine, type CoachState } from '@/lib/routine';
+import { loadCoach, recalibrateStarterLifts, saveRoutine, type CoachState } from '@/lib/routine';
 import { focusOfName, FOCUS_LINEUP, muscleWord, planSession, type Routine } from '@/lib/coach';
 import { ActionSquare, RunGlyph, WeekDots } from '@/components/train/ActionSquare';
 import { CoachCard } from '@/components/train/CoachCard';
 import { RoutineCard } from '@/components/train/RoutineCard';
 
 import { C, F } from '@/lib/theme';
+import { formatWeightWithUnit } from '@/lib/unit-preference';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function formatBig(n: number): string {
@@ -53,6 +54,9 @@ export default function TrainScreen() {
   const refreshCoach = useCallback(async () => {
     const c = await loadCoach();
     setCoach(c);
+    // Starter lifts still on placeholder weights get real ones here too, or
+    // STRENGTH shows the placeholder (100 KG bench) until LOG WORKOUT opens.
+    if (await recalibrateStarterLifts(c.sessions)) void loadBodyData().then(setData);
     const live = (await getTemplates()).filter(t => !t.isArchived);
     const t = live.find(x => focusOfName(x.name) === c.today.focus);
     const lib = await getExercises();
@@ -110,6 +114,7 @@ export default function TrainScreen() {
   }
 
   const steps = todaySteps(data);
+  const top = [...data.headlineLifts].filter(l => l.history.length).sort((x, y) => y.topSetKg - x.topSetKg)[0];
   const square = Math.floor((width - 32 - 10) / 2);
   const today = coach?.today;
   const todayIdx = (new Date().getDay() + 6) % 7;
@@ -177,13 +182,17 @@ export default function TrainScreen() {
           <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => router.push('/strength')}>
             <MaterialCommunityIcons name="dumbbell" size={22} color={C.ink} />
             <Text style={styles.metricLabel}>TOP LIFT</Text>
-            {data.headlineLifts.length > 0 ? (
+            {/* Only a lift you've logged a PB on — a starter's planned weight isn't a top lift. */}
+            {top ? (
               <>
-                <Text style={styles.metricValue}>{data.headlineLifts[0].topSetKg}KG</Text>
-                <Text style={styles.metricSub}>{data.headlineLifts[0].name}</Text>
+                <Text style={styles.metricValue}>{formatWeightWithUnit(top.topSetKg)}</Text>
+                <Text style={styles.metricSub}>{top.name}</Text>
               </>
             ) : (
-              <Text style={styles.metricValue}>—</Text>
+              <>
+                <Text style={styles.metricValue}>—</Text>
+                <Text style={styles.metricSub}>NO PBS YET</Text>
+              </>
             )}
           </TouchableOpacity>
 
@@ -235,7 +244,7 @@ const styles = StyleSheet.create({
 
   metricCard: { flex: 1, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12, gap: 4 },
   metricLabel: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5, marginTop: 4 },
-  metricValue: { fontFamily: F.num, fontSize: 20, color: C.ink },
+  metricValue: { fontFamily: F.dot, fontSize: 17, color: C.ink },
   metricSub: { fontFamily: F.mono, fontSize: 11, color: C.dim },
   metricSubTiny: { fontFamily: F.mono, fontSize: 11, color: C.dim },
 });

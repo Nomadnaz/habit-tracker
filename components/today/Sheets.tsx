@@ -324,7 +324,7 @@ const st = StyleSheet.create({
   you: { flexDirection: 'row', gap: 8 },
   field: { flex: 1, borderWidth: 1, borderColor: C.lineHi, borderRadius: 12, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4, backgroundColor: C.raised },
   fieldWord: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1.2 },
-  fieldInput: { fontFamily: F.num, fontSize: 20, color: C.hot, paddingVertical: 2 },
+  fieldInput: { fontFamily: F.dot, fontSize: 17, color: C.hot, paddingVertical: 2 },
   sexKey: { flex: 1, height: 34, borderWidth: 1, borderColor: C.lineHi, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.raised },
   setKey: { height: 50, borderRadius: 16, backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
   setText: { fontFamily: F.dot, fontSize: 14, color: C.onHot, letterSpacing: 3 },

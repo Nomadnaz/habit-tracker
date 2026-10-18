@@ -49,6 +49,9 @@ export default function ProgressScreen() {
   }
 
   const earnedCount = BADGES.filter(b => earned.includes(b.id)).length;
+  // Nothing ever adds to cumulative_stats.total_steps; the day-by-day history
+  // on the phone (Health + tracked) is the real count.
+  const allSteps = Math.max(stats.total_steps, Object.values(body.stepsHistory).reduce((t, n) => t + n, 0));
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
@@ -85,7 +88,7 @@ export default function ProgressScreen() {
 
         <Text style={[s.sectionLabel, s.sectionLabelSpaced]}>ALL-TIME STATS</Text>
         <View style={s.card}>
-          <StatRow label="STEPS" value={stats.total_steps.toLocaleString()} />
+          <StatRow label="STEPS" value={allSteps.toLocaleString('en-US')} />
           <StatRow label="WALKED" value={km(stats.total_distance_walked_m)} />
           <StatRow label="RUN" value={km(stats.total_distance_run_m)} />
           <StatRow label="GYM SESSIONS" value={String(stats.total_gym_sessions)} />

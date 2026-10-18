@@ -376,7 +376,7 @@ const st = StyleSheet.create({
 
   readout: { position: 'absolute', left: 10, top: 8 },
   readRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  readBig: { fontFamily: F.num, fontSize: 20, color: C.ink },
+  readBig: { fontFamily: F.dot, fontSize: 17, color: C.ink },
   readUnit: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1 },
   readSub: { fontFamily: F.mono, fontSize: 9, color: C.dim, letterSpacing: 0.5, marginTop: 1 },
   north: { position: 'absolute', right: 10, top: 9, alignItems: 'center', gap: 2 },

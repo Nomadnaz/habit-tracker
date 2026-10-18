@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   reply: { fontFamily: F.mono, fontSize: 18, color: C.ink, textAlign: 'center', lineHeight: 26 },
   chips: { flexDirection: 'row', gap: 18, marginTop: 26, flexWrap: 'wrap', justifyContent: 'center' },
   chip: { alignItems: 'center' },
-  chipValue: { fontFamily: F.num, fontSize: 34, color: C.hot },
+  chipValue: { fontFamily: F.dot, fontSize: 29, color: C.hot },
   chipUnit: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2, marginTop: 2 },
   hint: { fontFamily: F.dot, fontSize: 11, color: C.faint, letterSpacing: 3, textAlign: 'center', marginBottom: 56 },
   footer: { alignItems: 'center' },

@@ -257,8 +257,8 @@ export function buildTwin(input: TwinInput): Twin {
     const yLift = input.sessions.some(s => s.date === yKey && isLift(s)) ? 'full' as Focus : null;
     const yBurn = burnOf(b, input.steps[yKey] ?? steps.value, yLift, input.runsKm[yKey] ?? 0) * (1 + energy0);
     const over = input.eaten[yKey] - yBurn;
-    if (over > 300) fuelLines.push({ label: `${fmt(over)} OVER YESTERDAY`, delta: -roundTo(Math.min(300, over / 2), 10) });
-    else if (cutting && over < -500) fuelLines.push({ label: `${fmt(-over)} UNDER YESTERDAY`, delta: roundTo(Math.min(200, -over / 3), 10) });
+    if (over > 300) fuelLines.push({ label: `ATE ${fmt(over)} OVER YESTERDAY`, delta: -roundTo(Math.min(300, over / 2), 10) });
+    else if (cutting && over < -500) fuelLines.push({ label: `ATE ${fmt(-over)} UNDER YESTERDAY`, delta: roundTo(Math.min(200, -over / 3), 10) });
   }
   const trend = weightTrend(input.weights, now);
   if (trend) {
