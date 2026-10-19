@@ -431,42 +431,71 @@ export async function connectAndSyncAppleHealth(historyDays = 56, vitals = false
   }
 }
 
-const AUTO_SYNC_MIN_INTERVAL_MS = 15 * 60 * 1000; // 15 min -- avoid a HealthKit round trip on every glance at the app
+const AUTO_SYNC_MIN_INTERVAL_MS = 20 * 1000; // a burst of watch samples is one sync, not ten
+const AUTO_SYNC_POLL_MS = 2 * 60 * 1000;     // open-app fallback if an observer never fires
+
+// What a watch writes through the day. HealthKit fires these (once on setup,
+// then whenever the watch's batch lands on the phone) — in the background too,
+// which the background-delivery entitlement allows. Sleep isn't observable
+// here (the library maps it to workouts); it arrives with the next sync.
+const OBSERVED = ['HeartRate', 'HeartRateVariabilitySDNN', 'RestingHeartRate', 'StepCount', 'ActiveEnergyBurned', 'Workout'];
+let observing = false;
+
+function observeHealth(kit: HealthKitModule, onNew: () => void): void {
+  if (observing || typeof kit.setObserver !== 'function') return;
+  observing = true;
+  const { NativeEventEmitter, NativeModules } = require('react-native');
+  const events = new NativeEventEmitter(NativeModules.AppleHealthKit);
+  // Listen first: the native side drops events until JS has a listener.
+  for (const type of OBSERVED) events.addListener(`healthKit:${type}:sample`, onNew);
+  for (const type of OBSERVED) kit.setObserver({ type });
+}
 
 /**
- * Keeps today's steps/activity fresh without the user having to remember to
- * hit a manual sync button. Companion HUD's HUB screen reads steps_today
- * from device-state, which reads it from Supabase's daily_steps table,
- * which previously only ever got a row when connectAndSyncAppleHealth() was
- * called from the onboarding connect screen or a manual gym-tab sync --
- * meaning it went stale the moment the user stopped tapping that button
- * (confirmed on 2026-09-04: the newest row was over a month old). This re-
- * syncs automatically on launch and every foreground, but only if the user
- * has already connected Health at least once -- it never triggers the
- * permission prompt itself. historyDays=2 keeps each auto-sync cheap (only
- * today + yesterday need refreshing); the deep 56-day pull stays a manual,
- * explicit action. Mirrors lib/ble-bridge.ts's useBleAutoConnect. */
+ * Keeps everything Health has — the watch's heart rate, HRV, steps, workouts,
+ * sleep — in the app without a sync button. Companion HUD's HUB screen reads
+ * steps_today from Supabase's daily_steps table, which this also feeds. Syncs
+ * on launch, on every return to the app, whenever HealthKit says a new sample
+ * landed, and every 2 min while the app is open; screens hear about it via
+ * body-data's onHealthSync. Only once Health is connected — it never triggers
+ * the permission prompt itself. historyDays=2 keeps each one cheap (only
+ * today + yesterday's steps); the deep 56-day pull runs on a tab's focus. */
 export function useAppleHealthAutoSync(): void {
   const lastSyncRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    let running = false;
+    let pending: ReturnType<typeof setTimeout> | null = null;
 
     async function trySync() {
       if (!isAppleHealthSupported()) return;
-      if (Date.now() - lastSyncRef.current < AUTO_SYNC_MIN_INTERVAL_MS) return;
+      const wait = lastSyncRef.current + AUTO_SYNC_MIN_INTERVAL_MS - Date.now();
+      if (wait > 0) {
+        // Too soon after the last one (or during it): run once when the gap
+        // is up, so a sample landing mid-read still comes through.
+        if (!pending) pending = setTimeout(() => { pending = null; void trySync(); }, wait);
+        return;
+      }
+      if (running) return;
       const { loadBodyData } = await import('./body-data');
       const data = await loadBodyData();
       if (cancelled || !data.appleHealthConnected) return;
+      running = true;
       lastSyncRef.current = Date.now();
-      await connectAndSyncAppleHealth(2);
+      try {
+        await connectAndSyncAppleHealth(2);
+        const kit = getHealthKit();
+        if (kit) observeHealth(kit, () => void trySync());
+      } finally { running = false; }
     }
 
     void trySync();
+    const poll = setInterval(() => { if (AppState.currentState === 'active') void trySync(); }, AUTO_SYNC_POLL_MS);
     const sub = AppState.addEventListener('change', next => {
       if (next === 'active') void trySync();
     });
-    return () => { cancelled = true; sub.remove(); };
+    return () => { cancelled = true; clearInterval(poll); if (pending) clearTimeout(pending); sub.remove(); };
   }, []);
 }
 

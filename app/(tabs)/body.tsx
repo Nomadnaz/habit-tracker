@@ -47,7 +47,7 @@ import { toDateKey } from '@/lib/dateKey';
 import { Board, BoardRow } from '@/components/Board';
 import { WaterSheet, WeightSheet } from '@/components/BodyLogSheets';
 import {
-  loadBodyData, pullRemoteBody, refreshAppleHealthIfConnected,
+  loadBodyData, onHealthSync, pullRemoteBody, refreshAppleHealthIfConnected,
   todaySteps, todayWaterMl, latestWeight, formatSleep, getBodyProfile, type BodyData, type BodyProfile,
 } from '@/lib/body-data';
 import { connectAndSyncAppleHealth, probeHeart } from '@/lib/apple-health';
@@ -114,9 +114,11 @@ export default function BodyScreen() {
   useFocusEffect(useCallback(() => {
     // Water/weight logged by the voice device land server-side; pull, then re-read.
     void pullRemoteBody().then(found => { if (found) loadBodyData().then(setBody); });
+    // Every Health sync (this one, a watch sample landing, the 2-min poll) re-renders.
+    const off = onHealthSync(setBody);
     loadBodyData().then(d => {
       setBody(d);
-      if (d.appleHealthConnected) void refreshAppleHealthIfConnected().then(u => { if (u) setBody(u); });
+      if (d.appleHealthConnected) void refreshAppleHealthIfConnected();
     });
     void Promise.all([getMealsForDate(todayKey()), getTargets(), getTodayMood()]).then(([meals, t, mood]) =>
       setVitals({ kcal: dailyTotals(meals).calories, kcalGoal: t.calories, mood: mood?.moodScore ?? null }));
@@ -137,7 +139,7 @@ export default function BodyScreen() {
       setNext({ title: today.title, when: today.when, exercises: keep, resting: rest.map(r => ({ name: r.lift.name, muscle: muscleWord(r.muscle), pct: r.pct })) });
     })().catch(() => {});
     setFocused(true);
-    return () => setFocused(false);
+    return () => { off(); setFocused(false); };
   }, []));
 
   async function syncAppleHealth() {

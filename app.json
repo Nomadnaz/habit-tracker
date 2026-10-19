@@ -25,7 +25,10 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Hold the dot to speak a log or ask a question \u2014 audio is transcribed, then discarded."
       },
-      "bundleIdentifier": "com.nova.habittracker"
+      "bundleIdentifier": "com.nova.habittracker",
+      "entitlements": {
+        "com.apple.developer.healthkit.background-delivery": true
+      }
     },
     "android": {
       "adaptiveIcon": {

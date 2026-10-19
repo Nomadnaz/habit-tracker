@@ -300,11 +300,22 @@ export async function saveBodyData(data: BodyData): Promise<void> {
  *  the meantime, and a pull saving its older copy undid the heart readings. */
 export async function applyHealthSync(sync: AppleHealthSyncResult): Promise<BodyData> {
   const { mergeAppleHealthIntoBodyData } = await import('./apple-health');
-  return withStorageLock(BODY_KEY, async () => {
-    const merged = mergeAppleHealthIntoBodyData(await loadBodyData(), sync);
-    await save(merged);
-    return merged;
+  const merged = await withStorageLock(BODY_KEY, async () => {
+    const next = mergeAppleHealthIntoBodyData(await loadBodyData(), sync);
+    await save(next);
+    return next;
   });
+  for (const fn of healthListeners) fn(merged);
+  return merged;
+}
+
+const healthListeners = new Set<(data: BodyData) => void>();
+
+/** Hear every Health sync — background, observer or focus — so an open screen
+ *  shows the watch's newest reading without being left and re-entered. */
+export function onHealthSync(fn: (data: BodyData) => void): () => void {
+  healthListeners.add(fn);
+  return () => { healthListeners.delete(fn); };
 }
 
 /** Sync from Apple Health when already connected (no permission dialog). */

@@ -21,7 +21,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { C, F, SPRING, numFace } from '@/lib/theme';
-import { addWater, logWeight, pullRemoteBody, refreshAppleHealthIfConnected, saveBodyProfile } from '@/lib/body-data';
+import { addWater, logWeight, onHealthSync, pullRemoteBody, refreshAppleHealthIfConnected, saveBodyProfile } from '@/lib/body-data';
 import { cachedView, loadToday, setGoal, type TodayView } from '@/lib/twin-data';
 import { directive, goalWord, paceWord, type TwinGoal, type TwinInput } from '@/lib/twin';
 import { ALL_MODULES, DEFAULT_DECK, MODULES, getDeck, saveDeck, type ModuleId } from '@/lib/today-deck';
@@ -80,7 +80,9 @@ export default function TodayScreen() {
     void load();
     // Logged on the puck → server-side; Health → newer steps/sleep/HRV. Either one re-plans.
     void pullRemoteBody().then(found => { if (found) void load(); });
-    void refreshAppleHealthIfConnected().then(u => { if (u) void load(); });
+    void refreshAppleHealthIfConnected();
+    // Any Health sync while TODAY is open (watch sample, poll, this one) re-plans.
+    return onHealthSync(() => void load());
   }, [load]));
 
   useEffect(() => {
