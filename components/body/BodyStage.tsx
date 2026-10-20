@@ -23,7 +23,7 @@
 // muscle, redrawn only when something changes. React only re-renders for
 // the callout and the readouts' lines.
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, AppState } from 'react-native';
 import Svg, { Polyline, Rect } from 'react-native-svg';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -336,7 +336,9 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   // ── drawing ────────────────────────────────────────────────────────────
   const draw = () => {
     const S = glRef.current;
-    if (!S) return;
+    // No GPU work outside the foreground: a frame queued as the app left
+    // stalled expo-gl's queue and iOS killed the app (see patches/expo-gl).
+    if (!S || AppState.currentState !== 'active') return;
     const { gl, u } = S;
     const { look: lk, selPart: sp, zv: z, W: w, H: h, base: b } = live.current;
     const c = cam.current;
@@ -411,6 +413,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   };
   const step = () => {
     raf.current = null;
+    if (AppState.currentState !== 'active') return; // picked up again on return
     const now = Date.now();
     const dt = Math.min(0.05, (now - last.current) / 1000);
     last.current = now;
@@ -474,6 +477,12 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     hudLast.current = next;
     hudSet.current(next);
   };
+
+  // Back in the app → redraw and carry on where the loop stopped.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') { draw(); kick(); } });
+    return () => sub.remove();
+  }, []);
 
   // Back on the tab → pick the idle turn up again.
   useEffect(() => { if (active) { lastInput.current = Date.now(); kick(); } }, [active]);

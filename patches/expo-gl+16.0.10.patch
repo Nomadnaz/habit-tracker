@@ -1,0 +1,19 @@
+diff --git a/node_modules/expo-gl/ios/EXGLContext.mm b/node_modules/expo-gl/ios/EXGLContext.mm
+index 0cfc471..a07f572 100644
+--- a/node_modules/expo-gl/ios/EXGLContext.mm
++++ b/node_modules/expo-gl/ios/EXGLContext.mm
+@@ -91,8 +91,13 @@
+ - (void)onApplicationWillResignActive:(NSNotification *)notification
+ {
+   _appIsBackgrounded = YES;
+-  dispatch_sync(_glQueue, ^{
++  // Never block the main thread on the GL queue: a frame stuck waiting for the
++  // GPU while the app leaves the foreground hung this past iOS's 10 s
++  // scene-update watchdog (0x8BADF00D). Finish on the queue instead.
++  dispatch_async(_glQueue, ^{
++    [EAGLContext setCurrentContext:self->_eaglCtx];
+     glFinish();
++    [EAGLContext setCurrentContext:nil];
+   });
+ }
+ 
