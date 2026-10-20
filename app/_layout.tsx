@@ -259,6 +259,8 @@ export default function RootLayout() {
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="workout-select" />
+        <Stack.Screen name="workout-days" />
         <Stack.Screen name="workouts" />
         <Stack.Screen name="workout-detail" />
         <Stack.Screen name="lift-receipt" />

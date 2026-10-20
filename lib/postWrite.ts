@@ -17,7 +17,17 @@ import { writeObsidian as writeObsidianImpl } from './obsidian';
 export type Entity = 'task' | 'workout' | 'habit' | 'water' | 'weight' | 'sleep' | 'meal' | 'medication' | 'activity' | 'goal' | 'expense' | 'mood' | 'focus' | 'book' | 'movie';
 export type Action = 'create' | 'update' | 'delete';
 
+const writeListeners = new Set<(entity: Entity) => void>();
+
+/** Hear every domain write. The chat is an overlay, so a set logged from it
+ *  never refocuses BODY or TRAIN — they listen here to redraw instead. */
+export function onWrite(fn: (entity: Entity) => void): () => void {
+  writeListeners.add(fn);
+  return () => { writeListeners.delete(fn); };
+}
+
 export async function postWrite(entity: Entity, record: any, action: Action): Promise<void> {
+  for (const fn of writeListeners) fn(entity);
   // refreshWorkoutsTotal runs FIRST and is awaited on its own: checkBadges
   // (workouts_10/first_workout) reads the @body.workoutsTotal it just wrote
   // — running everything in one Promise.allSettled would race the two with

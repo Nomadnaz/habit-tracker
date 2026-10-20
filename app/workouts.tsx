@@ -56,7 +56,7 @@ const topMuscles = (ex: { name: string; muscleGroups: Exercise['muscleGroups'] }
 export default function LogWorkout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ focus?: string }>();
+  const params = useLocalSearchParams<{ focus?: string; templateId?: string }>();
   const { unitSystem } = useUnitPreference();
 
   const [today, setToday] = useState<Today | null>(null);
@@ -104,7 +104,7 @@ export default function LogWorkout() {
     await loadTemplate(id);
   }, [loadTemplate]);
 
-  // First open: the focus TRAIN sent, else the coach's pick.
+  // First open: what SELECT / TRAIN sent, else the coach's pick.
   useEffect(() => {
     void (async () => {
       const c = await loadCoach();
@@ -112,6 +112,8 @@ export default function LogWorkout() {
       setSessions(c.sessions);
       // Starter lifts still on placeholder numbers get real ones before anything shows.
       await recalibrateStarterLifts(c.sessions);
+      // A day picked on SELECT / WORKOUT DAYS, else the focus TRAIN sent, else the coach's pick.
+      if (params.templateId) { await choose({ templateId: params.templateId }); return; }
       const asked = FOCI.find(f => f === params.focus);
       await choose({ focus: asked ?? c.today.focus });
     })();

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { onWrite } from '@/lib/postWrite';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, F, SPRING, numFace } from '@/lib/theme';
@@ -116,6 +117,8 @@ export default function BodyScreen() {
     void pullRemoteBody().then(found => { if (found) loadBodyData().then(setBody); });
     // Every Health sync (this one, a watch sample landing, the 2-min poll) re-renders.
     const off = onHealthSync(setBody);
+    // A set logged from the chat overlay never refocuses this tab.
+    const offWrite = onWrite(e => { if (e === 'workout') void getTrainingSessions().then(setSessions).catch(() => {}); });
     loadBodyData().then(d => {
       setBody(d);
       if (d.appleHealthConnected) void refreshAppleHealthIfConnected();
@@ -139,7 +142,7 @@ export default function BodyScreen() {
       setNext({ title: today.title, when: today.when, exercises: keep, resting: rest.map(r => ({ name: r.lift.name, muscle: muscleWord(r.muscle), pct: r.pct })) });
     })().catch(() => {});
     setFocused(true);
-    return () => { off(); setFocused(false); };
+    return () => { off(); offWrite(); setFocused(false); };
   }, []));
 
   async function syncAppleHealth() {

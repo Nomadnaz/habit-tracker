@@ -288,6 +288,18 @@ export async function createTemplate(name: string, colour: string): Promise<Work
   return t;
 }
 
+export async function renameTemplate(id: string, name: string): Promise<void> {
+  const upper = name.trim().toUpperCase();
+  if (!upper) return;
+  const templates = await getTemplates();
+  await save(K.templates, templates.map(t => t.id === id ? { ...t, name: upper } : t));
+  bg(async () => {
+    const userId = await uid();
+    if (!userId) return;
+    await supabase.from('workout_templates').update({ name: upper }).eq('id', id).eq('user_id', userId);
+  });
+}
+
 export async function archiveTemplate(id: string): Promise<void> {
   const templates = await getTemplates();
   await save(K.templates, templates.map(t => t.id === id ? { ...t, isArchived: true } : t));

@@ -9,6 +9,7 @@ import { useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { onWrite } from '@/lib/postWrite';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import {
@@ -92,6 +93,8 @@ export default function TrainScreen() {
       }
     });
     void refreshCoach();
+    // A set logged from the chat overlay never refocuses this tab.
+    const offWrite = onWrite(e => { if (e === 'workout') void refreshCoach(); });
     void Promise.all([
       getRecentActivities(1),
       getActivitiesInRange(weekStart().toISOString(), new Date(Date.now() + 60_000).toISOString()),
@@ -101,6 +104,7 @@ export default function TrainScreen() {
       km: thisWeek.reduce((a, x) => a + x.distanceM, 0),
       runs: thisWeek.length,
     }))).catch(() => {});
+    return offWrite;
   }, [refreshCoach]));
 
   async function changeRoutine(r: Routine) {
@@ -148,7 +152,7 @@ export default function TrainScreen() {
             size={square} light index="02" eyebrow={today?.scheduled && !today.done ? 'TODAY' : 'LOG'} title="WORKOUT"
             sub={today ? `${today.title}${today.when !== 'TODAY' ? ` · ${today.when}` : ''}` : 'LOG A SESSION'}
             live={!!today?.scheduled && !today.done}
-            onPress={openLog}
+            onPress={() => router.push('/workout-select')}
           >
             <WeekDots counts={week.sets} todayIdx={todayIdx} w={square - 40} h={square * 0.42} />
           </ActionSquare>

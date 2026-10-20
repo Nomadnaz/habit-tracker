@@ -84,6 +84,29 @@ async function bestEstimated1RM(userId: string, exerciseId: string): Promise<num
   return Math.max(0, ...fromPbs, ...fromSets);
 }
 
+const normName = (s: string) => s.toLowerCase().replace(/^e-/, '').replace(/[_-]+/g, ' ').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+
+/** The phone's own exercise for whatever the model sent. ai-chat never gets
+ *  the exercise list, so exerciseId arrives as a name or a made-up slug
+ *  ("bench_press"); a set saved under that id was invisible to TRAIN and
+ *  recovery, which only know the phone's ids. Id, then name, then a new one. */
+async function localExercise(data: Record<string, unknown>): Promise<{ id: string; name: string }> {
+  const said = str(data.exerciseName) ?? str(data.exercise) ?? str(data.name) ?? str(data.exerciseId) ?? str(data.exercise_id);
+  const id = str(data.exerciseId) ?? str(data.exercise_id);
+  if (!said) throw new Error('Which exercise was that?');
+  const { getExercises } = await import('./workout-data');
+  const library = await getExercises();
+  const byId = id ? library.find(e => e.id === id) : undefined;
+  if (byId) return byId;
+  const target = normName(said);
+  const exact = library.filter(e => normName(e.name) === target);
+  if (exact.length === 1) return exact[0];
+  const near = library.filter(e => { const n = normName(e.name); return n.includes(target) || target.includes(n); });
+  if (near.length === 1) return near[0];
+  const { exerciseFor } = await import('./routine');
+  return exerciseFor(target.toUpperCase());
+}
+
 function priorityOf(v: unknown): Priority {
   const p = str(v)?.toUpperCase();
   return p === 'HIGH' || p === 'LOW' || p === 'MEDIUM' ? (p as Priority) : 'MEDIUM';
@@ -253,10 +276,11 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
     }
 
     case 'log_pb': {
-      const exerciseId = str(data.exerciseId) ?? str(data.exercise_id);
       const weightKg = numOrUndef(data.weightKg) ?? numOrUndef(data.weight_kg);
-      if (!exerciseId || weightKg === undefined) throw new Error('I need an exercise and a weight to log a PB.');
+      if (weightKg === undefined) throw new Error('I need an exercise and a weight to log a PB.');
       if (!userId) throw new Error('Not signed in.');
+      const ex = await localExercise(data);
+      const exerciseId = ex.id;
       const reps = numOrUndef(data.reps) ?? 1;
       const e1rm = estimated1RM(weightKg, reps);
       const prevBest = await bestEstimated1RM(userId, exerciseId);
@@ -274,17 +298,18 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
       const { error } = await supabase.from('pb_log').upsert(row, { onConflict: 'user_id,exercise_id,date' });
       if (error) throw new Error(error.message);
       await postWrite('workout', row, 'create');
-      return { summary: `Logged PB: ${exerciseId} ${weightKg}kg` };
+      return { summary: `Logged PB: ${ex.name} ${weightKg}kg` };
     }
 
     case 'log_set': {
-      const exerciseId = str(data.exerciseId) ?? str(data.exercise_id);
       const weightKg = numOrUndef(data.weightKg) ?? numOrUndef(data.weight_kg);
       const reps = numOrUndef(data.reps);
-      if (!exerciseId || weightKg === undefined || reps === undefined) {
+      if (weightKg === undefined || reps === undefined) {
         throw new Error('I need an exercise, a weight, and reps to log a set.');
       }
       if (!userId) throw new Error('Not signed in.');
+      const ex = await localExercise(data);
+      const exerciseId = ex.id;
       const date = resolveDateKey(data.date);
       const e1rm = estimated1RM(weightKg, reps);
       const setRow = {
@@ -313,7 +338,7 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
         if (!pbError) newPb = true;
       }
       await postWrite('workout', setRow, 'create');
-      return { summary: `Logged set: ${exerciseId} ${weightKg}kg x${reps}${newPb ? ' — new PB!' : ''}` };
+      return { summary: `Logged set: ${ex.name} ${weightKg}kg x${reps}${newPb ? ' — new PB!' : ''}` };
     }
 
     // The 7 cases below close a real gap (Code Audit v3, 2026-09-01):
