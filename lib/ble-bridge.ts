@@ -112,6 +112,44 @@ export interface BridgeState {
 type Listener = (state: BridgeState) => void;
 
 // ── Singleton manager ─────────────────────────────────────────────────────────
+
+/** The puck's BODY and FUEL pages (firmware screen_body.c / screen_fuel.c)
+ *  show what only the phone knows: the twin's targets, muscle recovery and
+ *  the watch's vitals. The server's snapshot has none of it, so it's merged
+ *  in here from TODAY's last computed view (lib/twin-data cachedView, null
+ *  once it's from another day). Compact on purpose: the whole snapshot has
+ *  to fit the firmware's 4 KB buffer.
+ *    t = targets  [kcal, protein g, water ml, steps, sleep min]
+ *    n = so far   [kcal, protein g, water ml, steps, sleep min, rhr, hrv, kg×10]
+ *    m = recovery % per group, lib/twin.ts GROUPS order
+ *        (chest back delts arms abs quads hams glutes calves) */
+async function withBodyBlock(json: string): Promise<string> {
+  try {
+    const { cachedView } = await import('@/lib/twin-data');
+    const { goalWord } = await import('@/lib/twin');
+    const v = await cachedView();
+    if (!v) return json;
+    const { twin: t, today, now } = v;
+    const r = (x: number | null | undefined) => (x == null || !isFinite(x) ? null : Math.round(x));
+    const body = {
+      goal: goalWord(t.goal.id),
+      eta: r(t.outlook.weeks),
+      plan: today.scheduled && !today.done ? today.focus.toUpperCase() : today.done ? 'DONE' : 'REST',
+      fresh: r(today.fresh),
+      t: [r(t.fuel.value), r(t.fuel.proteinG), r(t.water.value), r(t.steps.value), r(t.sleep.value)],
+      n: [r(now.kcal), r(now.proteinG), r(now.waterMl), r(now.steps), r(now.sleepMin), r(now.rhr), r(now.hrv),
+          now.weightKg == null ? null : Math.round(now.weightKg * 10)],
+      m: t.groups.map(g => Math.round(g.pct)),
+    };
+    const snap = JSON.parse(json);
+    snap.body = body;
+    return JSON.stringify(snap);
+  } catch (e: any) {
+    console.warn('[ble-bridge] body block skipped:', e?.message);
+    return json;
+  }
+}
+
 class BleBridgeManager {
   private manager: BleManager | null = null;
   private device: Device | null = null;
@@ -732,9 +770,10 @@ class BleBridgeManager {
     if (!this.device || this.syncInFlight) return;
     this.syncInFlight = true;
     try {
-      const json = await this._fetchSnapshot();
+      const raw = await this._fetchSnapshot();
       const device = this.device;
-      if (!json || !device) return;
+      if (!raw || !device) return;
+      const json = await withBodyBlock(raw);
 
       const bytes = new TextEncoder().encode(json);
       if (bytes.length > 4096) { // firmware SYNC_BUF_MAX — should never happen (~1-2KB)
@@ -816,6 +855,7 @@ class BleBridgeManager {
       const tabToCompanion: Record<string, string> = {
         HUB: 'habitCoach', TIMER: 'focus', TASKS: 'life', GYM: 'gym',
         HABITS: 'habitCoach', RUN: 'activity', BRAIN: 'habitCoach', LIFT: 'gym',
+        BODY: 'gym', FUEL: 'calorie',
       };
       const tab = String(action.tab ?? '');
       const mapped = tabToCompanion[tab];

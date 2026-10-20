@@ -32,6 +32,7 @@ const json = (body: unknown, status = 200) =>
 const TAB_TO_COMPANION: Record<string, string> = {
   HUB: 'habitCoach', TIMER: 'focus', TASKS: 'life', GYM: 'gym',
   HABITS: 'habitCoach', RUN: 'activity', BRAIN: 'habitCoach', LIFT: 'gym',
+  BODY: 'gym', FUEL: 'calorie',
 };
 
 // ── IMA ADPCM (mirrors main/adpcm.c and lib/adpcm.ts exactly) ───────────────
