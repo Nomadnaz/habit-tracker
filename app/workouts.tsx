@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, UIManager,
+  Alert, Animated, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, UIManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,7 +20,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import {
-  addExerciseToTemplate, createTemplate, getExercises, getJunctions, getTemplates, isDoneToday, markDoneToday,
+  addExerciseToTemplate, createTemplate, getDoneLog, getExercises, getJunctions, getTemplates, markDoneToday,
   removeExerciseFromTemplate, replaceExerciseInTemplate, unmarkDoneToday, updateExercise, getSetsForDay,
   type Exercise, type Focus, type WorkoutTemplate,
 } from '@/lib/workout-data';
@@ -33,6 +33,7 @@ import { musclesFor, type Session } from '@/lib/muscle-recovery';
 import { difficulty, e1rmFor, equipmentOf, guideFor, patternOf, repRange, snapWeight, type Guide } from '@/lib/exercise-guide';
 import { ValuePicker } from '@/components/train/ValuePicker';
 import { DifficultyBar } from '@/components/train/DifficultyBar';
+import { SessionBar } from '@/components/train/SessionBar';
 import { Dropdown } from '@/components/Dropdown';
 import { Reveal } from '@/components/Reveal';
 import { START_ACTION, SwipeRow } from '@/components/SwipeRow';
@@ -71,7 +72,9 @@ export default function LogWorkout() {
   const [custom, setCustom] = useState<WorkoutTemplate[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [library, setLibrary] = useState<Exercise[]>([]);
-  const [done, setDone] = useState(false);
+  /** Lifts ticked off today. Saved as today's done entry, the rest as its skip list, which is what recovery reads. */
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [cheer, setCheer] = useState(0);
   const [logged, setLogged] = useState<Record<string, number>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [swapping, setSwapping] = useState<string | null>(null);
@@ -94,7 +97,8 @@ export default function LogWorkout() {
     setCustom(templates.filter(t => !t.isArchived && focusOfName(t.name) == null));
     setLibrary(exs);
     setRows(list);
-    setDone(await isDoneToday(id));
+    const entry = (await getDoneLog()).find(e => e.templateId === id && e.date === toDateKey(new Date()));
+    setTicked(new Set(entry ? list.filter(r => !entry.skip?.includes(r.ex.id)).map(r => r.ex.id) : []));
     const day = toDateKey(new Date());
     const counts = await Promise.all(list.map(async r => [r.ex.id, (await getSetsForDay(r.ex.id, day)).length] as const));
     setLogged(Object.fromEntries(counts));
@@ -168,6 +172,8 @@ export default function LogWorkout() {
     // Only lifts whose muscles are recovered — unless you're searching for something specific.
     return (q ? base.filter(p => p.name.includes(q)) : base.filter(p => liftReady(p, sessions, at))).slice(0, q ? 20 : 14);
   }, [focus, library, rows, query, sessions, at]);
+  const tickedActive = active.filter(r => ticked.has(r.ex.id)).length;
+  const complete = active.length > 0 && tickedActive === active.length;
   const minutes = Math.round(active.reduce((a, r) => a + Math.max(1, r.ex.sets + (today?.setDelta ?? 0)), 0) * 2.5);
   const easy = (today?.setDelta ?? 0) < 0;
 
@@ -250,23 +256,32 @@ export default function LogWorkout() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
 
-  async function finish() {
+  /** Saves the ticks: none clears today's entry; otherwise every lift not ticked is skipped. */
+  async function saveTicks(next: Set<string>) {
     if (!template) return;
-    const refresh = () => loadCoach().then(c => { setToday(c.today); setSessions(c.sessions); });
-    if (done) {
-      await unmarkDoneToday(template.id);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setDone(false);
-      void refresh();
-      return;
-    }
-    // Lifts that rested for a tired muscle aren't counted as trained.
-    await markDoneToday(template.id, rows.filter(r => isResting(r.ex)).map(r => r.ex.id));
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    animate();
-    setDone(true);
-    void refresh();
+    setTicked(next);
+    if (next.size) await markDoneToday(template.id, rows.filter(r => !next.has(r.ex.id)).map(r => r.ex.id));
+    else await unmarkDoneToday(template.id);
+    // No coach refresh here: it would count this very session as fatigue and
+    // trim its sets mid-workout. The coach catches up next time you open it.
   }
+
+  function tick(ex: Exercise) {
+    const next = new Set(ticked);
+    if (next.has(ex.id)) {
+      next.delete(ex.id);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else {
+      next.add(ex.id);
+      // The last one completes the session — the footer plays it; otherwise a firm tick.
+      if (active.every(r => next.has(r.ex.id))) setCheer(c => c + 1);
+      else void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    void saveTicks(next);
+  }
+
+  const completeAll = () => { setCheer(c => c + 1); void saveTicks(new Set([...ticked, ...active.map(r => r.ex.id)])); };
+  const undoAll = () => void saveTicks(new Set());
 
   function newTemplate() {
     Alert.prompt?.('New workout', 'Name it — e.g. ARMS', async name => {
@@ -283,7 +298,7 @@ export default function LogWorkout() {
     <SafeAreaView style={st.safe} edges={['top']}>
       <ScreenHeader title="LOG WORKOUT" />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 190 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* ── day ── */}
         <Dropdown
           label="DAY"
@@ -349,6 +364,8 @@ export default function LogWorkout() {
               row={r}
               sets={Math.max(1, r.ex.sets + (today?.setDelta ?? 0))}
               logged={logged[r.ex.id] ?? 0}
+              done={ticked.has(r.ex.id)}
+              onTick={() => tick(r.ex)}
               open={open === r.jid}
               swapping={swapping === r.jid}
               resting={isResting(r.ex) ? restOf[r.ex.id] : null}
@@ -406,12 +423,17 @@ export default function LogWorkout() {
         </View>
       </ScrollView>
 
-      {/* ── finish ── */}
+      {/* ── progress + hold to complete ── */}
       <View style={[st.footer, { paddingBottom: 12 + insets.bottom }]}>
-        <Pressable onPress={finish} disabled={!done && !active.length} style={({ pressed }) => [st.finish, done && st.finishDone, !done && !active.length && { opacity: 0.4 }, pressed && { opacity: 0.8 }]}>
-          <MaterialCommunityIcons name={done ? 'check-circle' : 'flag-checkered'} size={18} color={done ? C.onHot : C.onHot} />
-          <Text style={st.finishText}>{done ? 'LOGGED TODAY · TAP TO UNDO' : 'FINISH SESSION'}</Text>
-        </Pressable>
+        <SessionBar
+          total={active.length}
+          ticked={tickedActive}
+          complete={complete}
+          title={title}
+          cheer={cheer}
+          onComplete={completeAll}
+          onUndo={undoAll}
+        />
       </View>
 
       {howTo && (
@@ -430,10 +452,12 @@ export default function LogWorkout() {
 type LiftEdit = Partial<Pick<Exercise, 'sets' | 'reps' | 'weightKg'>>;
 
 function LiftChip({
-  index, delay, row, sets, logged, open, swapping, alternatives, unit, puckSent, resting, onForce, guide, bestE1rm,
+  index, delay, row, sets, logged, done, onTick, open, swapping, alternatives, unit, puckSent, resting, onForce, guide, bestE1rm,
   onToggle, onSwapToggle, onSwap, onRemove, onPatch, onPuck, onHowTo, onHistory,
 }: {
-  index: number; delay: number; row: Row; sets: number; logged: number; open: boolean; swapping: boolean; alternatives: Choice[];
+  index: number; delay: number; row: Row; sets: number; logged: number;
+  /** Ticked off today. */
+  done: boolean; onTick: () => void; open: boolean; swapping: boolean; alternatives: Choice[];
   unit: 'metric' | 'imperial'; puckSent: boolean;
   /** Set when a main muscle won't be recovered — the lift sits this session out. */
   resting: Resting<Exercise> | null; onForce: () => void;
@@ -452,7 +476,7 @@ function LiftChip({
   const onRec = ex.sets === guide.sets && ex.reps === recReps && Math.abs(ex.weightKg - recKg) < 0.01;
 
   return (
-    <Reveal delay={delay} style={[st.chip, open && st.chipOpen, resting && st.chipResting]}>
+    <Reveal delay={delay} style={[st.chip, open && st.chipOpen, resting && st.chipResting, done && st.chipDone]}>
       {/* Slide right to start the lift (its log), left to send it to the puck. A resting lift sits still. */}
       <SwipeRow
         style={st.chipTop}
@@ -462,9 +486,11 @@ function LiftChip({
       >
       <View style={{ gap: 8 }}>
       <Pressable onPress={onToggle} style={st.chipHead}>
-        <Text style={st.chipIndex}>{String(index + 1).padStart(2, '0')}</Text>
+        {resting
+          ? <Text style={st.chipIndex}>{String(index + 1).padStart(2, '0')}</Text>
+          : <TickBox index={index} done={done} onPress={onTick} />}
         <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[st.chipName, resting && { color: C.dim }]} numberOfLines={1}>{ex.name}</Text>
+          <Text style={[st.chipName, resting && { color: C.dim }, done && { color: C.live }]} numberOfLines={1}>{ex.name}</Text>
           <Text style={st.chipMeta} numberOfLines={1}>{`${sets} × ${ex.reps} · ${weight}`}</Text>
         </View>
         <Pressable onPress={onSwapToggle} hitSlop={8} style={[st.iconBtn, swapping && st.iconBtnOn]} accessibilityLabel="Swap">
@@ -552,6 +578,26 @@ function LiftChip({
   );
 }
 
+/** The lift's number, and its tick: tap to mark it done — it fills green and pops a check. */
+function TickBox({ index, done, onPress }: { index: number; done: boolean; onPress: () => void }) {
+  const s = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    s.setValue(done ? 0.6 : 0.85);
+    Animated.spring(s, { toValue: 1, friction: 3, tension: 180, useNativeDriver: true }).start();
+  }, [done]);
+  return (
+    <Pressable onPress={onPress} hitSlop={10} accessibilityRole="checkbox" accessibilityState={{ checked: done }} accessibilityLabel="Mark done">
+      <Animated.View style={[st.tickBox, done && st.tickBoxOn, { transform: [{ scale: s }] }]}>
+        {done
+          ? <MaterialCommunityIcons name="check-bold" size={14} color={C.onHot} />
+          : <Text style={st.tickNum}>{String(index + 1).padStart(2, '0')}</Text>}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   focusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
@@ -578,23 +624,27 @@ const st = StyleSheet.create({
   chipBody: { paddingHorizontal: 14, paddingBottom: 12, gap: 8 },
   chipOpen: { borderColor: C.lineHi, backgroundColor: C.raised },
   chipResting: { backgroundColor: C.bg, borderStyle: 'dashed' },
-  restRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 30 },
+  restRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 38 },
   restText: { flex: 1, fontFamily: F.dot, fontSize: 8, color: C.alert, letterSpacing: 1 },
   force: { fontFamily: F.dot, fontSize: 8, color: C.ink, letterSpacing: 1, textDecorationLine: 'underline' },
   chipHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  chipIndex: { fontFamily: F.dot, fontSize: 11, color: C.faint, letterSpacing: 1, width: 20 },
+  chipIndex: { fontFamily: F.dot, fontSize: 11, color: C.faint, letterSpacing: 1, width: 28 },
+  chipDone: { borderColor: C.live, backgroundColor: 'rgba(116,242,91,0.06)' },
+  tickBox: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
+  tickBoxOn: { backgroundColor: C.live, borderColor: C.live },
+  tickNum: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 0.5 },
   chipName: { fontFamily: F.dot, fontSize: 14, color: C.hot, letterSpacing: 0.8 },
   chipMeta: { fontFamily: F.mono, fontSize: 12, color: C.dim },
   iconBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   iconBtnOn: { backgroundColor: C.hot, borderColor: C.hot },
-  chipFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 30 },
+  chipFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 38 },
   tags: { flexDirection: 'row', gap: 4 },
   tag: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1, borderWidth: 1, borderColor: C.line, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, overflow: 'hidden' },
   setDots: { flexDirection: 'row', gap: 4 },
   setDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: C.lineHi },
   setDotOn: { backgroundColor: C.live, borderColor: C.live },
 
-  alts: { gap: 6, paddingLeft: 30 },
+  alts: { gap: 6, paddingLeft: 38 },
   alt: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 30, paddingHorizontal: 10, borderRadius: 15, borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.bg },
   altText: { fontFamily: F.dot, fontSize: 8, color: C.ink, letterSpacing: 1 },
 
@@ -619,7 +669,4 @@ const st = StyleSheet.create({
   trayText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1 },
 
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.line },
-  finish: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 54, borderRadius: 16, backgroundColor: C.hot },
-  finishDone: { backgroundColor: C.live },
-  finishText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
 });
