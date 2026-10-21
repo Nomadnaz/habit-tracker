@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert, Animated, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, UIManager,
+  Alert, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, UIManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -30,14 +30,16 @@ import {
 } from '@/lib/coach';
 import { bestE1rms, ensureFocusTemplate, exerciseFor, loadCoach, recalibrateStarterLifts } from '@/lib/routine';
 import { musclesFor, type Session } from '@/lib/muscle-recovery';
-import { difficulty, e1rmFor, equipmentOf, guideFor, nextWeight, patternOf, repRange, shiftReps, snapWeight, type Guide } from '@/lib/exercise-guide';
-import { Stepper } from '@/components/train/Stepper';
+import { difficulty, e1rmFor, equipmentOf, guideFor, patternOf, repRange, snapWeight, type Guide } from '@/lib/exercise-guide';
+import { ValuePicker } from '@/components/train/ValuePicker';
 import { DifficultyBar } from '@/components/train/DifficultyBar';
+import { Dropdown } from '@/components/Dropdown';
+import { Reveal } from '@/components/Reveal';
 import { getBodyProfile, latestWeight, loadBodyData, type BodyProfile } from '@/lib/body-data';
-import { useUnitPreference, formatWeightFromKg, formatWeightWithUnit } from '@/lib/unit-preference';
+import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
 import { bleBridge } from '@/lib/ble-bridge';
 import { toDateKey } from '@/lib/dateKey';
-import { C, F, SPRING } from '@/lib/theme';
+import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { ExerciseCard } from '@/components/ExerciseCard';
 
@@ -77,7 +79,10 @@ export default function LogWorkout() {
   const [query, setQuery] = useState('');
   const [profile, setProfile] = useState<BodyProfile>({ heightCm: null, sex: null, weightKg: null });
   const [bodyKg, setBodyKg] = useState<number | null>(null);
+  const [dayOpen, setDayOpen] = useState(false);
   const busy = useRef(false);
+  /** True while a freshly picked day deals its lifts in, one by one. */
+  const dealing = useRef(true);
 
   const loadTemplate = useCallback(async (id: string) => {
     const [templates, exs, jcts] = await Promise.all([getTemplates(), getExercises(), getJunctions()]);
@@ -95,13 +100,16 @@ export default function LogWorkout() {
   }, []);
 
   const choose = useCallback(async (next: Sel) => {
-    animate();
+    dealing.current = true;
+    setDayOpen(false);
     setSel(next);
     setOpen(null);
     setSwapping(null);
     setForced(new Set());
     const id = 'focus' in next ? await ensureFocusTemplate(next.focus) : next.templateId;
     await loadTemplate(id);
+    // Lifts and tray mount on this render with rising delays; after that, new ones just appear.
+    setTimeout(() => { dealing.current = false; }, 1200);
   }, [loadTemplate]);
 
   // First open: what SELECT / TRAIN sent, else the coach's pick.
@@ -275,31 +283,39 @@ export default function LogWorkout() {
       <ScreenHeader title="LOG WORKOUT" />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 + insets.bottom }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {/* ── focus chips ── */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.focusRow}>
-          {FOCI.map(f => {
-            const on = sel && 'focus' in sel && sel.focus === f;
-            return (
-              <Pressable key={f} onPress={() => !on && choose({ focus: f })} style={[st.focusChip, on && st.focusChipOn]}>
-                {today?.focus === f && <View style={[st.pickDot, on && { backgroundColor: C.onHot }]} />}
-                <Text style={[st.focusText, on && st.focusTextOn]}>{SHORT[f]}</Text>
+        {/* ── day ── */}
+        <Dropdown
+          label="DAY"
+          summary={template?.name ?? ''}
+          open={dayOpen}
+          onToggle={setDayOpen}
+          style={{ marginHorizontal: 16 }}
+        >
+          <View style={st.focusRow}>
+            {FOCI.map(f => {
+              const on = sel && 'focus' in sel && sel.focus === f;
+              return (
+                <Pressable key={f} onPress={() => (on ? setDayOpen(false) : choose({ focus: f }))} style={[st.focusChip, on && st.focusChipOn]}>
+                  {today?.focus === f && <View style={[st.pickDot, on && { backgroundColor: C.onHot }]} />}
+                  <Text style={[st.focusText, on && st.focusTextOn]}>{SHORT[f]}</Text>
+                </Pressable>
+              );
+            })}
+            {custom.map(t => {
+              const on = sel && 'templateId' in sel && sel.templateId === t.id;
+              return (
+                <Pressable key={t.id} onPress={() => (on ? setDayOpen(false) : choose({ templateId: t.id }))} style={[st.focusChip, on && st.focusChipOn]}>
+                  <Text style={[st.focusText, on && st.focusTextOn]}>{t.name}</Text>
+                </Pressable>
+              );
+            })}
+            {Platform.OS === 'ios' && (
+              <Pressable onPress={newTemplate} style={[st.focusChip, st.focusChipNew]} accessibilityLabel="New workout">
+                <MaterialCommunityIcons name="plus" size={14} color={C.dim} />
               </Pressable>
-            );
-          })}
-          {custom.map(t => {
-            const on = sel && 'templateId' in sel && sel.templateId === t.id;
-            return (
-              <Pressable key={t.id} onPress={() => !on && choose({ templateId: t.id })} style={[st.focusChip, on && st.focusChipOn]}>
-                <Text style={[st.focusText, on && st.focusTextOn]}>{t.name}</Text>
-              </Pressable>
-            );
-          })}
-          {Platform.OS === 'ios' && (
-            <Pressable onPress={newTemplate} style={[st.focusChip, st.focusChipNew]} accessibilityLabel="New workout">
-              <MaterialCommunityIcons name="plus" size={14} color={C.dim} />
-            </Pressable>
-          )}
-        </ScrollView>
+            )}
+          </View>
+        </Dropdown>
 
         {/* ── hero ── */}
         <View style={st.hero}>
@@ -328,6 +344,7 @@ export default function LogWorkout() {
             <LiftChip
               key={r.jid}
               index={i}
+              delay={dealing.current ? 80 + i * 90 : 0}
               row={r}
               sets={Math.max(1, r.ex.sets + (today?.setDelta ?? 0))}
               logged={logged[r.ex.id] ?? 0}
@@ -371,11 +388,13 @@ export default function LogWorkout() {
                 : 'Nothing else here is recovered yet.'}
             </Text>
           )}
-          {tray.map(p => (
-            <Pressable key={p.name} onPress={() => add(p)} style={({ pressed }) => [st.trayChip, pressed && { backgroundColor: C.raised }]}>
-              <MaterialCommunityIcons name="plus" size={13} color={p.mine ? C.hot : C.dim} />
-              <Text style={[st.trayText, p.mine && { color: C.hot }]}>{p.name}</Text>
-            </Pressable>
+          {tray.map((p, j) => (
+            <Reveal key={p.name} delay={dealing.current ? 160 + rows.length * 90 + j * 35 : 0}>
+              <Pressable onPress={() => add(p)} style={({ pressed }) => [st.trayChip, pressed && { backgroundColor: C.raised }]}>
+                <MaterialCommunityIcons name="plus" size={13} color={p.mine ? C.hot : C.dim} />
+                <Text style={[st.trayText, p.mine && { color: C.hot }]}>{p.name}</Text>
+              </Pressable>
+            </Reveal>
           ))}
           {!!query.trim() && !tray.some(p => p.name === query.trim().toUpperCase()) && (
             <Pressable onPress={addCustom} style={[st.trayChip, st.trayChipNew]}>
@@ -410,10 +429,10 @@ export default function LogWorkout() {
 type LiftEdit = Partial<Pick<Exercise, 'sets' | 'reps' | 'weightKg'>>;
 
 function LiftChip({
-  index, row, sets, logged, open, swapping, alternatives, unit, puckSent, resting, onForce, guide, bestE1rm,
+  index, delay, row, sets, logged, open, swapping, alternatives, unit, puckSent, resting, onForce, guide, bestE1rm,
   onToggle, onSwapToggle, onSwap, onRemove, onPatch, onPuck, onHowTo, onHistory,
 }: {
-  index: number; row: Row; sets: number; logged: number; open: boolean; swapping: boolean; alternatives: Choice[];
+  index: number; delay: number; row: Row; sets: number; logged: number; open: boolean; swapping: boolean; alternatives: Choice[];
   unit: 'metric' | 'imperial'; puckSent: boolean;
   /** Set when a main muscle won't be recovered — the lift sits this session out. */
   resting: Resting<Exercise> | null; onForce: () => void;
@@ -422,8 +441,6 @@ function LiftChip({
   onPatch: (p: LiftEdit) => void; onPuck: () => void; onHowTo: () => void; onHistory: () => void;
 }) {
   const { ex } = row;
-  const pop = useRef(new Animated.Value(0.92)).current;
-  useEffect(() => { Animated.spring(pop, { toValue: 1, ...SPRING.pop }).start(); }, []);
   const kit = equipmentOf(ex.name, patternOf(ex.name));
   const range = repRange(ex.reps);
   const weight = ex.weightKg > 0 ? formatWeightWithUnit(ex.weightKg, unit) : 'BODYWEIGHT';
@@ -434,7 +451,7 @@ function LiftChip({
   const onRec = ex.sets === guide.sets && ex.reps === recReps && Math.abs(ex.weightKg - recKg) < 0.01;
 
   return (
-    <Animated.View style={[st.chip, open && st.chipOpen, resting && st.chipResting, { transform: [{ scale: pop }] }]}>
+    <Reveal delay={delay} style={[st.chip, open && st.chipOpen, resting && st.chipResting]}>
       <Pressable onPress={onToggle} style={st.chipHead}>
         <Text style={st.chipIndex}>{String(index + 1).padStart(2, '0')}</Text>
         <View style={{ flex: 1, gap: 3 }}>
@@ -484,10 +501,12 @@ function LiftChip({
 
       {open && (
         <View style={st.panel}>
+          <ValuePicker sets={ex.sets} reps={ex.reps} weightKg={ex.weightKg} kit={kit} unit={unit} onPatch={onPatch} />
           <DifficultyBar d={diff} measured={!!e1?.measured} />
           <View style={st.rec}>
+            <Text style={st.recLabel}>COACH</Text>
             <Text style={st.recText} numberOfLines={1}>
-              {`RECOMMENDED ${guide.sets} × ${recReps} · ${guide.startKg == null ? 'BODYWEIGHT' : formatWeightWithUnit(recKg, unit)}${guide.perHand ? ' EACH' : ''}`}
+              {`${guide.sets} × ${recReps} · ${guide.startKg == null ? 'BW' : formatWeightWithUnit(recKg, unit)}${guide.perHand ? ' EACH' : ''}`}
             </Text>
             {onRec
               ? <MaterialCommunityIcons name="check-circle" size={16} color={C.live} />
@@ -497,36 +516,32 @@ function LiftChip({
                 </Pressable>
               )}
           </View>
-          <View style={st.steppers}>
-            <Stepper label="SETS" value={`${ex.sets}`} onStep={d => onPatch({ sets: Math.max(1, Math.min(10, ex.sets + d)) })} />
-            <Stepper label="REPS" value={ex.reps} onStep={d => onPatch({ reps: shiftReps(ex.reps, d) })} />
-            <Stepper label={unit === 'imperial' ? 'WEIGHT LB' : 'WEIGHT KG'} value={formatWeightFromKg(ex.weightKg, unit)}
-              onStep={d => onPatch({ weightKg: nextWeight(ex.weightKg, d, kit, unit) })} />
-          </View>
-          <View style={st.actions}>
-            <Pressable onPress={onPuck} style={({ pressed }) => [st.action, st.actionHot, pressed && { opacity: 0.8 }]}>
-              <MaterialCommunityIcons name={puckSent ? 'check' : 'send'} size={14} color={C.onHot} />
-              <Text style={[st.actionText, { color: C.onHot }]}>{puckSent ? 'ON PUCK' : 'SEND TO PUCK'}</Text>
-            </Pressable>
-            <Pressable onPress={onHowTo} style={({ pressed }) => [st.action, pressed && { backgroundColor: C.raised }]}>
-              <MaterialCommunityIcons name="play" size={14} color={C.ink} />
-              <Text style={st.actionText}>HOW TO</Text>
-            </Pressable>
-            <Pressable onPress={onHistory} style={({ pressed }) => [st.action, pressed && { backgroundColor: C.raised }]}>
-              <MaterialCommunityIcons name="chart-line" size={14} color={C.ink} />
-              <Text style={st.actionText}>PB</Text>
-            </Pressable>
-          </View>
-          {puckSent && <Text style={st.hint}>Countdown is on the puck. Hold it still, then lift — each set lights a dot.</Text>}
+          <Dropdown label="MORE" summary={puckSent ? 'ON PUCK' : 'PUCK · HOW TO · PB'}>
+            <View style={st.actions}>
+              <Pressable onPress={onPuck} style={({ pressed }) => [st.action, st.actionHot, pressed && { opacity: 0.8 }]}>
+                <MaterialCommunityIcons name={puckSent ? 'check' : 'send'} size={14} color={C.onHot} />
+                <Text style={[st.actionText, { color: C.onHot }]}>{puckSent ? 'ON PUCK' : 'SEND TO PUCK'}</Text>
+              </Pressable>
+              <Pressable onPress={onHowTo} style={({ pressed }) => [st.action, pressed && { backgroundColor: C.raised }]}>
+                <MaterialCommunityIcons name="play" size={14} color={C.ink} />
+                <Text style={st.actionText}>HOW TO</Text>
+              </Pressable>
+              <Pressable onPress={onHistory} style={({ pressed }) => [st.action, pressed && { backgroundColor: C.raised }]}>
+                <MaterialCommunityIcons name="chart-line" size={14} color={C.ink} />
+                <Text style={st.actionText}>PB</Text>
+              </Pressable>
+            </View>
+            {puckSent && <Text style={st.hint}>Countdown is on the puck. Hold it still, then lift — each set lights a dot.</Text>}
+          </Dropdown>
         </View>
       )}
-    </Animated.View>
+    </Reveal>
   );
 }
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  focusRow: { gap: 6, paddingHorizontal: 16, paddingBottom: 4 },
+  focusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   focusChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   focusChipOn: { backgroundColor: C.hot, borderColor: C.hot },
   focusChipNew: { borderStyle: 'dashed', paddingHorizontal: 12 },
@@ -568,10 +583,10 @@ const st = StyleSheet.create({
   alt: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 30, paddingHorizontal: 10, borderRadius: 15, borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.bg },
   altText: { fontFamily: F.dot, fontSize: 8, color: C.ink, letterSpacing: 1 },
 
-  panel: { gap: 10, paddingTop: 4 },
-  steppers: { flexDirection: 'row', gap: 6 },
-  rec: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingLeft: 10, paddingRight: 6, height: 38, backgroundColor: C.bg },
-  recText: { flex: 1, fontFamily: F.dot, fontSize: 8, color: C.ink, letterSpacing: 1 },
+  panel: { gap: 8, paddingTop: 2 },
+  rec: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingLeft: 12, paddingRight: 6, height: 36, backgroundColor: C.bg },
+  recLabel: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 2 },
+  recText: { flex: 1, textAlign: 'right', fontFamily: F.dot, fontSize: 9, color: C.ink, letterSpacing: 1 },
   recBtn: { height: 26, paddingHorizontal: 12, borderRadius: 13, backgroundColor: C.hot, justifyContent: 'center' },
   recBtnText: { fontFamily: F.dot, fontSize: 9, color: C.onHot, letterSpacing: 1.5 },
   actions: { flexDirection: 'row', gap: 6 },
