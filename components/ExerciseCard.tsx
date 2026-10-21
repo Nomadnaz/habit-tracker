@@ -9,6 +9,9 @@ import { Animated, Linking, Pressable, StyleSheet, Text, View, useWindowDimensio
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F, SPRING, numFace } from '@/lib/theme';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
+import { PulleyChart, PULLEY_CHART_W } from '@/components/PulleyChart';
+import { cableSide } from '@/lib/exercise-demo';
+import { findExercise } from '@/lib/exercise-library';
 import { videoUrl, type Guide } from '@/lib/exercise-guide';
 
 const BASIS: Record<Guide['basis'], string> = {
@@ -25,7 +28,10 @@ export function ExerciseCard({ name, role, guide, bodyKg, onClose }: {
   useEffect(() => { Animated.spring(pop, { toValue: 1, ...SPRING.pop }).start(); }, []);
   const close = () => Animated.timing(pop, { toValue: 0, duration: 140, useNativeDriver: true }).start(onClose);
 
-  const demo = Math.min(240, width - 96);
+  // Cable moves show which pin the pulley goes on, beside the demo.
+  const pulley = guide.equipment === 'cable' ? findExercise(name)?.pulley : undefined;
+  const side = pulley != null ? cableSide(guide.pattern, name, pulley) : 'right';
+  const demo = Math.min(240, width - 96 - (pulley != null ? PULLEY_CHART_W + 8 : 0));
   const reps = guide.reps[0] === guide.reps[1] ? `${guide.reps[0]}` : `${guide.reps[0]}-${guide.reps[1]}`;
   const start = guide.startKg == null ? 'BODYWEIGHT' : `${guide.startKg}`;
   const note = guide.basis === 'none' && guide.equipment !== 'bodyweight'
@@ -47,8 +53,9 @@ export function ExerciseCard({ name, role, guide, bodyKg, onClose }: {
             <Pressable onPress={close} hitSlop={10}><MaterialCommunityIcons name="close" size={20} color={C.dim} /></Pressable>
           </View>
 
-          <View style={st.demo}>
-            <ExerciseDemo pattern={guide.pattern} equipment={guide.equipment} name={name} size={demo} />
+          <View style={[st.demo, pulley != null && st.demoCable, side === 'left' && { flexDirection: 'row-reverse' }]}>
+            <ExerciseDemo pattern={guide.pattern} equipment={guide.equipment} name={name} size={demo} pulley={pulley} />
+            {pulley != null && <PulleyChart pulley={pulley} height={demo} side={side} />}
           </View>
 
           <View style={st.stats}>
@@ -86,6 +93,7 @@ const st = StyleSheet.create({
   eyebrow: { fontFamily: F.dot, fontSize: 9, color: C.live, letterSpacing: 2 },
   title: { fontFamily: F.dot, fontSize: 22, color: C.hot, letterSpacing: 1, marginTop: 4 },
   demo: { alignItems: 'center', marginVertical: 12, paddingVertical: 6, backgroundColor: C.bg, borderRadius: 16 },
+  demoCable: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
   stats: { flexDirection: 'row', borderWidth: 1, borderColor: C.line, borderRadius: 14 },
   stat: { flex: 1, padding: 12, gap: 4 },
   statRule: { borderLeftWidth: 1, borderLeftColor: C.line },
