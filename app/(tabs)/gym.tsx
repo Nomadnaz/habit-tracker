@@ -16,7 +16,10 @@ import {
   loadBodyData, pullRemoteBody, todaySteps, refreshAppleHealthIfConnected,
   type BodyData,
 } from '@/lib/body-data';
-import { getDoneLog, getExercises, getTemplates, getTemplateExercises } from '@/lib/workout-data';
+import { getDoneLog, getExercises, getPBLog, getTemplates, getTemplateExercises, getTrainingSessions } from '@/lib/workout-data';
+import { buildHistory, dayName, shortDate, type DayLog } from '@/lib/history';
+import { BodyMini } from '@/components/train/BodyMini';
+import { Corners } from '@/components/Corners';
 import { getActivitiesInRange, getRecentActivities, formatDistance } from '@/lib/activity-data';
 import { loadCoach, recalibrateStarterLifts, saveRoutine, type CoachState } from '@/lib/routine';
 import { focusOfName, FOCUS_LINEUP, muscleWord, planSession, type Routine } from '@/lib/coach';
@@ -50,6 +53,9 @@ export default function TrainScreen() {
   const [coach, setCoach] = useState<CoachState | null>(null);
   const [lifts, setLifts] = useState(0);
   const [resting, setResting] = useState<{ name: string; muscle: string; pct: number }[]>([]);
+  /** Heaviest PB, and the latest training day — TRAIN's PBS and HISTORY boxes. */
+  const [bestPb, setBestPb] = useState<{ name: string; kg: number; date: string; count: number } | null>(null);
+  const [lastDay, setLastDay] = useState<DayLog | null>(null);
   const [week, setWeek] = useState<Week>({ route: null, km: 0, runs: 0, sets: [0, 0, 0, 0, 0, 0, 0], done: [] });
 
   const refreshCoach = useCallback(async () => {
@@ -75,8 +81,14 @@ export default function TrainScreen() {
       const i = idx(s.date);
       if (i >= 0 && i < 7) sets[i] += Math.round(s.sets);
     }
-    const done = [...new Set((await getDoneLog()).map(d => idx(d.date)).filter(i => i >= 0 && i < 7))];
+    const doneLog = await getDoneLog();
+    const done = [...new Set(doneLog.map(d => idx(d.date)).filter(i => i >= 0 && i < 7))];
     setWeek(w => ({ ...w, sets, done }));
+    const [pbs, history] = await Promise.all([getPBLog(), getTrainingSessions(60)]);
+    const best = pbs.reduce<(typeof pbs)[number] | null>((b, p) => (!b || p.weightKg > b.weightKg ? p : b), null);
+    const bestEx = best && lib.find(e => e.id === best.exerciseId);
+    setBestPb(best && bestEx ? { name: bestEx.name, kg: best.weightKg, date: best.date, count: new Set(pbs.map(p => p.exerciseId)).size } : null);
+    setLastDay(buildHistory(history, doneLog, live)[0] ?? null);
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -118,7 +130,6 @@ export default function TrainScreen() {
   }
 
   const steps = todaySteps(data);
-  const top = [...data.headlineLifts].filter(l => l.history.length).sort((x, y) => y.topSetKg - x.topSetKg)[0];
   const square = Math.floor((width - 32 - 10) / 2);
   const today = coach?.today;
   const todayIdx = (new Date().getDay() + 6) % 7;
@@ -175,7 +186,7 @@ export default function TrainScreen() {
           <MaterialCommunityIcons name="chevron-right" size={16} color={C.dim} />
         </TouchableOpacity>
 
-        {/* ── Strength (compact — full detail lives on /strength) ── */}
+        {/* ── PBs and history (strength detail still on /strength) ── */}
         <View style={styles.strengthHeader}>
           <Text style={styles.sectionLabel}>STRENGTH</Text>
           <TouchableOpacity onPress={() => router.push('/strength')}>
@@ -183,34 +194,40 @@ export default function TrainScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.cardRow}>
-          <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => router.push('/strength')}>
-            <MaterialCommunityIcons name="dumbbell" size={22} color={C.ink} />
-            <Text style={styles.metricLabel}>TOP LIFT</Text>
-            {/* Only a lift you've logged a PB on — a starter's planned weight isn't a top lift. */}
-            {top ? (
+          <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => router.push('/pbs')} accessibilityLabel="PBs">
+            <Corners color={bestPb ? C.live : C.lineHi} />
+            <View style={styles.metricHead}>
+              <MaterialCommunityIcons name="trophy-outline" size={18} color={bestPb ? C.live : C.ink} />
+              <Text style={styles.metricLabel}>PBS</Text>
+            </View>
+            {bestPb ? (
               <>
-                <Text style={styles.metricValue}>{formatWeightWithUnit(top.topSetKg)}</Text>
-                <Text style={styles.metricSub}>{top.name}</Text>
+                <Text style={[styles.metricValue, { color: C.live }]}>{formatWeightWithUnit(bestPb.kg)}</Text>
+                <Text style={styles.metricSub} numberOfLines={1}>{bestPb.name}</Text>
+                <Text style={styles.metricSubTiny}>{`${shortDate(bestPb.date)} · ${bestPb.count} LIFT${bestPb.count === 1 ? '' : 'S'}`}</Text>
               </>
             ) : (
               <>
-                <Text style={styles.metricValue}>—</Text>
+                <Text style={styles.metricValue}>--</Text>
                 <Text style={styles.metricSub}>NO PBS YET</Text>
+                <Text style={styles.metricSubTiny}>TAP TO SET ONE</Text>
               </>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => router.push('/strength')}>
-            <MaterialCommunityIcons name="trending-up" size={22} color={C.ink} />
-            <Text style={styles.metricLabel}>STRENGTH</Text>
-            {data.strengthTrend ? (
-              <Text style={[styles.metricValue, { color: C.hot }]}>
-                {data.strengthTrend.pct >= 0 ? '+' : ''}{data.strengthTrend.pct}%
-              </Text>
-            ) : (
-              <Text style={styles.metricValue}>—</Text>
-            )}
-            <Text style={styles.metricSubTiny}>vs 90d ago</Text>
+          <TouchableOpacity style={styles.metricCard} activeOpacity={0.85} onPress={() => router.push('/history')} accessibilityLabel="History">
+            <Corners color={lastDay ? C.alert : C.lineHi} />
+            <View style={styles.metricHead}>
+              <MaterialCommunityIcons name="history" size={18} color={C.ink} />
+              <Text style={styles.metricLabel}>HISTORY</Text>
+            </View>
+            <View style={styles.historyRow}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.metricValue} numberOfLines={2}>{lastDay ? lastDay.title : '--'}</Text>
+                <Text style={styles.metricSubTiny}>{lastDay ? `${dayName(lastDay.date)} ${shortDate(lastDay.date)} · ${lastDay.lifts.length} LIFTS` : 'NOTHING LOGGED YET'}</Text>
+              </View>
+              <BodyMini load={lastDay?.load ?? {}} height={64} />
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -246,8 +263,10 @@ const styles = StyleSheet.create({
   strengthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 20, paddingRight: 16 },
   cardRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 16 },
 
-  metricCard: { flex: 1, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12, gap: 4 },
-  metricLabel: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5, marginTop: 4 },
+  metricCard: { flex: 1, backgroundColor: C.surface, padding: 12, gap: 4 },
+  metricHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  metricLabel: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5 },
+  historyRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
   metricValue: { fontFamily: F.dot, fontSize: 17, color: C.ink },
   metricSub: { fontFamily: F.mono, fontSize: 11, color: C.dim },
   metricSubTiny: { fontFamily: F.mono, fontSize: 11, color: C.dim },

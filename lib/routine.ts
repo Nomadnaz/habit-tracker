@@ -28,7 +28,8 @@ export async function getRoutine(): Promise<Routine | null> {
   } catch { /* fall through */ }
   const plan = await getGymPlan();
   const days = WEEK.filter(d => plan[d] && plan[d] !== 'rest' && plan[d] !== 'cheat');
-  return days.length ? { days, split: 'auto' } : null;
+  const cheat = WEEK.filter(d => plan[d] === 'cheat');
+  return days.length ? { days, split: 'auto', ...(cheat.length ? { cheat } : {}) } : null;
 }
 
 export async function saveRoutine(r: Routine): Promise<GymPlan> {

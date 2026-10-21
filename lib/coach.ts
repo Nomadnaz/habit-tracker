@@ -37,7 +37,8 @@ import type { Focus, GymPlan, MuscleGroup, PlanDayValue } from './workout-data';
 
 export type Weekday = keyof GymPlan;
 export type SplitId = 'auto' | 'full' | 'ul' | 'ppl' | 'hybrid';
-export type Routine = { days: Weekday[]; split: SplitId };
+/** cheat: rest days marked as cheat days (never training days). */
+export type Routine = { days: Weekday[]; split: SplitId; cheat?: Weekday[] };
 
 export const WEEK: Weekday[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DOW: Weekday[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -138,6 +139,7 @@ export function weekPlan(r: Routine): GymPlan {
   const chosen = WEEK.filter(d => r.days.includes(d));
   const plan = Object.fromEntries(WEEK.map(d => [d, 'rest' as PlanDayValue])) as GymPlan;
   chosen.forEach((d, i) => { plan[d] = rot[i % rot.length]; });
+  for (const d of r.cheat ?? []) if (!r.days.includes(d)) plan[d] = 'cheat';
   return plan;
 }
 

@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { nextWeight, repRange, repText, type Equipment } from '@/lib/exercise-guide';
 import { formatWeightFromKg } from '@/lib/unit-preference';
 import { C, F } from '@/lib/theme';
+import { Corners } from '@/components/Corners';
 
 type Field = 'sets' | 'reps' | 'weight';
 type Patch = { sets?: number; reps?: string; weightKg?: number };
@@ -169,19 +170,6 @@ const Tape = memo(function Tape({ labels, item, x, tap }: { labels: string[]; it
     </>
   );
 }, (a, b) => a.item === b.item && a.labels.length === b.labels.length && a.labels.every((l, i) => l === b.labels[i]));
-
-/** The four bracket corners of a lit box — green when on. */
-function Corners({ size = 8, color }: { size?: number; color: string }) {
-  const c = { position: 'absolute' as const, width: size, height: size, borderColor: color };
-  return (
-    <>
-      <View pointerEvents="none" style={[c, { left: 0, top: 0, borderLeftWidth: 2, borderTopWidth: 2 }]} />
-      <View pointerEvents="none" style={[c, { right: 0, top: 0, borderRightWidth: 2, borderTopWidth: 2 }]} />
-      <View pointerEvents="none" style={[c, { left: 0, bottom: 0, borderLeftWidth: 2, borderBottomWidth: 2 }]} />
-      <View pointerEvents="none" style={[c, { right: 0, bottom: 0, borderRightWidth: 2, borderBottomWidth: 2 }]} />
-    </>
-  );
-}
 
 const st = StyleSheet.create({
   wrap: { gap: 6 },
