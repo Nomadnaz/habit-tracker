@@ -145,7 +145,8 @@ describe('chips', () => {
   it('offers same-muscle swaps', async () => {
     const { alternativesFor } = await import('./coach');
     const alts = alternativesFor({ name: 'LAT PULLDOWN', muscleGroups: ['lats'] }, [], []).map(p => p.name);
-    expect(alts[0]).toMatch(/PULL UP|CHIN UP/);
+    expect(alts[0]).toMatch(/PULLDOWN|PULL UP|CHIN UP/);
+    expect(alts.slice(0, 4).some(n => /PULL UP|CHIN UP/.test(n))).toBe(true);
     expect(alts).not.toContain('BACK SQUAT');
   });
 });

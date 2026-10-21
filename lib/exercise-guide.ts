@@ -15,11 +15,15 @@
 //   Bodyweight moves (pull-ups, push-ups, dips, planks…) say BODYWEIGHT.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { findExercise } from './exercise-library';
+
 export type Pattern =
   | 'squat' | 'legpress' | 'lunge' | 'hinge' | 'thrust' | 'bench' | 'pushup' | 'dip' | 'ohp'
   | 'raise' | 'lateral' | 'fly' | 'row' | 'cablerow' | 'pulldown' | 'pullup' | 'curl' | 'pushdown'
   | 'overheadext' | 'skull' | 'facepull' | 'shrug' | 'calf' | 'crunch' | 'legraise' | 'plank'
-  | 'legext' | 'legcurl' | 'abduct' | 'twist' | 'run' | 'stand';
+  | 'legext' | 'legcurl' | 'abduct' | 'twist' | 'run' | 'stand'
+  | 'pullover' | 'invrow' | 'backext' | 'swing' | 'kickback' | 'sideplank' | 'carry' | 'clean' | 'jump'
+  | 'jacks' | 'burpee' | 'rower' | 'bike';
 
 export type Equipment = 'barbell' | 'dumbbell' | 'cable' | 'machine' | 'bodyweight';
 
@@ -57,13 +61,18 @@ const PATTERNS: [RegExp, Pattern][] = [
 ];
 
 export function patternOf(name: string): Pattern {
+  const lib = findExercise(name);
+  if (lib) return lib.pattern;
   const n = ` ${name.toUpperCase()} `;
   return PATTERNS.find(([re]) => re.test(n))?.[1] ?? 'stand';
 }
 
-const BODYWEIGHT_MOVES: Pattern[] = ['pushup', 'dip', 'pullup', 'plank', 'legraise', 'crunch', 'run', 'stand'];
+const BODYWEIGHT_MOVES: Pattern[] = ['pushup', 'dip', 'pullup', 'plank', 'legraise', 'crunch', 'run', 'stand',
+  'invrow', 'backext', 'sideplank', 'jump', 'jacks', 'burpee'];
 
 export function equipmentOf(name: string, pattern: Pattern): Equipment {
+  const lib = findExercise(name);
+  if (lib) return lib.kit;
   const n = name.toUpperCase();
   if (/\bDB\b|DUMBBELL|HAMMER|GOBLET|ARNOLD|KETTLEBELL|\bKB\b|FARMER/.test(n)) return 'dumbbell';
   if (/CABLE|PULLDOWN|PULL DOWN|PUSHDOWN|PUSH DOWN|FACE PULL|CROSSOVER|WOODCHOP|PALLOF|STRAIGHT ARM/.test(n)) return 'cable';
@@ -89,8 +98,10 @@ const RATIO: Partial<Record<Pattern, Partial<Record<Equipment, number>>>> = {
   shrug: { barbell: 0.6, dumbbell: 0.25 }, calf: { machine: 0.5, dumbbell: 0.2, barbell: 0.5 },
   legext: { machine: 0.3 }, legcurl: { machine: 0.25 }, abduct: { machine: 0.35 }, twist: { cable: 0.1, dumbbell: 0.06 },
   crunch: { cable: 0.3, machine: 0.3 },
+  pullover: { dumbbell: 0.15, barbell: 0.2, machine: 0.35 }, swing: { dumbbell: 0.2, cable: 0.3 },
+  kickback: { cable: 0.08, machine: 0.25 }, carry: { dumbbell: 0.3, machine: 0.8 }, clean: { barbell: 0.35, dumbbell: 0.12 },
 };
-const LOWER: Pattern[] = ['squat', 'legpress', 'lunge', 'hinge', 'thrust', 'calf', 'legext', 'legcurl', 'abduct'];
+const LOWER: Pattern[] = ['squat', 'legpress', 'lunge', 'hinge', 'thrust', 'calf', 'legext', 'legcurl', 'abduct', 'swing', 'kickback'];
 
 const SCHEME: Record<Goal, { sets: number; reps: [number, number]; rest: string }> = {
   strength: { sets: 4, reps: [4, 6], rest: '2–3 MIN REST' },
@@ -122,8 +133,8 @@ export function guideFor(name: string, ctx: {
   const equipment = equipmentOf(name, pattern);
   const { sets, reps, rest } = SCHEME[ctx.goal];
   const target = Math.round((reps[0] + reps[1]) / 2);
-  // Goblet squats and overhead extensions hold one dumbbell; the rest, one per hand.
-  const perHand = equipment === 'dumbbell' && pattern !== 'squat' && pattern !== 'overheadext';
+  // Goblet squats, overhead extensions, pullovers and swings hold one dumbbell or bell; the rest, one per hand.
+  const perHand = equipment === 'dumbbell' && !['squat', 'overheadext', 'pullover', 'swing'].includes(pattern);
   const tip = `ADD WEIGHT ONCE EVERY SET HITS ${reps[1]}`;
 
   if (equipment === 'bodyweight') return { pattern, equipment, sets, reps, startKg: null, perHand: false, basis: 'none', rest, tip };

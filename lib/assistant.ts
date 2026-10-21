@@ -32,6 +32,7 @@ export interface Msg {
   voice?: boolean;
   stats?: Stat[];       // big-number chips, like the puck's confirm screen
   logged?: boolean;     // something was actually written
+  saved?: string[];     // what was written, one summary per action — fed back as history
   error?: boolean;      // the turn failed (network / limit) — nothing happened
   pending?: ProcessedAction[]; // preview actions awaiting a tap
 }
@@ -186,25 +187,35 @@ function statsFor(a: ProcessedAction): Stat[] {
 
 async function runActions(actions: ProcessedAction[]) {
   const done: string[] = [];
+  const saved: string[] = [];
   const stats: Stat[] = [];
   for (const a of actions.filter(x => x.status === 'auto')) {
     try {
       const { summary } = await executeAction(a);
       done.push(summary);
+      saved.push(summary);
       stats.push(...statsFor(a));
     } catch (e: any) {
       done.push(e?.message || `Couldn't ${a.type.replace(/_/g, ' ')}.`);
     }
   }
   if (done.length) DeviceEventEmitter.emit(TASKS_CHANGED_EVENT);
-  return { done, stats: stats.slice(0, 4) };
+  return { done, saved, stats: stats.slice(0, 4) };
 }
 
 /** Send one turn. Resolves to the assistant message that was appended. */
 export async function send(text: string, opts: { voice?: boolean } = {}): Promise<Msg> {
   const clean = text.trim();
   const thread = ensureThread(clean);
-  const history = thread.messages.slice(-10).map(m => ({ role: m.role, content: m.text }));
+  // The model never sees its own <action> blocks again, only the prose — so a
+  // past "Logged!" with nothing behind it looks like a normal reply and gets
+  // copied (2026-10-21: "5 reps of 86kg pec fly machine" → "Logged!", no
+  // action). Each reply carries what was really written; one that wrote
+  // nothing says so.
+  const history = thread.messages.slice(-10).map(m => ({
+    role: m.role,
+    content: m.role === 'assistant' && !m.error ? `${m.text}\n[saved: ${m.saved?.length ? m.saved.join('; ') : 'nothing'}]` : m.text,
+  }));
   appendMsg(thread.id, { id: uid(), role: 'user', text: clean, at: Date.now(), voice: opts.voice });
   set({ busy: true });
   if (opts.voice) set({ phase: 'think', transcript: clean });
@@ -220,7 +231,7 @@ export async function send(text: string, opts: { voice?: boolean } = {}): Promis
     });
     if (error) throw error;
     const actions: ProcessedAction[] = Array.isArray(data?.actions) ? data.actions : [];
-    const { done, stats } = await runActions(actions);
+    const { done, saved, stats } = await runActions(actions);
     const clarify = actions.filter(a => a.status === 'clarify').map(a => a.message).filter(Boolean);
     const pending = actions.filter(a => a.status === 'preview');
     const prose = String(data?.response ?? '').trim();
@@ -229,6 +240,7 @@ export async function send(text: string, opts: { voice?: boolean } = {}): Promis
       text: [prose, ...clarify].filter(Boolean).join('\n') || (done.length ? done.join(' · ') : 'Done.'),
       stats: stats.length ? stats : undefined,
       logged: done.length > 0,
+      saved: saved.length ? saved : undefined,
       pending: pending.length ? pending : undefined,
     };
     if (done.length && !stats.length) reply.text = done.map(d => `✓ ${d}`).join('\n') + (prose ? `\n${prose}` : '');
@@ -255,7 +267,7 @@ export async function confirmPending(threadId: string, msgId: string, action: Pr
     const { summary } = await executeAction({ ...action, status: 'auto' });
     DeviceEventEmitter.emit(TASKS_CHANGED_EVENT);
     patchMsg(threadId, msgId, { pending: m.pending?.filter(a => a !== action && a.type + JSON.stringify(a.data) !== action.type + JSON.stringify(action.data)) });
-    appendMsg(threadId, { id: uid(), role: 'assistant', text: `✓ ${summary}`, at: Date.now(), logged: true, stats: statsFor(action) });
+    appendMsg(threadId, { id: uid(), role: 'assistant', text: `✓ ${summary}`, at: Date.now(), logged: true, saved: [summary], stats: statsFor(action) });
   } catch (e: any) {
     appendMsg(threadId, { id: uid(), role: 'assistant', text: e?.message || "Couldn't complete that.", at: Date.now() });
   }

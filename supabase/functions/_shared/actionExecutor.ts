@@ -26,6 +26,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { localDateKey, localDateKeyPlusDays, localWeekday } from './localDate.ts';
+import { resolveExerciseId } from './exercises.ts';
 
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
@@ -391,7 +392,11 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
   // set can be the user's best estimated-1RM even if they never said "PB",
   // so this upserts pb_log too when it is one.
   log_set: async (supabase, userId, data, tzOffsetMinutes) => {
-    const exerciseId = str(data.exerciseId) ?? str(data.exercise_id);
+    // The model now names the lift ("pec fly machine") rather than inventing an
+    // id; match it against the user's synced exercises, as device-log does.
+    const said = str(data.exerciseName) ?? str(data.exercise_name);
+    const exerciseId = str(data.exerciseId) ?? str(data.exercise_id)
+      ?? (said ? await resolveExerciseId(supabase, userId, said) : null) ?? said;
     const weightKg = num(data.weightKg) ?? num(data.weight_kg);
     const reps = num(data.reps);
     if (!exerciseId || weightKg === undefined || reps === undefined) {
@@ -751,7 +756,7 @@ export const ACTION_SPECS: Record<string, string> = {
   log_pb:
     'log_pb — record a personal best. Rejected (throws) if it is not actually a new best estimated-1RM for that exercise. data: { "exerciseId": string, "weightKg": number, "reps"?: number, "date"?: "YYYY-MM-DD" }',
   log_set:
-    'log_set — log one set (weight x reps). Always logs to exercise_sets; also updates pb_log if this set beats the exercise\'s best estimated-1RM. data: { "exerciseId": string, "weightKg": number, "reps": number, "date"?: "YYYY-MM-DD" }',
+    'log_set — log one set (weight x reps). Always logs to exercise_sets; also updates pb_log if this set beats the exercise\'s best estimated-1RM. data: { "exerciseName": string (the exercise as the user said it, e.g. "pec fly machine", "assisted pull up"), "exerciseId"?: string, "weightKg": number (0 for bodyweight; on an assisted machine, the assistance weight), "reps": number, "date"?: "YYYY-MM-DD" }. Every set the user reports needs its own log_set, even when the same exercise was logged a moment ago.',
   log_meal:
     'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }. There is no photo -- ALWAYS estimate calories/proteinG/carbsG/fatG from the food name and a typical portion, even when no size was given (assume one typical individual serving). Never omit calories or send 0 for a real, named food.',
   update_meal:

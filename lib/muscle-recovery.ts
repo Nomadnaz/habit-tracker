@@ -16,6 +16,7 @@
 
 import type { MuscleGroup } from './workout-data';
 import { toDateKey } from './dateKey';
+import { findExercise, STAPLES } from './exercise-library';
 
 export type Session = {
   exerciseId: string;
@@ -79,7 +80,8 @@ const WALK: Share = {
   'quad.rf': 0.3, 'glute.max': 0.35, 'ham.bf': 0.3, 'ham.st': 0.3, hipflex: 0.35, adductor: 0.2,
 };
 
-// Exercise name → muscles worked, first match wins. Checked before the
+// For names the exercise library (lib/exercise-library.ts) doesn't know:
+// exercise name → muscles worked, first match wins. Checked before the
 // coarse muscle-group fallback so "INCLINE DB PRESS" lands on the upper
 // chest and "FACE PULL" on the rear delt rather than "chest" / "shoulders".
 const RULES: [RegExp, Share][] = [
@@ -112,7 +114,7 @@ const RULES: [RegExp, Share][] = [
   [/HIP THRUST|GLUTE BRIDGE|GLUTE KICK/, { 'glute.max': 1, 'glute.med': 0.5, ...scale(HAMS, 0.4) }],
   [/ABDUCT/, { 'glute.med': 1, tfl: 0.6 }],
   [/ADDUCT/, { adductor: 1 }],
-  [/SQUAT|LEG PRESS|LUNGE|SPLIT|STEP ?UP|HACK/, { ...QUADS, 'quad.rf': 0.8, 'glute.max': 0.7, adductor: 0.5, ...scale(HAMS, 0.2) }],
+  [/SQUAT|LEG PRESS|LUNGE|SPLIT|STEP ?UP|HACK/, { ...QUADS, 'quad.rf': 0.45, 'glute.max': 0.7, adductor: 0.6, ...scale(HAMS, 0.2) }],
   [/TWIST|WOODCHOP|SIDE PLANK/, { oblique: 1, 'abs.upper': 0.4 }],
   [/CRUNCH|SIT ?UP|PLANK|LEG RAISE|\bABS?\b/, { 'abs.upper': 1, 'abs.lower': 0.8, oblique: 0.4 }],
   // Last, so WALKING LUNGE stays a lunge.
@@ -141,8 +143,10 @@ const GROUPS: Record<MuscleGroup, Share> = {
   cardio: {},
 };
 
-/** Muscles (no side) an exercise works, each 0–1. */
+/** Muscles (no side) an exercise works, each 0–1: the library's, else the rules, else its groups. */
 export function musclesFor(name: string, groups: MuscleGroup[]): Share {
+  const lib = findExercise(name);
+  if (lib) return lib.muscles;
   const n = ` ${name.toUpperCase()} `;
   for (const [re, share] of RULES) if (re.test(n)) return share;
   // Fallback: the first listed group is the prime mover.
@@ -155,33 +159,9 @@ export function musclesFor(name: string, groups: MuscleGroup[]): Share {
 
 // ── exercises for a muscle (the panel's GO list) ─────────────────────────
 
-/** Common lifts, offered under RECOMMENDED. Names go through the same
- *  RULES as logged sessions; `groups` only matter where no rule matches. */
-export const CATALOGUE: [string, MuscleGroup[]][] = [
-  ['BENCH PRESS', ['chest']], ['DUMBBELL BENCH PRESS', ['chest']], ['INCLINE DB PRESS', ['chest']],
-  ['INCLINE BENCH PRESS', ['chest']], ['DECLINE BENCH PRESS', ['chest']], ['MACHINE CHEST PRESS', ['chest']],
-  ['PUSH UP', ['chest']], ['CHEST DIPS', ['chest']], ['CABLE FLY', ['chest']], ['PEC DECK', ['chest']],
-  ['OVERHEAD PRESS', ['shoulders']], ['SEATED DB SHOULDER PRESS', ['shoulders']], ['ARNOLD PRESS', ['shoulders']],
-  ['LATERAL RAISE', ['shoulders']], ['CABLE LATERAL RAISE', ['shoulders']], ['UPRIGHT ROW', ['shoulders']],
-  ['FRONT RAISE', ['shoulders']], ['REAR DELT FLY', ['shoulders']], ['FACE PULL', ['shoulders']],
-  ['REVERSE PEC DECK', ['shoulders']], ['EXTERNAL ROTATION', ['upper back']], ['Y RAISE', ['upper back']],
-  ['PULL UP', ['lats']], ['CHIN UP', ['lats']], ['LAT PULLDOWN', ['lats']], ['STRAIGHT ARM PULLDOWN', ['lats']],
-  ['BARBELL ROW', ['back']], ['SEATED CABLE ROW', ['back']], ['CHEST SUPPORTED ROW', ['upper back']],
-  ['SINGLE ARM DB ROW', ['back']], ['SHRUG', ['traps']], ['DEADLIFT', ['back']], ['BACK EXTENSION', ['lower back']],
-  ['BARBELL CURL', ['biceps']], ['INCLINE DB CURL', ['biceps']], ['PREACHER CURL', ['biceps']], ['HAMMER CURL', ['biceps']],
-  ['TRICEP PUSHDOWN', ['triceps']], ['OVERHEAD TRICEP EXTENSION', ['triceps']], ['SKULL CRUSHER', ['triceps']],
-  ['CLOSE GRIP BENCH PRESS', ['triceps']], ['WRIST CURL', ['forearms']], ['REVERSE WRIST CURL', ['forearms']],
-  ['FARMER CARRY', ['forearms', 'traps']],
-  ['CABLE CRUNCH', ['abs']], ['HANGING LEG RAISE', ['abs']], ['AB WHEEL', ['abs']], ['PLANK', ['core']],
-  ['RUSSIAN TWIST', ['core']], ['CABLE WOODCHOP', ['core']], ['SIDE PLANK', ['core']], ['SERRATUS PUNCH', ['core']],
-  ['HANGING KNEE RAISE', ['hip flexors']],
-  ['BACK SQUAT', ['quads']], ['FRONT SQUAT', ['quads']], ['HACK SQUAT', ['quads']], ['LEG PRESS', ['quads']],
-  ['BULGARIAN SPLIT SQUAT', ['quads']], ['WALKING LUNGE', ['quads']], ['STEP UP', ['quads']], ['LEG EXTENSION', ['quads']],
-  ['LYING LEG CURL', ['hamstrings']], ['SEATED LEG CURL', ['hamstrings']], ['NORDIC CURL', ['hamstrings']],
-  ['ROMANIAN DEADLIFT', ['hamstrings']], ['GOOD MORNING', ['hamstrings']],
-  ['HIP THRUST', ['glutes']], ['GLUTE BRIDGE', ['glutes']], ['HIP ABDUCTION', ['glutes']], ['HIP ADDUCTION', ['glutes']],
-  ['STANDING CALF RAISE', ['calves']], ['SEATED CALF RAISE', ['calves']], ['TIBIALIS RAISE', ['calves']],
-];
+/** Common lifts, offered under RECOMMENDED: the library's staples. Names go
+ *  through musclesFor like logged sessions; `groups` only matter where nothing matches. */
+export const CATALOGUE: [string, MuscleGroup[]][] = STAPLES;
 
 export type RecentExercise = Hit & { times: number };
 export type Suggestion = { name: string; share: number; mine: boolean };
@@ -244,7 +224,8 @@ export function muscleStatus(baseId: string, sessions: Session[], now: number): 
 
 // ── how heavy, and what running/walking cost ─────────────────────────────
 
-const e1rm = (s: Session) => (s.weightKg > 0 ? s.weightKg * (1 + (s.reps ?? 1) / 30) : 0);
+// Assisted machines' weight is help, not load, so they count as full effort.
+const e1rm = (s: Session) => (s.weightKg > 0 && !findExercise(s.name)?.assisted ? s.weightKg * (1 + (s.reps ?? 1) / 30) : 0);
 
 /** Marks each lift with how heavy it was for this lifter: its estimated 1RM
  *  against their best for that exercise in the same sessions. A light day

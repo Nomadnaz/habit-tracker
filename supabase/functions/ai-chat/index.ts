@@ -187,7 +187,7 @@ Deno.serve(async (req: Request) => {
     // names/schema is what makes the model reliably emit a usable <action> block.
     const allowedActions = (cfg.actions ?? []).map((a: string) => ACTION_SPECS[a]).filter(Boolean);
     const actionGuide = allowedActions.length
-      ? `\n\nACTIONS YOU CAN TAKE (besides your normal reply, emit one <action> block per requested change, each with the JSON on a single line):\n${allowedActions.map((s: string) => `- ${s}`).join('\n')}\n\nRules:\n- Only emit an action when the user clearly asks you to change their data.\n- A single message can request MULTIPLE changes -- a brain dump like "add tasks to call mum, buy milk, and book the dentist" is THREE separate create_task actions. Emit ONE <action> block PER ITEM, never merged into one, never dropped: if the user listed 5 things, this reply must contain exactly 5 <action> blocks.\n- If the user's message is a short confirmation of something YOU already proposed (e.g. "go ahead", "yes", "do it") -- look back through conversationHistory to recover exactly what was proposed, then emit the <action> block for EVERY one of those items in THIS reply. Never write a sentence claiming something was added, logged, or changed unless you emitted the matching <action> block(s) in this same reply -- a confirmation with no action blocks behind it is a lie the user has no way to catch.\n- For an explicit, unambiguous request (e.g. "add a task to call mum tomorrow at 6pm"), set "confidence": 0.95 so it happens immediately.\n- If you are unsure which task they mean or details are missing, use a lower "confidence" (0.6-0.8) so they can confirm first.${isDevice ? ' EXCEPT from the device (see DEVICE MODE below): it has no confirm screen, so use 0.85+ and your best-guess interpretation instead of a low confidence -- a gated, unconfirmed action here just reads back as a question nobody can answer.' : ''}\n- For reschedule_task / complete_task, use the exact id shown in TASKS.\n- Resolve relative dates against TODAY above.`
+      ? `\n\nACTIONS YOU CAN TAKE (besides your normal reply, emit one <action> block per requested change, each with the JSON on a single line):\n${allowedActions.map((s: string) => `- ${s}`).join('\n')}\n\nRules:\n- Only emit an action when the user clearly asks you to change their data.\n- A single message can request MULTIPLE changes -- a brain dump like "add tasks to call mum, buy milk, and book the dentist" is THREE separate create_task actions. Emit ONE <action> block PER ITEM, never merged into one, never dropped: if the user listed 5 things, this reply must contain exactly 5 <action> blocks.\n- If the user's message is a short confirmation of something YOU already proposed (e.g. "go ahead", "yes", "do it") -- look back through conversationHistory to recover exactly what was proposed, then emit the <action> block for EVERY one of those items in THIS reply. Never write a sentence claiming something was added, logged, or changed unless you emitted the matching <action> block(s) in this same reply -- a confirmation with no action blocks behind it is a lie the user has no way to catch.\n- For an explicit, unambiguous request (e.g. "add a task to call mum tomorrow at 6pm"), set "confidence": 0.95 so it happens immediately.\n- If you are unsure which task they mean or details are missing, use a lower "confidence" (0.6-0.8) so they can confirm first.${isDevice ? ' EXCEPT from the device (see DEVICE MODE below): it has no confirm screen, so use 0.85+ and your best-guess interpretation instead of a low confidence -- a gated, unconfirmed action here just reads back as a question nobody can answer.' : ''}\n- For reschedule_task / complete_task, use the exact id shown in TASKS.\n- Resolve relative dates against TODAY above.\n- Your earlier replies in conversationHistory may end with a "[saved: ...]" note the app adds, listing what was really written (or "nothing"). Never write that note yourself, and never copy an earlier reply's wording as a substitute for an <action> block: every new set, meal or change the user tells you about needs its own <action> block in THIS reply.\n- For log_set, set "exerciseName" to the exercise as the user named it (e.g. "pec fly machine"); the app matches it to its exercise library.`
       : '';
     // Device calls reach here only when device-log's own classifier couldn't
     // confidently turn the utterance into a write (see device-log/index.ts) --
@@ -215,20 +215,38 @@ Deno.serve(async (req: Request) => {
     const userKey = await getUserApiKey(admin, userId);
     const anthropic = new Anthropic({ apiKey: userKey ?? ANTHROPIC_API_KEY });
     const modelId = MODEL_IDS[cfg.model];
-    const completion = await anthropic.messages.create({
+    type Turn = { role: 'user' | 'assistant'; content: string };
+    const ask = (messages: Turn[]) => anthropic.messages.create({
       model: modelId,
       max_tokens: 1024,
       system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        ...history.map((h) => ({ role: h.role, content: h.content })),
-        { role: 'user', content: message },
-      ],
+      messages,
     });
+    const textOf = (c: { content: { type: string; text?: string }[] }) =>
+      c.content.filter((b) => b.type === 'text').map((b) => b.text ?? '').join('');
+    const convo: Turn[] = [...history.map((h) => ({ role: h.role, content: h.content })), { role: 'user', content: message }];
+    const completion = await ask(convo);
+    let rawText = textOf(completion);
+    let tokensIn = completion.usage?.input_tokens ?? null;
+    let tokensOut = completion.usage?.output_tokens ?? null;
 
-    const rawText = completion.content
-      .filter((b: { type: string }) => b.type === 'text')
-      .map((b: { text: string }) => b.text)
-      .join('');
+    // Self-check: a reply that says it logged/added/saved something but carries
+    // no <action> block wrote nothing (found 2026-10-21: "5 reps of 86kg pec fly
+    // machine" got "Logged! 5 reps on the pec fly machine at 86kg." with no
+    // action — copied from the history's earlier, real "Logged!" replies). Ask
+    // once more, naming the problem; the model either emits the action or
+    // drops the claim. One extra call, only on this failure.
+    if (allowedActions.length && !extractActions(rawText).length && /\b(logged|added|saved|recorded|tracked|created|updated|scheduled)\b/i.test(cleanText(rawText))) {
+      console.log('[ai-chat] claimed a write with no <action>; retrying once');
+      const retry = await ask([
+        ...convo,
+        { role: 'assistant', content: rawText },
+        { role: 'user', content: 'SYSTEM CHECK (from the app, not the user): your reply says something was logged/added/saved, but it has no <action> block, so NOTHING was saved. If my previous message asked you to record or change something, reply again in full: the <action> block(s) plus the same short reply. If it did not, reply again without saying anything was saved.' },
+      ]);
+      rawText = textOf(retry);
+      tokensIn = (tokensIn ?? 0) + (retry.usage?.input_tokens ?? 0);
+      tokensOut = (tokensOut ?? 0) + (retry.usage?.output_tokens ?? 0);
+    }
     let responseText = cleanText(rawText);
     // 5b. Gate every emitted action (tasks 012/039). The app is LOCAL-FIRST, so
     // it performs the actual writes itself (on-device store + Supabase + Apple);
@@ -335,8 +353,6 @@ Deno.serve(async (req: Request) => {
       responseText = lastStop > 40 ? cut.slice(0, lastStop + 1) : cut.slice(0, lastSpace > 0 ? lastSpace : 140);
     }
 
-    const tokensIn = completion.usage?.input_tokens ?? null;
-    const tokensOut = completion.usage?.output_tokens ?? null;
 
     // 6. Persist the exchange + increment usage (best-effort; never block the reply).
     const now = new Date().toISOString();

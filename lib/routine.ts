@@ -17,6 +17,7 @@ import { CATALOGUE, cardioSessions, withIntensity, type Session } from './muscle
 import { loadBodyData, getBodyProfile, latestWeight, type BodyData } from './body-data';
 import { getActivitiesInRange } from './activity-data';
 import { equipmentOf, guideFor, patternOf } from './exercise-guide';
+import { findExercise } from './exercise-library';
 
 const KEY = '@routine';
 
@@ -84,14 +85,19 @@ const MOVE_OF_GROUP: Partial<Record<MuscleGroup, MovementType>> = {
 
 /** An exercise for a catalogue name: yours if you have that lift (same name, or same movement on the
  *  same kit), else a new one with a starting weight for your size. */
-export async function exerciseFor(name: string, groups?: MuscleGroup[]): Promise<Exercise> {
+export async function exerciseFor(name: string, groups?: MuscleGroup[], opts: { exact?: boolean } = {}): Promise<Exercise> {
   const library = await getExercises();
-  const key = name.toUpperCase();
+  const known = findExercise(name);
+  const key = known?.name ?? name.toUpperCase();
   const pattern = patternOf(key), kit = equipmentOf(key, pattern);
-  const mine = library.find(e => e.name.toUpperCase() === key)
-    ?? library.find(e => patternOf(e.name) === pattern && equipmentOf(e.name, pattern) === kit && pattern !== 'stand');
+  // Yours by name, or by being the same lift in the library ("PEC FLY" is your PEC DECK).
+  // A starter lineup may also borrow one on the same movement and kit; a logged set
+  // (`exact`) never does — an incline press is not your flat one.
+  const mine = library.find(e => e.name.toUpperCase() === name.toUpperCase() || e.name.toUpperCase() === key)
+    ?? (known ? library.find(e => findExercise(e.name) === known) : undefined)
+    ?? (opts.exact ? undefined : library.find(e => patternOf(e.name) === pattern && equipmentOf(e.name, pattern) === kit && pattern !== 'stand'));
   if (mine) return mine;
-  const muscleGroups = groups ?? CATALOGUE.find(([n]) => n === key)?.[1] ?? [];
+  const muscleGroups = groups?.length ? groups : known?.groups ?? CATALOGUE.find(([n]) => n === key)?.[1] ?? [];
   const [profile, body] = await Promise.all([getBodyProfile(), loadBodyData()]);
   const g = guideFor(key, { goal: 'size', bodyKg: latestWeight(body) || profile.weightKg, heightCm: profile.heightCm, sex: profile.sex });
   return createExercise({
@@ -137,7 +143,7 @@ const SEED: Record<string, { sets: number; reps: string; weightKg: number }> = {
 export function bestE1rms(sessions: Session[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const s of sessions) {
-    if (!s.measured || s.weightKg <= 0) continue;
+    if (!s.measured || s.weightKg <= 0 || findExercise(s.name)?.assisted) continue;
     const e = s.weightKg * (1 + (s.reps ?? 1) / 30);
     if (e > (out[s.exerciseId] ?? 0)) out[s.exerciseId] = e;
   }

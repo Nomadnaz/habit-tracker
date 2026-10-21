@@ -39,8 +39,9 @@ describe('muscleStatus', () => {
     expect(done.lastAt).toBe(NOW - 100 * H);
   });
   it('secondary movers drain less', () => {
+    // Bench press: lateral triceps 0.55 of the work → 3 sets drain 3 × 0.55 / 4.
     const tri = muscleStatus('triceps.lat', [s('BENCH PRESS', 0)], NOW);
-    expect(tri.pct).toBe(50);
+    expect(tri.pct).toBe(45);
   });
   it('joints list hits but have no battery drain', () => {
     expect(muscleStatus('knee', [s('SQUAT', 1)], NOW).pct).toBe(100);

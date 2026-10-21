@@ -101,10 +101,13 @@ async function localExercise(data: Record<string, unknown>): Promise<{ id: strin
   const target = normName(said);
   const exact = library.filter(e => normName(e.name) === target);
   if (exact.length === 1) return exact[0];
+  // Known to the exercise library ("pec fly machine" = PEC DECK): your copy of
+  // that lift, or a new one under its proper name and muscles.
+  const [{ exerciseFor }, { findExercise }] = await Promise.all([import('./routine'), import('./exercise-library')]);
+  if (findExercise(said)) return exerciseFor(said, undefined, { exact: true });
   const near = library.filter(e => { const n = normName(e.name); return n.includes(target) || target.includes(n); });
   if (near.length === 1) return near[0];
-  const { exerciseFor } = await import('./routine');
-  return exerciseFor(target.toUpperCase());
+  return exerciseFor(target.toUpperCase(), undefined, { exact: true });
 }
 
 function priorityOf(v: unknown): Priority {
@@ -311,7 +314,11 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
       const ex = await localExercise(data);
       const exerciseId = ex.id;
       const date = resolveDateKey(data.date);
-      const e1rm = estimated1RM(weightKg, reps);
+      // On an assisted machine the weight helps you up — more of it is easier,
+      // so it can't stand for strength or set a PB.
+      const { findExercise } = await import('./exercise-library');
+      const assisted = !!findExercise(ex.name)?.assisted;
+      const e1rm = assisted ? 0 : estimated1RM(weightKg, reps);
       const setRow = {
         id: genId(),
         user_id: userId,
@@ -330,7 +337,7 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
 
       const prevBest = await bestEstimated1RM(userId, exerciseId);
       let newPb = false;
-      if (e1rm > prevBest) {
+      if (!assisted && e1rm > prevBest) {
         const { error: pbError } = await supabase.from('pb_log').upsert(
           { id: genId(), user_id: userId, exercise_id: exerciseId, weight_kg: weightKg, reps, date },
           { onConflict: 'user_id,exercise_id,date' },
@@ -338,7 +345,7 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
         if (!pbError) newPb = true;
       }
       await postWrite('workout', setRow, 'create');
-      return { summary: `Logged set: ${ex.name} ${weightKg}kg x${reps}${newPb ? ' — new PB!' : ''}` };
+      return { summary: `Logged set: ${ex.name} ${weightKg}kg${assisted ? ' assist' : ''} x${reps}${newPb ? ' — new PB!' : ''}` };
     }
 
     // The 7 cases below close a real gap (Code Audit v3, 2026-09-01):

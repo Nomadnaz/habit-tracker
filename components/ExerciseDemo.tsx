@@ -187,7 +187,7 @@ const bench = (j: Joints): Cap[] => {
 const seat = (j: Joints): Cap[] => [cap([j.hip[0] - 12, j.hip[1] - 12], [j.hip[0] + 22, j.hip[1] - 12], 4.5, 0.45, 0.2), cap([j.hip[0] + 4, j.hip[1] - 12], [j.hip[0] + 4, 0], 2.5, 0.35, 0.2)];
 const bar = (at: P) => () => [cap(at, at, 3.5, 0.8, 3)];
 
-const DEMOS: Record<Pattern, Demo> = {
+const DEMOS: Partial<Record<Pattern, Demo>> = {
   squat: { view: 'side', a: { ...STAND, hip: [-2, 88], hand: { s: [-11, 2] } }, b: { ...STAND, hip: [-28, 48], torso: 145, hand: { s: [-11, 2] } } },
   legpress: {
     view: 'side',
@@ -312,10 +312,17 @@ const DEMOS: Record<Pattern, Demo> = {
   },
   stand: { view: 'side', a: STAND, b: { ...STAND, hip: [0, 87], shrug: 1 } },
 };
+// Movements added with the exercise library, on their nearest demo for now.
+Object.assign(DEMOS, {
+  pullover: DEMOS.skull, invrow: DEMOS.row, backext: DEMOS.hinge, swing: DEMOS.hinge, kickback: DEMOS.legcurl,
+  sideplank: DEMOS.plank, carry: DEMOS.shrug, clean: DEMOS.squat, jump: DEMOS.squat, jacks: DEMOS.lateral,
+  burpee: DEMOS.pushup, rower: DEMOS.cablerow, bike: DEMOS.run,
+});
+const demoOf = (p: Pattern): Demo => DEMOS[p] ?? DEMOS.stand!;
 
 // Tweaks by name: the bench's tilt, a seated press.
 function demoFor(pattern: Pattern, name: string): Demo {
-  const d = DEMOS[pattern];
+  const d = demoOf(pattern);
   const n = name.toUpperCase();
   // Upright row: hands up the front of the body to the chin, elbows high.
   if (/UPRIGHT/.test(n)) return { view: 'front', a: { ...STAND, ankle: [11, 0], hand: { s: [-13, -54] }, elbow: 1 }, b: { ...STAND, ankle: [11, 0], hand: { s: [-13, -6] }, elbow: 1 } };
