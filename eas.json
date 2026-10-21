@@ -8,14 +8,20 @@
       "distribution": "internal",
       "ios": {
         "simulator": false
+      },
+      "channel": "preview",
+      "android": {
+        "buildType": "apk"
       }
     },
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production"
     }
   },
   "submit": {

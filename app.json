@@ -16,14 +16,14 @@
         "NSHealthShareUsageDescription": "Read your steps, walking distance, activity, sleep, weight, heart rate and heart rate variability to show progress on the Body and Today screens.",
         "NSHealthUpdateUsageDescription": "This app does not write health data; permission is only requested for compatibility with HealthKit.",
         "NSBluetoothAlwaysUsageDescription": "Connect to your Companion HUD device to relay voice commands to the AI.",
-        "NSSpeechRecognitionUsageDescription": "Transcribe voice questions from your Companion HUD device (unused \u2014 cloud transcription is used instead).",
+        "NSSpeechRecognitionUsageDescription": "Transcribe voice questions from your Companion HUD device (unused — cloud transcription is used instead).",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Keep tracking your hike, run, or walk in the background if you lock your phone or switch apps mid-activity.",
         "NSLocationWhenInUseUsageDescription": "Track your route, distance, and pace while recording a hike, run, or walk.",
         "UIBackgroundModes": [
           "location"
         ],
         "ITSAppUsesNonExemptEncryption": false,
-        "NSMicrophoneUsageDescription": "Hold the dot to speak a log or ask a question \u2014 audio is transcribed, then discarded."
+        "NSMicrophoneUsageDescription": "Hold the dot to speak a log or ask a question — audio is transcribed, then discarded."
       },
       "bundleIdentifier": "com.nova.habittracker",
       "entitlements": {
@@ -31,6 +31,7 @@
       }
     },
     "android": {
+      "package": "com.nova.habittracker",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -47,7 +48,9 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION"
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -90,7 +93,7 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Hold the dot to speak a log or ask a question \u2014 audio is transcribed, then discarded."
+          "microphonePermission": "Hold the dot to speak a log or ask a question — audio is transcribed, then discarded."
         }
       ],
       "./plugins/with-fmt-cxx17"
@@ -108,6 +111,12 @@
       "resizeMode": "contain",
       "backgroundColor": "#000000",
       "imageWidth": 160
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2e1a9c53-a91b-4cb2-9339-5f34f8563979"
     }
   }
 }
