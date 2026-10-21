@@ -36,7 +36,8 @@ import { DifficultyBar } from '@/components/train/DifficultyBar';
 import { SessionBar } from '@/components/train/SessionBar';
 import { Dropdown } from '@/components/Dropdown';
 import { Reveal } from '@/components/Reveal';
-import { START_ACTION, SwipeRow } from '@/components/SwipeRow';
+import { SwipeActions } from '@/components/SwipeActions';
+import { RestTimer, restSeconds, type Rest } from '@/components/train/RestTimer';
 import { getBodyProfile, latestWeight, loadBodyData, type BodyProfile } from '@/lib/body-data';
 import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
 import { bleBridge } from '@/lib/ble-bridge';
@@ -75,6 +76,8 @@ export default function LogWorkout() {
   /** Lifts ticked off today. Saved as today's done entry, the rest as its skip list, which is what recovery reads. */
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [cheer, setCheer] = useState(0);
+  /** The one rest timer running, on the lift it was started from. */
+  const [rest, setRest] = useState<Rest | null>(null);
   const [logged, setLogged] = useState<Record<string, number>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [swapping, setSwapping] = useState<string | null>(null);
@@ -366,6 +369,10 @@ export default function LogWorkout() {
               logged={logged[r.ex.id] ?? 0}
               done={ticked.has(r.ex.id)}
               onTick={() => tick(r.ex)}
+              rest={rest?.id === r.ex.id ? rest : null}
+              onRest={() => { const total = restSeconds(guideOf(r.ex).rest); setRest({ id: r.ex.id, ends: Date.now() + total * 1000, total }); }}
+              onRestAdd={s => setRest(x => (x ? { ...x, ends: Math.max(x.ends, Date.now()) + s * 1000, total: x.total + s } : x))}
+              onRestStop={() => setRest(null)}
               open={open === r.jid}
               swapping={swapping === r.jid}
               resting={isResting(r.ex) ? restOf[r.ex.id] : null}
@@ -452,12 +459,13 @@ export default function LogWorkout() {
 type LiftEdit = Partial<Pick<Exercise, 'sets' | 'reps' | 'weightKg'>>;
 
 function LiftChip({
-  index, delay, row, sets, logged, done, onTick, open, swapping, alternatives, unit, puckSent, resting, onForce, guide, bestE1rm,
+  index, delay, row, sets, logged, done, onTick, rest, onRest, onRestAdd, onRestStop, open, swapping, alternatives, unit, puckSent, resting, onForce, guide, bestE1rm,
   onToggle, onSwapToggle, onSwap, onRemove, onPatch, onPuck, onHowTo, onHistory,
 }: {
   index: number; delay: number; row: Row; sets: number; logged: number;
   /** Ticked off today. */
-  done: boolean; onTick: () => void; open: boolean; swapping: boolean; alternatives: Choice[];
+  done: boolean; onTick: () => void;
+  rest: Rest | null; onRest: () => void; onRestAdd: (s: number) => void; onRestStop: () => void; open: boolean; swapping: boolean; alternatives: Choice[];
   unit: 'metric' | 'imperial'; puckSent: boolean;
   /** Set when a main muscle won't be recovered — the lift sits this session out. */
   resting: Resting<Exercise> | null; onForce: () => void;
@@ -477,12 +485,15 @@ function LiftChip({
 
   return (
     <Reveal delay={delay} style={[st.chip, open && st.chipOpen, resting && st.chipResting, done && st.chipDone]}>
-      {/* Slide right to start the lift (its log), left to send it to the puck. A resting lift sits still. */}
-      <SwipeRow
+      {/* Swipe either way for the lift's tray: rest timer, send to puck, done. A resting lift has none. */}
+      <SwipeActions
         style={st.chipTop}
         nudge={index === 0 && !resting}
-        right={resting ? undefined : { ...START_ACTION, leaves: true, onFire: onHistory }}
-        left={resting ? undefined : { label: 'PUCK', icon: 'send', color: C.hot, ink: C.onHot, onFire: onPuck }}
+        actions={resting ? [] : [
+          { key: 'timer', label: 'TIMER', icon: 'timer-outline', color: C.raised, ink: C.ink, onPress: onRest },
+          { key: 'puck', label: 'PUCK', icon: 'send', color: C.hot, ink: C.onHot, onPress: onPuck },
+          { key: 'done', label: done ? 'UNDO' : 'DONE', icon: done ? 'undo' : 'check-bold', color: C.live, ink: C.onHot, onPress: onTick },
+        ]}
       >
       <View style={{ gap: 8 }}>
       <Pressable onPress={onToggle} style={st.chipHead}>
@@ -522,7 +533,9 @@ function LiftChip({
         </View>
       </View>}
       </View>
-      </SwipeRow>
+      </SwipeActions>
+
+      {rest && <View style={st.chipBody}><RestTimer rest={rest} onAdd={onRestAdd} onStop={onRestStop} /></View>}
 
       {(swapping || open) && <View style={st.chipBody}>
       {swapping && (
