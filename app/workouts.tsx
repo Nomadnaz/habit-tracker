@@ -35,6 +35,7 @@ import { ValuePicker } from '@/components/train/ValuePicker';
 import { DifficultyBar } from '@/components/train/DifficultyBar';
 import { Dropdown } from '@/components/Dropdown';
 import { Reveal } from '@/components/Reveal';
+import { START_ACTION, SwipeRow } from '@/components/SwipeRow';
 import { getBodyProfile, latestWeight, loadBodyData, type BodyProfile } from '@/lib/body-data';
 import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
 import { bleBridge } from '@/lib/ble-bridge';
@@ -452,6 +453,14 @@ function LiftChip({
 
   return (
     <Reveal delay={delay} style={[st.chip, open && st.chipOpen, resting && st.chipResting]}>
+      {/* Slide right to start the lift (its log), left to send it to the puck. A resting lift sits still. */}
+      <SwipeRow
+        style={st.chipTop}
+        nudge={index === 0 && !resting}
+        right={resting ? undefined : { ...START_ACTION, leaves: true, onFire: onHistory }}
+        left={resting ? undefined : { label: 'PUCK', icon: 'send', color: C.hot, ink: C.onHot, onFire: onPuck }}
+      >
+      <View style={{ gap: 8 }}>
       <Pressable onPress={onToggle} style={st.chipHead}>
         <Text style={st.chipIndex}>{String(index + 1).padStart(2, '0')}</Text>
         <View style={{ flex: 1, gap: 3 }}>
@@ -486,7 +495,10 @@ function LiftChip({
           ))}
         </View>
       </View>}
+      </View>
+      </SwipeRow>
 
+      {(swapping || open) && <View style={st.chipBody}>
       {swapping && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.alts}>
           {alternatives.length === 0 && <Text style={st.empty}>Nothing close — add one from the tray.</Text>}
@@ -535,6 +547,7 @@ function LiftChip({
           </Dropdown>
         </View>
       )}
+      </View>}
     </Reveal>
   );
 }
@@ -560,7 +573,9 @@ const st = StyleSheet.create({
   stack: { paddingHorizontal: 16, gap: 8, marginBottom: 22 },
   empty: { fontFamily: F.mono, fontSize: 12, color: C.dim, paddingVertical: 10 },
 
-  chip: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  chip: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.line, overflow: 'hidden' },
+  chipTop: { paddingHorizontal: 14, paddingVertical: 12 },
+  chipBody: { paddingHorizontal: 14, paddingBottom: 12, gap: 8 },
   chipOpen: { borderColor: C.lineHi, backgroundColor: C.raised },
   chipResting: { backgroundColor: C.bg, borderStyle: 'dashed' },
   restRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 30 },

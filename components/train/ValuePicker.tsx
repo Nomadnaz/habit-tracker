@@ -4,7 +4,7 @@
 // one in the lens is the value. Weights are only ones you can load (the plate
 // grid in lib/exercise-guide.ts); a rep range moves as one piece.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { nextWeight, repRange, repText, type Equipment } from '@/lib/exercise-guide';
@@ -56,6 +56,7 @@ export function ValuePicker({ sets, reps, weightKg, kit, unit, onPatch }: {
         accessibilityRole="tab"
         accessibilityState={{ selected: on }}
       >
+        <Corners color={on ? C.live : C.lineHi} />
         <Text style={[st.tabLabel, on && { color: C.live }]}>{label}</Text>
         <Text style={[st.tabValue, on && { color: C.ink }]} numberOfLines={1}>{value}</Text>
       </Pressable>
@@ -83,6 +84,7 @@ function Ruler({ labels, index, item, pick }: { labels: string[]; index: number;
   const at = useRef(index);
   /** Only a finger moves the value; a scroll we started just catches up. */
   const user = useRef(false);
+  const placed = useRef(false);
   const pickRef = useRef(pick);
   pickRef.current = pick;
 
@@ -106,14 +108,14 @@ function Ruler({ labels, index, item, pick }: { labels: string[]; index: number;
     },
   }), [labels.length, item]);
 
-  const tap = (i: number) => {
+  const tap = useRef((i: number) => {
     if (i === at.current) return;
     void Haptics.selectionAsync();
     at.current = i;
     user.current = false;
     list.current?.scrollTo({ x: i * item, animated: true });
     pickRef.current(i);
-  };
+  }).current;
 
   const side = Math.max(0, (w - item) / 2);
   return (
@@ -121,10 +123,7 @@ function Ruler({ labels, index, item, pick }: { labels: string[]; index: number;
       {/* the lens — behind the tape, so it never takes a touch */}
       {!!w && (
         <View pointerEvents="none" style={[st.lens, { left: side, width: item }]}>
-          <View style={[st.corner, { left: 0, top: 0, borderLeftWidth: 2, borderTopWidth: 2 }]} />
-          <View style={[st.corner, { right: 0, top: 0, borderRightWidth: 2, borderTopWidth: 2 }]} />
-          <View style={[st.corner, { left: 0, bottom: 0, borderLeftWidth: 2, borderBottomWidth: 2 }]} />
-          <View style={[st.corner, { right: 0, bottom: 0, borderRightWidth: 2, borderBottomWidth: 2 }]} />
+          <Corners color={C.live} />
         </View>
       )}
       {!!w && (
@@ -133,8 +132,9 @@ function Ruler({ labels, index, item, pick }: { labels: string[]; index: number;
           horizontal
           style={StyleSheet.absoluteFill}
           contentContainerStyle={{ paddingHorizontal: side }}
-          onLayout={() => list.current?.scrollTo({ x: index * item, animated: false })}
-          contentOffset={{ x: index * item, y: 0 }}
+          // Placed once. A contentOffset prop would be re-applied by iOS on every
+          // value change and yank the tape back mid-swipe.
+          onLayout={() => { if (placed.current) return; placed.current = true; list.current?.scrollTo({ x: index * item, animated: false }); }}
           onScroll={onScroll}
           onScrollBeginDrag={() => { user.current = true; }}
           scrollEventThrottle={16}
@@ -142,34 +142,56 @@ function Ruler({ labels, index, item, pick }: { labels: string[]; index: number;
           decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
         >
-          {labels.map((l, i) => {
-            const r = (k: number) => (i + k) * item;
-            const inputRange = [r(-3), r(-1), r(0), r(1), r(3)];
-            const scale = x.interpolate({ inputRange, outputRange: [0.7, 0.8, 1.15, 0.8, 0.7], extrapolate: 'clamp' });
-            const opacity = x.interpolate({ inputRange, outputRange: [0.2, 0.5, 1, 0.5, 0.2], extrapolate: 'clamp' });
-            return (
-              <Pressable key={i} onPress={() => tap(i)} style={{ width: item, height: RULER_H, alignItems: 'center', justifyContent: 'center' }}>
-                <Animated.Text style={[st.num, { opacity, transform: [{ scale }] }]} numberOfLines={1}>{l}</Animated.Text>
-                <View style={[st.tick, i % 5 === 0 && st.tickMajor]} />
-              </Pressable>
-            );
-          })}
+          <Tape labels={labels} item={item} x={x} tap={tap} />
         </Animated.ScrollView>
       )}
     </View>
   );
 }
 
+/** The numbers on the tape. Memoised so a value change doesn't rebuild every
+ *  number's native animation while the tape is moving. */
+const Tape = memo(function Tape({ labels, item, x, tap }: { labels: string[]; item: number; x: Animated.Value; tap: (i: number) => void }) {
+  return (
+    <>
+      {labels.map((l, i) => {
+        const r = (k: number) => (i + k) * item;
+        const inputRange = [r(-3), r(-1), r(0), r(1), r(3)];
+        const scale = x.interpolate({ inputRange, outputRange: [0.7, 0.8, 1.15, 0.8, 0.7], extrapolate: 'clamp' });
+        const opacity = x.interpolate({ inputRange, outputRange: [0.2, 0.5, 1, 0.5, 0.2], extrapolate: 'clamp' });
+        return (
+          <Pressable key={i} onPress={() => tap(i)} style={{ width: item, height: RULER_H, alignItems: 'center', justifyContent: 'center' }}>
+            <Animated.Text style={[st.num, { opacity, transform: [{ scale }] }]} numberOfLines={1}>{l}</Animated.Text>
+            <View style={[st.tick, i % 5 === 0 && st.tickMajor]} />
+          </Pressable>
+        );
+      })}
+    </>
+  );
+}, (a, b) => a.item === b.item && a.labels.length === b.labels.length && a.labels.every((l, i) => l === b.labels[i]));
+
+/** The four bracket corners of a lit box — green when on. */
+function Corners({ size = 8, color }: { size?: number; color: string }) {
+  const c = { position: 'absolute' as const, width: size, height: size, borderColor: color };
+  return (
+    <>
+      <View pointerEvents="none" style={[c, { left: 0, top: 0, borderLeftWidth: 2, borderTopWidth: 2 }]} />
+      <View pointerEvents="none" style={[c, { right: 0, top: 0, borderRightWidth: 2, borderTopWidth: 2 }]} />
+      <View pointerEvents="none" style={[c, { left: 0, bottom: 0, borderLeftWidth: 2, borderBottomWidth: 2 }]} />
+      <View pointerEvents="none" style={[c, { right: 0, bottom: 0, borderRightWidth: 2, borderBottomWidth: 2 }]} />
+    </>
+  );
+}
+
 const st = StyleSheet.create({
   wrap: { gap: 6 },
   tabs: { flexDirection: 'row', gap: 6 },
-  tab: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.bg, paddingHorizontal: 10, justifyContent: 'center', gap: 3 },
-  tabOn: { borderColor: C.live, backgroundColor: 'rgba(116,242,91,0.06)' },
+  tab: { flex: 1, height: 48, backgroundColor: C.bg, paddingHorizontal: 12, justifyContent: 'center', gap: 3 },
+  tabOn: { backgroundColor: 'rgba(116,242,91,0.07)' },
   tabLabel: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1.8 },
   tabValue: { fontFamily: F.dot, fontSize: 15, color: C.dim, letterSpacing: 0.5 },
   ruler: { height: RULER_H, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.bg, overflow: 'hidden' },
   lens: { position: 'absolute', top: 3, bottom: 3, backgroundColor: 'rgba(116,242,91,0.07)' },
-  corner: { position: 'absolute', width: 8, height: 8, borderColor: C.live },
   num: { fontFamily: F.dot, fontSize: 15, color: C.ink, letterSpacing: 0.5 },
   tick: { position: 'absolute', bottom: 4, width: 1, height: 4, backgroundColor: C.lineHi },
   tickMajor: { height: 7, backgroundColor: C.dim },
