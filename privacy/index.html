@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PUCK Privacy Policy</title>
+<style>
+  :root { --bg: #000; --ink: #f2f2f2; --dim: #8a8a8a; --line: #2a2a2a; --food: #ff7a3d; }
+  @media (prefers-color-scheme: light) { :root { --bg: #fff; --ink: #111; --dim: #555; --line: #ddd; --food: #d9531a; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 28px; letter-spacing: 2px; margin: 0 0 4px; }
+  h2 { font-size: 15px; letter-spacing: 2px; text-transform: uppercase; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--food); }
+  p, li { color: var(--ink); }
+  .dim { color: var(--dim); font-size: 14px; }
+  ul { padding-left: 20px; }
+  li { margin: 6px 0; }
+  a { color: var(--food); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { text-align: left; vertical-align: top; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: normal; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PUCK — PRIVACY POLICY</h1>
+  <p class="dim">Last updated 22 October 2026</p>
+
+  <p>PUCK is a fitness, nutrition and habit tracking app, with an optional Bluetooth rep-sensor device (the "puck"). This policy explains what the app collects, why, where it goes, and how to have it deleted. We don't sell your data, we don't show ads, and we don't track you across other apps or websites.</p>
+
+  <h2>What we collect</h2>
+  <ul>
+    <li><b>Account:</b> your email address and password (the password is stored hashed by our authentication provider; we never see it).</li>
+    <li><b>Profile:</b> details you enter to set your targets, such as age, sex, height, weight and goal.</li>
+    <li><b>Things you log:</b> meals and their nutrition (including sugar), water, weight, workouts, sets and reps, habits, tasks and notes.</li>
+    <li><b>Food photos:</b> if you photograph a meal, the photo is stored with that meal and sent for a nutrition estimate.</li>
+    <li><b>Health data (iPhone only, with your permission):</b> we read steps, walking distance, activity, sleep, weight, heart rate and heart rate variability from Apple Health. We never write to Apple Health.</li>
+    <li><b>Location (only while you record a walk, run or hike):</b> your route, distance and pace for that activity.</li>
+    <li><b>Voice (only while you hold to talk):</b> the recording is sent for transcription and then discarded; the resulting text is kept as part of your chat or log.</li>
+    <li><b>Puck data:</b> rep counts, movement height and speed measured by the puck, sent to the app over Bluetooth.</li>
+    <li><b>Barcodes:</b> the number of a product you scan.</li>
+  </ul>
+
+  <h2>How we use it</h2>
+  <p>Only to run the app for you: to show your progress, set your daily targets, estimate the nutrition of meals, answer your questions in the in-app assistant, and sync your data between your devices. We don't use your data for advertising or marketing, and health data from Apple Health is never used for advertising, never sold and never shared with data brokers.</p>
+
+  <h2>Who processes it</h2>
+  <table>
+    <tr><th>Service</th><th>What it receives</th><th>Why</th></tr>
+    <tr><td>Supabase (servers in Frankfurt, EU)</td><td>Your account and the data you log, including food photos</td><td>Storage, sign-in and sync</td></tr>
+    <tr><td>Anthropic (Claude)</td><td>Food photos or meal descriptions you ask it to estimate; messages you send the assistant, with the recent logs it needs to answer</td><td>Nutrition estimates and the assistant</td></tr>
+    <tr><td>Groq</td><td>Voice recordings while you hold to talk; text for spoken replies</td><td>Speech to text and text to speech</td></tr>
+    <tr><td>Open Food Facts</td><td>The barcode number you scan (nothing about you)</td><td>Looking up the product's nutrition label</td></tr>
+    <tr><td>Expo (EAS Update)</td><td>Standard app and device information when the app checks for updates</td><td>Delivering app updates</td></tr>
+  </table>
+  <p>These providers process data on our behalf to provide the features above and are not permitted to use it for their own purposes such as advertising.</p>
+
+  <h2>Where it's stored and for how long</h2>
+  <p>Your data is stored on your phone and in our database (EU). We keep it while you have an account. When you ask us to delete your account, we delete your account and everything you logged within 30 days.</p>
+
+  <h2>Your choices and rights</h2>
+  <ul>
+    <li>You can refuse or revoke Health, location, camera, microphone and Bluetooth access at any time in your phone's settings; the rest of the app keeps working.</li>
+    <li>You can edit or delete individual entries in the app.</li>
+    <li>You can ask for a copy of your data, for corrections, or for your account and all its data to be deleted by emailing us (below). If you're in the UK or EU you have these rights under the UK GDPR / GDPR, and you can complain to your data protection authority (in the UK, the ICO).</li>
+  </ul>
+
+  <h2>Children</h2>
+  <p>PUCK is not intended for children under 13, and we don't knowingly collect their data.</p>
+
+  <h2>Security</h2>
+  <p>Data is sent over encrypted connections (HTTPS) and access to your data in our database is restricted to your account.</p>
+
+  <h2>Changes</h2>
+  <p>If we change this policy we'll update the date at the top, and tell you in the app if the change is significant.</p>
+
+  <h2>Contact</h2>
+  <p>Questions, data requests or account deletion: <a href="mailto:nuz2002@hotmail.co.uk">nuz2002@hotmail.co.uk</a></p>
+</main>
+</body>
+</html>
