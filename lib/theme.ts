@@ -58,10 +58,10 @@ export const MOD = {
   weight:    '#E8C9A0',
   active:    '#FFD23F',
   macros:    '#FF5C9A',
-  protein:   '#FF5C9A',
+  protein:   '#74F25B',
   carbs:     '#FFB23F',
   fat:       '#FFE066',
-  sugar:     '#C77DFF',
+  sugar:     '#FFFFFF',
 };
 
 /** STEPS' ASCII mountain only (components/steps/Mountain.tsx): snow to meadow,

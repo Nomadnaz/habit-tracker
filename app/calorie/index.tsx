@@ -125,14 +125,14 @@ export default function CalorieScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Today's total, as big as the screen allows. */}
-        <View style={styles.hero}>
+        <Pressable style={({ pressed }) => [styles.hero, pressed && { opacity: 0.85 }]} onPress={() => router.push({ pathname: '/calorie/goal', params: { key: 'calories' } })}>
           <Corners size={16} color={over ? C.alert : C.food} />
-          <Text style={styles.eyebrow}>EATEN TODAY</Text>
+          <Text style={styles.eyebrow}>EATEN TODAY  ›</Text>
           <Text style={styles.kcal} numberOfLines={1} adjustsFontSizeToFit>{fmt(totals.calories)}</Text>
           <Text style={styles.kcalUnit}>{`KCAL OF ${fmt(calGoal)}`}</Text>
           <DotBar value={totals.calories} goal={calGoal} color={over ? C.alert : C.food} cells={30} />
           <Text style={[styles.left, over && { color: C.alert }]}>{over ? `${fmt(-left)} OVER` : `${fmt(left)} LEFT`}</Text>
-        </View>
+        </Pressable>
 
         <View style={styles.grid}>
           {MACROS.map(m => {
@@ -140,14 +140,14 @@ export default function CalorieScreen() {
             const goal = targets ? targets[m.key] : 0;
             const color = macroColor(m.kind, val, goal);
             return (
-              <View key={m.key} style={styles.cell}>
+              <Pressable key={m.key} style={({ pressed }) => [styles.cell, pressed && { opacity: 0.85 }]} onPress={() => router.push({ pathname: '/calorie/goal', params: { key: m.key } })}>
                 <Corners size={8} color={C.lineHi} />
-                <Text style={styles.cellLabel}>{m.kind === 'limit' ? `${m.label} · LIMIT` : m.label}</Text>
+                <Text style={styles.cellLabel}>{m.kind === 'limit' ? `${m.label} · LIMIT  ›` : `${m.label}  ›`}</Text>
                 <Text style={[styles.cellVal, color === C.alert && { color: C.alert }]}>
                   {fmt(val)}<Text style={styles.cellUnit}>{` / ${fmt(goal)}G`}</Text>
                 </Text>
                 <DotBar value={val} goal={goal} color={color} cells={14} />
-              </View>
+              </Pressable>
             );
           })}
         </View>

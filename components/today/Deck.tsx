@@ -167,7 +167,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
         body: (
           <View style={st.readiness}>
             <View style={{ width: 104 }}>
-              <Count value={r.score} style={[st.score, { color: MOD.readiness }]} />
+              <Count value={r.score} style={st.score} />
               <Text style={st.dose} numberOfLines={2}>{LEVEL[r.level].dose}</Text>
             </View>
             <View style={{ flex: 1, gap: 7, justifyContent: 'center' }}>

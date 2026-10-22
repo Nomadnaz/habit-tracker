@@ -81,6 +81,9 @@ async function saveMealMap(map: MealMap): Promise<void> {
   await AsyncStorage.setItem(MEALS_KEY, JSON.stringify(map));
 }
 
+/** Every logged day's meals, keyed by date — the fuel goal calendar reads this. */
+export const getMealMap = loadMealMap;
+
 export async function getMealsForDate(dateKey: string): Promise<Meal[]> {
   const map = await loadMealMap();
   return map[dateKey] ?? [];
