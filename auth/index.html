@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>PUCK Account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #000; --surface: #0c0c0c; --line: #222; --lineHi: #383838; --ink: #ededed; --hot: #fff; --onHot: #000; --dim: #8a8a8a; --faint: #4a4a4a; --ghost: #2c2c2c; --live: #74f25b; --alert: #ff3b30; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 "Share Tech Mono", ui-monospace, Menlo, monospace; }
+  main { min-height: 100svh; max-width: 460px; margin: 0 auto; padding: 48px 20px; display: flex; flex-direction: column; justify-content: center; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; letter-spacing: 6px; font-size: 22px; }
+  .brand i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--hot); display: grid; place-items: center; }
+  .brand i::after { content: ""; width: 6px; height: 6px; background: var(--hot); border-radius: 50%; }
+  .art { display: grid; gap: 3px; margin-bottom: 28px; width: max-content; }
+  .art div { display: grid; grid-auto-flow: column; gap: 3px; }
+  .art span { width: 7px; height: 7px; background: var(--ghost); }
+  .art span.on { background: var(--c, var(--hot)); }
+  h1 { font-size: 26px; letter-spacing: 2px; margin: 0 0 10px; font-weight: normal; }
+  p { color: var(--dim); margin: 0 0 12px; }
+  b { color: var(--ink); font-weight: normal; }
+  .btn { display: block; width: 100%; text-align: center; background: var(--hot); color: var(--onHot); border: 0; border-radius: 12px; padding: 16px; font: inherit; letter-spacing: 2px; text-decoration: none; cursor: pointer; margin-top: 18px; }
+  .btn[disabled] { opacity: .5; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-top: 22px; display: grid; gap: 14px; }
+  label { font-size: 11px; letter-spacing: 2px; color: var(--dim); display: grid; gap: 6px; }
+  .box { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 0 12px; }
+  .box:focus-within { border-color: var(--lineHi); }
+  .box.bad { border-color: var(--alert); }
+  input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--ink); font: inherit; font-size: 16px; padding: 13px 0; }
+  .eye { background: none; border: 0; color: var(--dim); font: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; padding: 6px 0 6px 10px; }
+  .rules { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--faint); }
+  .rules span::before { content: ""; display: inline-block; width: 6px; height: 6px; background: var(--ghost); margin-right: 6px; vertical-align: middle; }
+  .rules span.ok { color: var(--ink); }
+  .rules span.ok::before { background: var(--live); }
+  .err { color: var(--alert); font-size: 13px; min-height: 1em; margin: 0; }
+  .fine { font-size: 12px; color: var(--faint); margin-top: 18px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><i></i>PUCK</div>
+  <div id="art" class="art"></div>
+  <section id="view"></section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+// Where PUCK's emails land (lib/auth-links.ts AUTH_PAGE in the app repo).
+// Confirm sign-up → says so and offers OPEN PUCK, which hands the session to
+// the app (habittracker://auth-callback#tokens). Reset password → choose the
+// new one here. The anon key is the app's public key; row-level security
+// limits it to the signed-in user's own rows.
+const SUPABASE_URL = 'https://dnbdjjrjudrzugxkpeeh.supabase.co';
+const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuYmRqanJqdWRyenVneGtwZWVoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzQ2NjAsImV4cCI6MjA5NTYxMDY2MH0.w-s4KT7vKH_yUkpAV8wc47o4EjrdFhPfDiCxqDcvj1Q';
+const APP = 'habittracker://auth-callback';
+const MIN = 8;
+
+const params = new URLSearchParams([location.hash.slice(1), location.search.slice(1)].filter(Boolean).join('&'));
+const at = params.get('access_token'), rt = params.get('refresh_token'), type = params.get('type');
+const error = params.get('error_description') || params.get('error');
+// Keep tokens out of the address bar, history and screenshots.
+if (location.hash || location.search) history.replaceState(null, '', location.pathname);
+
+const view = document.getElementById('view');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+function art(rows, color) {
+  const el = document.getElementById('art');
+  el.style.setProperty('--c', color);
+  el.innerHTML = rows.map(r => '<div>' + [...r].map(c => '<span' + (c === '#' ? ' class="on"' : '') + '></span>').join('') + '</div>').join('');
+}
+const CHECK = ['..........#', '.........##', '........##.', '#......##..', '##....##...', '.##..##....', '..####.....', '...##......'];
+const CROSS = ['##.....##', '.##...##.', '..##.##..', '...###...', '..##.##..', '.##...##.', '##.....##'];
+const KEY = ['.####......', '##..##.....', '#....######', '##..##.#.#.', '.####......'];
+const MAIL = ['###########', '##.......##', '#.#.....#.#', '#..#...#..#', '#...#.#...#', '#....#....#', '#.........#', '###########'];
+
+if (error) {
+  art(CROSS, 'var(--alert)');
+  const expired = /expired|invalid/i.test(error);
+  view.innerHTML = `
+    <h1>${expired ? 'LINK EXPIRED' : 'LINK DIDN’T WORK'}</h1>
+    <p>${expired ? 'This link has expired or was already used. Links work once, for a limited time.' : esc(error)}</p>
+    <p>Open <b>PUCK</b> and sign in. If your email still isn’t confirmed, tap <b>RESEND CONFIRMATION EMAIL</b>; for a password, tap <b>FORGOT PASSWORD?</b> to get a new link.</p>
+    <a class="btn" href="${APP}">OPEN PUCK</a>`;
+} else if (type === 'recovery' && at && rt) {
+  art(KEY, 'var(--hot)');
+  view.innerHTML = `
+    <h1>NEW PASSWORD</h1>
+    <p>Choose a new password for your PUCK account.</p>
+    <form class="card" id="f" novalidate>
+      <label>NEW PASSWORD<div class="box" id="b1"><input id="p1" type="password" autocomplete="new-password" placeholder="${MIN}+ characters, with a number"><button type="button" class="eye" data-for="p1">SHOW</button></div></label>
+      <label>CONFIRM PASSWORD<div class="box" id="b2"><input id="p2" type="password" autocomplete="new-password" placeholder="Type it again"><button type="button" class="eye" data-for="p2">SHOW</button></div></label>
+      <div class="rules"><span id="r1">${MIN}+ characters</span><span id="r2">letters + a number</span><span id="r3">both match</span></div>
+      <p class="err" id="err"></p>
+      <button class="btn" id="go" style="margin-top:0">SAVE PASSWORD</button>
+    </form>`;
+  const p1 = document.getElementById('p1'), p2 = document.getElementById('p2'), err = document.getElementById('err'), go = document.getElementById('go');
+  document.querySelectorAll('.eye').forEach(b => b.onclick = () => {
+    const i = document.getElementById(b.dataset.for); const show = i.type === 'password';
+    i.type = show ? 'text' : 'password'; b.textContent = show ? 'HIDE' : 'SHOW';
+  });
+  const check = () => {
+    const a = p1.value, b = p2.value;
+    const r = [a.length >= MIN, /[a-zA-Z]/.test(a) && /\d/.test(a), b.length > 0 && a === b];
+    ['r1', 'r2', 'r3'].forEach((id, i) => document.getElementById(id).classList.toggle('ok', r[i]));
+    document.getElementById('b2').classList.toggle('bad', b.length > 0 && a !== b);
+    return r;
+  };
+  p1.oninput = p2.oninput = check;
+  document.getElementById('f').onsubmit = async e => {
+    e.preventDefault();
+    const r = check();
+    if (!r[0]) return err.textContent = `Use at least ${MIN} characters.`;
+    if (!r[1]) return err.textContent = 'Mix letters and at least one number.';
+    if (!r[2]) return err.textContent = 'Passwords don’t match.';
+    err.textContent = ''; go.disabled = true; go.textContent = 'SAVING…';
+    try {
+      const sb = supabase.createClient(SUPABASE_URL, ANON, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+      const s = await sb.auth.setSession({ access_token: at, refresh_token: rt });
+      if (s.error) throw s.error;
+      const u = await sb.auth.updateUser({ password: p1.value });
+      if (u.error) throw u.error;
+      await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+      art(CHECK, 'var(--live)');
+      view.innerHTML = `
+        <h1>PASSWORD UPDATED</h1>
+        <p>You’re all set. Open <b>PUCK</b> and sign in with your new password.</p>
+        <a class="btn" href="${APP}">OPEN PUCK</a>
+        <p class="fine">On a computer? Just open PUCK on your phone.</p>`;
+    } catch (x) {
+      go.disabled = false; go.textContent = 'SAVE PASSWORD';
+      err.textContent = /same/i.test(x.message) ? 'That’s your current password — pick a new one.'
+        : /expired|invalid|jwt/i.test(x.message) ? 'This link has expired. Ask for a new one from PUCK (FORGOT PASSWORD?).'
+        : x.message;
+    }
+  };
+} else if (at && rt || params.get('code') || type) {
+  art(CHECK, 'var(--live)');
+  const handoff = at && rt ? `${APP}#access_token=${encodeURIComponent(at)}&refresh_token=${encodeURIComponent(rt)}&type=${encodeURIComponent(type || 'signup')}` : APP;
+  const changed = type === 'email_change';
+  view.innerHTML = `
+    <h1>${changed ? 'EMAIL UPDATED' : 'EMAIL CONFIRMED'}</h1>
+    <p>${changed ? 'Your PUCK account now uses this email address.' : 'Your PUCK account is ready.'}</p>
+    <a class="btn" href="${handoff}">OPEN PUCK</a>
+    <p class="fine">On this phone, OPEN PUCK signs you straight in. Confirmed on a computer? Go back to PUCK on your phone and tap <b>I’VE CONFIRMED</b>, or sign in.</p>`;
+} else {
+  art(MAIL, 'var(--hot)');
+  view.innerHTML = `
+    <h1>PUCK ACCOUNT</h1>
+    <p>This page handles the links in PUCK’s emails: confirming your address and resetting your password. Open the link from the email to continue.</p>
+    <a class="btn" href="${APP}">OPEN PUCK</a>`;
+}
+</script>
+</body>
+</html>
