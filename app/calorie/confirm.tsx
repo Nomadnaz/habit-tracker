@@ -156,7 +156,7 @@ export default function ConfirmScreen() {
               <TextInput
                 ref={promptRef}
                 style={st.promptInput} value={prompt} onChangeText={t => { setPrompt(t); setAiError(false); }}
-                placeholder={'e.g. 2 scrambled eggs, 2 slices of\nbuttered toast and a flat white'}
+                placeholder="e.g. 2 scrambled eggs, 2 slices of buttered toast and a flat white"
                 placeholderTextColor={C.faint} multiline autoFocus={str(params.mode) === 'ai'}
                 returnKeyType="done" blurOnSubmit onSubmitEditing={estimate}
               />
@@ -205,7 +205,7 @@ export default function ConfirmScreen() {
 
               <TextInput
                 style={st.name} value={name} onChangeText={setName}
-                placeholder="Name it" placeholderTextColor={C.faint}
+                placeholder="Name it" placeholderTextColor={C.faint} multiline blurOnSubmit
               />
 
               <View style={st.kcalBox}>
@@ -230,14 +230,11 @@ export default function ConfirmScreen() {
                 ] as const).map(([label, value, set]) => (
                   <View key={label} style={st.cell}>
                     <Corners size={8} color={C.lineHi} />
-                    <Text style={st.cellLabel}>{label}</Text>
-                    <View style={st.cellRow}>
-                      <TextInput
-                        style={st.cellInput} value={value} onChangeText={set}
-                        keyboardType="decimal-pad" placeholder="0" placeholderTextColor={C.faint} selectTextOnFocus
-                      />
-                      <Text style={st.cellUnit}>G</Text>
-                    </View>
+                    <Text style={st.cellLabel}>{`${label} · G`}</Text>
+                    <TextInput
+                      style={st.cellInput} value={value} onChangeText={set}
+                      keyboardType="decimal-pad" placeholder="0" placeholderTextColor={C.faint} selectTextOnFocus
+                    />
                   </View>
                 ))}
               </View>
@@ -291,7 +288,7 @@ const st = StyleSheet.create({
   bannerLink: { fontFamily: F.dot, fontSize: 11, color: C.food, letterSpacing: 1.5 },
   photo: { width: '100%', height: 180, marginBottom: 12 },
 
-  name: { fontFamily: F.dot, fontSize: 26, color: C.ink, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.lineHi },
+  name: { fontFamily: F.dot, fontSize: 22, lineHeight: 28, color: C.ink, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.lineHi },
 
   kcalBox: { marginTop: 14, paddingTop: 14, paddingBottom: 16, alignItems: 'center', backgroundColor: C.surface },
   kcal: { fontFamily: F.dot, fontSize: 84, lineHeight: 94, color: C.ink, minWidth: 140, textAlign: 'center', padding: 0 },
@@ -301,9 +298,7 @@ const st = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   cell: { width: '48.6%', flexGrow: 1, backgroundColor: C.surface, padding: 14 },
   cellLabel: { fontFamily: F.mono, fontSize: 10, color: C.dim, letterSpacing: 1.5 },
-  cellRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 6 },
-  cellInput: { flex: 1, fontFamily: F.dot, fontSize: 34, color: C.ink, padding: 0 },
-  cellUnit: { fontFamily: F.dot, fontSize: 14, color: C.faint },
+  cellInput: { fontFamily: F.dot, fontSize: 34, color: C.ink, padding: 0, marginTop: 6 },
 
   label: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2, marginTop: 20, marginBottom: 0 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
