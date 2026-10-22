@@ -6,14 +6,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { C, F, SPRING, numFace } from '@/lib/theme';
+import { C, F, MOD, SPRING, numFace } from '@/lib/theme';
 import { MODULES, packRows, type ModuleId } from '@/lib/today-deck';
 import { goalWord, hm, paceWord } from '@/lib/twin';
 import { FOCUS_TITLE, LEVEL } from '@/lib/coach';
 import type { TodayView } from '@/lib/twin-data';
 import { TypeLine } from '@/components/TypeLine';
 import { Count, Pixel, Segs } from './bits';
-import { DotIcon } from './DotIcon';
+import { DotIcon, type DotIconKind } from './DotIcon';
 
 export type SheetKind = 'steps' | 'water' | 'fuel' | 'sleep' | 'readiness' | 'week' | 'goal';
 export type DeckActions = {
@@ -26,6 +26,7 @@ const GAP = 8;
 const HALF_H = 138;
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 const LEVEL_TONE = { push: C.live, train: C.live, easy: C.hot, recover: C.alert } as const;
+const GLYPH: Partial<Record<ModuleId, DotIconKind>> = { steps: 'foot', water: 'drop', fuel: 'can', sleep: 'moon', heart: 'heart', active: 'bolt' };
 
 export function Deck({ deck, view, width, editing, selected, onSelect, onEject, onHold, act }: {
   deck: ModuleId[];
@@ -47,7 +48,7 @@ export function Deck({ deck, view, width, editing, selected, onSelect, onEject, 
         const m = moduleOf(id, view, act);
         return (
           <Frame
-            key={id} index={index} word={MODULES[id].word} led={m.led} tag={m.tag}
+            key={id} index={index} word={MODULES[id].word} tone={MOD[id]} glyph={GLYPH[id]} led={m.led} tag={m.tag}
             width={MODULES[id].wide ? width : half} height={MODULES[id].wide ? undefined : HALF_H}
             editing={editing} selected={selected === id}
             onPress={() => (editing ? onSelect(id) : m.onPress?.())}
@@ -64,8 +65,8 @@ export function Deck({ deck, view, width, editing, selected, onSelect, onEject, 
 
 // ── the key every module sits in ─────────────────────────────────────────
 
-function Frame({ index, word, led, tag, width, height, editing, selected, onPress, onLongPress, onEject, children }: {
-  index: number; word: string; led?: { tone: string; blink?: boolean }; tag?: string;
+function Frame({ index, word, tone, glyph, led, tag, width, height, editing, selected, onPress, onLongPress, onEject, children }: {
+  index: number; word: string; tone: string; glyph?: DotIconKind; led?: { tone: string; blink?: boolean }; tag?: string;
   width: number; height?: number; editing: boolean; selected: boolean;
   onPress: () => void; onLongPress: () => void; onEject: () => void; children: React.ReactNode;
 }) {
@@ -88,13 +89,15 @@ function Frame({ index, word, led, tag, width, height, editing, selected, onPres
         delayLongPress={380}
         onPressIn={() => Animated.spring(press, { toValue: 0.965, ...SPRING.pop }).start()}
         onPressOut={() => Animated.spring(press, { toValue: 1, ...SPRING.pop }).start()}
-        style={[st.frame, height != null && { flex: 1 }, editing && st.frameEdit, selected && st.frameSel]}
+        style={[st.frame, { borderColor: `${tone}33` }, height != null && { flex: 1 }, editing && st.frameEdit, selected && st.frameSel]}
       >
         <View style={st.head}>
-          <Text style={st.idx}>{String(index + 1).padStart(2, '0')}</Text>
-          <Text style={st.word} numberOfLines={1}>{word}</Text>
+          <View style={[st.chip, { backgroundColor: `${tone}1F` }]}>
+            {glyph && <DotIcon kind={glyph} tone={tone} />}
+            <Text style={[st.word, { color: tone }]} numberOfLines={1}>{word}</Text>
+          </View>
           <View style={{ flex: 1 }} />
-          {!!tag && !editing && <Text style={st.tag}>{tag}</Text>}
+          {!!tag && !editing && <Text style={st.tag} numberOfLines={1}>{tag}</Text>}
           {led && !editing && <Pixel tone={led.tone} blink={led.blink} />}
         </View>
         <View pointerEvents={editing ? 'none' : 'auto'} style={[{ flex: 1 }, editing && { opacity: 0.55 }]}>{children}</View>
@@ -126,7 +129,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
       const pct = v.now.steps / t.steps.value;
       return {
         led: ledFor(pct, v.now.steps > 0), tag: delta(t.steps.lines), onPress: () => act.open('steps'),
-        body: <Half icon={<DotIcon kind="foot" pct={pct} tone={C.live} />} big={<Count value={v.now.steps} style={st.big} />} sub={`of ${fmt(t.steps.value)}`} pct={pct} tone={C.live} />,
+        body: <Half big={<Count value={v.now.steps} style={st.big} />} sub={`of ${fmt(t.steps.value)}`} pct={pct} tone={MOD.steps} />,
       };
     }
     case 'water': {
@@ -135,9 +138,8 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
         led: ledFor(pct, v.now.waterMl > 0), tag: delta(t.water.lines, ' ML'), onPress: () => act.open('water'),
         body: (
           <Half
-            icon={<DotIcon kind="drop" pct={pct} tone={C.water} />}
             big={<Count value={v.now.waterMl} style={st.big} />}
-            sub={`of ${fmt(t.water.value)} ml`} pct={pct} tone={C.water}
+            sub={`of ${fmt(t.water.value)} ml`} pct={pct} tone={MOD.water}
             side={<Pressable onPress={() => act.addWater(250)} hitSlop={8} style={({ pressed }) => [st.miniKey, pressed && st.miniKeyOn]}><Text style={st.miniKeyText}>+250</Text></Pressable>}
           />
         ),
@@ -147,7 +149,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
       const pct = v.now.kcal / t.fuel.value;
       return {
         led: { tone: pct > 1.05 ? C.alert : pct >= 0.9 ? C.live : v.now.kcal > 0 ? C.hot : C.ghost }, tag: delta(t.fuel.lines), onPress: () => act.open('fuel'),
-        body: <Half icon={<DotIcon kind="can" pct={pct} tone={C.food} alarm={pct > 1.05} />} top={`${Math.round(v.now.proteinG)}/${t.fuel.proteinG} g protein`} big={<Count value={v.now.kcal} style={st.big} />} sub={`of ${fmt(t.fuel.value)} kcal`} pct={pct} tone={C.food} />,
+        body: <Half top={`${Math.round(v.now.proteinG)}/${t.fuel.proteinG} g protein`} big={<Count value={v.now.kcal} style={st.big} />} sub={`of ${fmt(t.fuel.value)} kcal`} pct={pct} tone={pct > 1.05 ? C.alert : MOD.fuel} />,
       };
     }
     case 'sleep': {
@@ -155,7 +157,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
       const last = v.now.sleepMin;
       return {
         led: { tone: last == null ? C.ghost : last >= need ? C.live : C.hot }, tag: delta(t.sleep.lines, ' MIN'), onPress: () => act.open('sleep'),
-        body: <Half top={`last night ${last == null ? '--' : hm(last).toLowerCase()}`} big={<Text style={st.big}>{t.sleep.bed}</Text>} sub={`bed · ${hm(t.sleep.value).toLowerCase()} asleep`} pct={last == null ? 0 : last / need} tone={C.hot} />,
+        body: <Half top={`last night ${last == null ? '--' : hm(last).toLowerCase()}`} big={<Text style={st.big}>{t.sleep.bed}</Text>} sub={`bed · ${hm(t.sleep.value).toLowerCase()} asleep`} pct={last == null ? 0 : last / need} tone={MOD.sleep} />,
       };
     }
     case 'readiness': {
@@ -165,7 +167,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
         body: (
           <View style={st.readiness}>
             <View style={{ width: 104 }}>
-              <Count value={r.score} style={st.score} />
+              <Count value={r.score} style={[st.score, { color: MOD.readiness }]} />
               <Text style={st.dose} numberOfLines={2}>{LEVEL[r.level].dose}</Text>
             </View>
             <View style={{ flex: 1, gap: 7, justifyContent: 'center' }}>
@@ -242,7 +244,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
                   <Text style={[st.dayDow, d.today && { color: C.hot }]}>{d.today ? 'NOW' : d.dow}</Text>
                   <Text style={[st.dayFocus, !d.focus && { color: C.faint }]} numberOfLines={1}>{d.word}</Text>
                   <View style={st.dayBarTrack}>
-                    <View style={[st.dayBar, { height: 6 + 22 * (max > min ? (d.kcal - min) / (max - min) : 0.5), backgroundColor: d.today ? C.food : C.lineHi }]} />
+                    <View style={[st.dayBar, { height: 6 + 22 * (max > min ? (d.kcal - min) / (max - min) : 0.5), backgroundColor: d.today ? C.hot : C.lineHi }]} />
                   </View>
                   <Text style={st.dayNum}>{fmt(d.kcal)}</Text>
                   <Text style={st.dayNum}>{Math.round(d.steps / 100) / 10}k</Text>
@@ -263,7 +265,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
           <View style={st.goal}>
             <View style={st.goalRow}>
               <Text style={st.goalWord}>{goalWord(t.goal.id)}</Text>
-              <Text style={[st.goalHead, numFace(t.outlook.headline, 18)]}>{t.outlook.headline}</Text>
+              <Text style={[st.goalHead, numFace(t.outlook.headline, 18), { color: MOD.goal }]}>{t.outlook.headline}</Text>
             </View>
             <Text style={st.goalSub} numberOfLines={2}>{t.outlook.sub}</Text>
           </View>
@@ -276,7 +278,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
       const has = v.now.rhr != null || v.now.hrv != null;
       return {
         led: { tone: has ? C.live : C.ghost, blink: has }, onPress: () => act.go(v.wearable ? '/(tabs)/body' : '/settings/wearables'),
-        body: <Half big={<Text style={st.big}>{v.now.rhr != null ? Math.round(v.now.rhr) : '--'}</Text>} sub={has ? `bpm resting · hrv ${v.now.hrv != null ? Math.round(v.now.hrv) : '--'} ms` : 'connect a watch'} />,
+        body: <Half big={<Text style={[st.big, { color: MOD.heart }]}>{v.now.rhr != null ? Math.round(v.now.rhr) : '--'}</Text>} sub={has ? `bpm resting · hrv ${v.now.hrv != null ? Math.round(v.now.hrv) : '--'} ms` : 'connect a watch'} />,
       };
     }
     case 'weight': {
@@ -284,37 +286,37 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
       const dl = v.now.weightDelta;
       return {
         onPress: () => act.go('/(tabs)/body'),
-        body: <Half big={<Text style={[st.big, numFace(kg ? kg.toFixed(1) : '--', 30)]}>{kg ? kg.toFixed(1) : '--'}</Text>} sub={kg ? `kg${dl != null ? ` · ${dl > 0 ? '+' : ''}${dl} this week` : ''}` : 'log a weigh-in'} />,
+        body: <Half big={<Text style={[st.big, numFace(kg ? kg.toFixed(1) : '--', 30), { color: MOD.weight }]}>{kg ? kg.toFixed(1) : '--'}</Text>} sub={kg ? `kg${dl != null ? ` · ${dl > 0 ? '+' : ''}${dl} this week` : ''}` : 'log a weigh-in'} />,
       };
     }
     case 'active': {
       return {
         onPress: () => act.go('/steps'),
-        body: <Half big={<Count value={v.now.activeKcal ?? 0} style={st.big} />} sub={v.now.activeKcal != null ? `kcal active · ${v.now.activeMin ?? 0} min` : 'from apple health'} />,
+        body: <Half big={<Count value={v.now.activeKcal ?? 0} style={[st.big, { color: MOD.active }]} />} sub={v.now.activeKcal != null ? `kcal active · ${v.now.activeMin ?? 0} min` : 'from apple health'} />,
       };
     }
     case 'macros': {
       const sugarLimit = v.now.sugarLimitG ?? 90;
-      const cols: { word: string; have: number; want: number; limit?: boolean }[] = [
-        { word: 'PROTEIN', have: v.now.proteinG, want: t.fuel.proteinG },
-        { word: 'CARBS', have: v.now.carbsG, want: t.fuel.carbsG },
-        { word: 'FAT', have: v.now.fatG, want: t.fuel.fatG },
-        { word: 'SUGAR', have: v.now.sugarG ?? 0, want: sugarLimit, limit: true },
+      const cols: { word: string; have: number; want: number; tone: string; limit?: boolean }[] = [
+        { word: 'PROTEIN', have: v.now.proteinG, want: t.fuel.proteinG, tone: MOD.protein },
+        { word: 'CARBS', have: v.now.carbsG, want: t.fuel.carbsG, tone: MOD.carbs },
+        { word: 'FAT', have: v.now.fatG, want: t.fuel.fatG, tone: MOD.fat },
+        { word: 'SUGAR', have: v.now.sugarG ?? 0, want: sugarLimit, tone: MOD.sugar, limit: true },
       ];
       const proteinHit = v.now.proteinG >= t.fuel.proteinG;
       return {
-        led: { tone: v.now.kcal > 0 ? C.food : C.ghost, blink: v.now.kcal > 0 && !proteinHit },
+        led: { tone: proteinHit ? C.live : v.now.kcal > 0 ? MOD.protein : C.ghost },
         tag: proteinHit ? 'PROTEIN HIT' : undefined,
         onPress: () => act.go('/calorie'),
         body: (
           <View style={st.macros}>
             {cols.map(m => {
               const pct = m.want ? m.have / m.want : 0;
-              const tone = m.limit ? (pct > 1 ? C.alert : C.food) : pct >= 1 ? C.live : C.food;
+              const tone = m.limit && pct > 1 ? C.alert : m.tone;
               return (
                 <View key={m.word} style={st.macro}>
                   <Text style={st.macroWord}>{m.limit ? 'SUGAR·MAX' : m.word}</Text>
-                  <Text style={[st.macroVal, tone !== C.food && { color: tone }]} numberOfLines={1}>
+                  <Text style={[st.macroVal, { color: tone }]} numberOfLines={1}>
                     {fmt(m.have)}<Text style={st.macroOf}>{`/${fmt(m.want)}G`}</Text>
                   </Text>
                   <Battery pct={pct} tone={tone} />
@@ -357,11 +359,10 @@ function Battery({ pct, tone, n = 8 }: { pct: number; tone: string; n?: number }
 }
 
 /** The half-width layout: big number, a line under it, a meter along the bottom. */
-function Half({ top, big, sub, pct, tone, side, icon }: { top?: string; big: React.ReactNode; sub: string; pct?: number; tone?: string; side?: React.ReactNode; icon?: React.ReactNode }) {
+function Half({ top, big, sub, pct, tone, side }: { top?: string; big: React.ReactNode; sub: string; pct?: number; tone?: string; side?: React.ReactNode }) {
   return (
     <View style={st.half}>
-      {icon && <View style={st.icon} pointerEvents="none">{icon}</View>}
-      {!!top && <Text style={[st.top, icon != null && { paddingRight: 46 }]} numberOfLines={1}>{top}</Text>}
+      {!!top && <Text style={st.top} numberOfLines={1}>{top}</Text>}
       {big}
       <View style={st.halfSubRow}>
         <Text style={st.sub} numberOfLines={1}>{sub}</Text>
@@ -395,14 +396,13 @@ const st = StyleSheet.create({
   frame: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.line, padding: 13, gap: 10 },
   frameEdit: { borderStyle: 'dashed', borderColor: C.lineHi, backgroundColor: C.bg },
   frameSel: { borderStyle: 'solid', borderColor: C.hot },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 12 },
-  idx: { fontFamily: F.dot, fontSize: 9, color: C.faint, letterSpacing: 1 },
-  word: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2.2, flexShrink: 1 },
-  tag: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.6, borderWidth: 1, borderColor: C.line, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, overflow: 'hidden' },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 16 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  word: { fontFamily: F.dot, fontSize: 9, letterSpacing: 2.2 },
+  tag: { flexShrink: 0, fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.6, borderWidth: 1, borderColor: C.line, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, overflow: 'hidden' },
   eject: { position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: C.raised, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
 
   half: { flex: 1, justifyContent: 'flex-end' },
-  icon: { position: 'absolute', top: -2, right: 0 },
 
   macros: { flexDirection: 'row', gap: 12, paddingTop: 2 },
   macro: { flex: 1, gap: 4 },

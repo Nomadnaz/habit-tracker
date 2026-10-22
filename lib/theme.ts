@@ -40,6 +40,30 @@ export const C = {
   scrim:    'rgba(0,0,0,0.72)',
 };
 
+/** TODAY deck only (components/today/Deck.tsx): each module's own colour —
+ *  its header word, glyph, border tint and meter — so the board reads at a
+ *  glance. The macros get one each. */
+export const MOD = {
+  steps:     '#74F25B',
+  water:     '#3FA9FF',
+  fuel:      '#FF7A3D',
+  sleep:     '#9D8CFF',
+  readiness: '#2EE6C5',
+  train:     '#FFFFFF',
+  muscles:   '#FFB23F',
+  week:      '#8A8A8A',
+  goal:      '#7FD4FF',
+  log:       '#8A8A8A',
+  heart:     '#FF4D6A',
+  weight:    '#E8C9A0',
+  active:    '#FFD23F',
+  macros:    '#FF5C9A',
+  protein:   '#FF5C9A',
+  carbs:     '#FFB23F',
+  fat:       '#FFE066',
+  sugar:     '#C77DFF',
+};
+
 /** STEPS' ASCII mountain only (components/steps/Mountain.tsx): snow to meadow,
  *  hut timber, and the five prayer-flag colours (blue, white, red, green, yellow). */
 /** components/RouteMap.tsx's block map only: greyscale ground, dithered parks
