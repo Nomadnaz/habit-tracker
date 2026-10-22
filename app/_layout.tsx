@@ -208,6 +208,8 @@ export default function RootLayout() {
 
     const inAuth = segments[0] === '(auth)';
     const inOnboarding = segments[0] === '(onboarding)';
+    // An email link is being turned into a session — app/auth-callback.tsx routes itself.
+    if (segments[0] === 'auth-callback') return;
 
     if (session) {
       // Logged in but still on the login screen — send them to the main app.
@@ -263,6 +265,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="auth-callback" />
         <Stack.Screen name="calendar" options={{ presentation: 'modal' }} />
         <Stack.Screen name="workout-select" />
         <Stack.Screen name="workout-days" />

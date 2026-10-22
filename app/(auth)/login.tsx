@@ -1,219 +1,198 @@
-// useState stores values that can change — like what the user typed, or whether we're loading.
-import { useState } from 'react';
-import {
-  View,             // A box/container for grouping other elements.
-  Text,             // Displays text on screen.
-  TextInput,        // A field the user can type into.
-  TouchableOpacity, // A button that responds to taps (with a press effect).
-  StyleSheet,       // Used at the bottom to define all our styles in one place.
-  KeyboardAvoidingView, // Automatically moves the layout up when the keyboard appears,
-                        // so the keyboard doesn't cover the input fields.
-  Platform,         // Tells us if we're on iOS or Android, so we can behave differently.
-  ActivityIndicator, // A spinning loading indicator shown while waiting for a network request.
-  Alert,            // Shows a native pop-up dialog with a message.
-} from 'react-native';
+// Sign in · create account · forgot password — one card that changes its
+// boxes with the mode. Create account asks for the password twice; forgot
+// password asks only for the email and sends a reset link. Every email
+// Supabase sends points at the hosted auth page (lib/auth-links.ts), and
+// after sending one we go to check-email, which can resend it.
+// A successful sign-in needs no redirect here: app/_layout.tsx sees the
+// session and moves to the tabs.
 
-// Our Supabase client — handles sign in and sign up requests.
+import { useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-
-import { C, F } from '@/lib/theme';
+import { AUTH_PAGE, authErrorText, holdCredentials, looksLikeEmail, MIN_PASSWORD, passwordProblem } from '@/lib/auth-links';
+import { AuthField, PasswordRules } from '@/components/AuthField';
 import { PuckMark } from '@/components/PuckMark';
+import { C, F } from '@/lib/theme';
+
+type Mode = 'signin' | 'signup' | 'forgot';
+
+const COPY: Record<Mode, { label: string; cta: string }> = {
+  signin: { label: 'SIGN IN', cta: 'SIGN IN  ›' },
+  signup: { label: 'CREATE ACCOUNT', cta: 'CREATE ACCOUNT  ›' },
+  forgot: { label: 'RESET PASSWORD', cta: 'SEND RESET LINK  ›' },
+};
+
 export default function LoginScreen() {
-  // These four pieces of state track everything that can change on this screen.
-
-  // What the user has typed in the email field.
-  const [email, setEmail] = useState('');
-
-  // What the user has typed in the password field.
+  const router = useRouter();
+  const params = useLocalSearchParams<{ email?: string; mode?: Mode }>();
+  const [mode, setMode] = useState<Mode>(params.mode ?? 'signin');
+  const [email, setEmail] = useState(params.email ?? '');
   const [password, setPassword] = useState('');
-
-  // Whether the form is in "sign up" mode (true) or "sign in" mode (false).
-  // The user can toggle between these by tapping the link at the bottom.
-  const [isSignUp, setIsSignUp] = useState(false);
-
-  // True while we're waiting for Supabase to respond to a login/signup request.
-  // Used to show the spinner and disable the button so the user can't tap twice.
+  const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const passRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
 
-  // This function runs when the user taps "SIGN IN" or "CREATE ACCOUNT".
-  async function handleSubmit() {
-    // If either field is empty, show an alert and stop — don't send the request.
-    if (!email || !password) {
-      Alert.alert('MISSING FIELDS', 'Please enter your email and password.');
-      return;
+  const switchTo = (m: Mode) => { setMode(m); setError(null); setUnconfirmed(false); setPassword(''); setConfirm(''); };
+  const addr = email.trim().toLowerCase();
+
+  const strong = passwordProblem(password) === null;
+  const mismatch = mode === 'signup' && confirm.length > 0 && confirm !== password;
+
+  async function submit() {
+    setError(null);
+    setUnconfirmed(false);
+    if (!looksLikeEmail(addr)) return setError('Enter a valid email address.');
+
+    if (mode === 'forgot') {
+      setLoading(true);
+      const { error: e } = await supabase.auth.resetPasswordForEmail(addr, { redirectTo: AUTH_PAGE });
+      setLoading(false);
+      if (e) return setError(authErrorText(e.message));
+      return router.push({ pathname: '/(auth)/check-email', params: { email: addr, kind: 'reset' } });
     }
 
-    setLoading(true); // Show the spinner while we wait for Supabase.
+    if (!password) return setError('Enter your password.');
 
-    if (isSignUp) {
-      // CREATE ACCOUNT mode: register a new user with Supabase.
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        Alert.alert('SIGN UP FAILED', error.message);
-      } else {
-        // Supabase sends a confirmation email. The user must click it before they can log in.
-        Alert.alert('CHECK YOUR EMAIL', 'We sent you a confirmation link.');
-      }
-    } else {
-      // SIGN IN mode: log in with an existing account.
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        Alert.alert('LOGIN FAILED', error.message);
-      }
-      // If successful, the root layout (app/_layout.tsx) detects the new session
-      // and automatically redirects the user to the main tabs — no redirect needed here.
+    if (mode === 'signup') {
+      const problem = passwordProblem(password, confirm);
+      if (problem) return setError(problem);
+      setLoading(true);
+      const { data, error: e } = await supabase.auth.signUp({ email: addr, password, options: { emailRedirectTo: AUTH_PAGE } });
+      setLoading(false);
+      if (e) return setError(authErrorText(e.message));
+      // An existing, confirmed email comes back with no identities (Supabase hides
+      // whether an account exists); say so rather than wait for an email that won't come.
+      if (data.user && data.user.identities?.length === 0) return setError(authErrorText('already registered'));
+      if (data.session) return; // confirmations off — the root layout takes it from here
+      holdCredentials(addr, password);
+      return router.push({ pathname: '/(auth)/check-email', params: { email: addr, kind: 'signup' } });
     }
 
-    setLoading(false); // Hide the spinner once we have a response.
+    setLoading(true);
+    const { error: e } = await supabase.auth.signInWithPassword({ email: addr, password });
+    setLoading(false);
+    if (e) {
+      setError(authErrorText(e.message));
+      if (e.message.toLowerCase().includes('not confirmed')) setUnconfirmed(true);
+    }
+  }
+
+  async function resendConfirm() {
+    setLoading(true);
+    const { error: e } = await supabase.auth.resend({ type: 'signup', email: addr, options: { emailRedirectTo: AUTH_PAGE } });
+    setLoading(false);
+    if (e) return setError(authErrorText(e.message));
+    holdCredentials(addr, password);
+    router.push({ pathname: '/(auth)/check-email', params: { email: addr, kind: 'signup' } });
   }
 
   return (
-    // KeyboardAvoidingView shifts the whole screen upward when the keyboard appears.
-    // On iOS we use 'padding' (adds space at the bottom).
-    // On Android we use 'height' (shrinks the view height).
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.inner}>
-
-        {/* Company mark + wordmark. */}
-        <View style={styles.headerRow}>
+    <KeyboardAvoidingView style={st.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={st.inner} keyboardShouldPersistTaps="handled">
+        <View style={st.headerRow}>
           <PuckMark size={44} />
-          <Text style={styles.title}>PUCK</Text>
+          <Text style={st.title}>PUCK</Text>
         </View>
-        <Text style={styles.tagline}>TRACK. GROW. THRIVE.</Text>
+        <Text style={st.tagline}>TRACK. GROW. THRIVE.</Text>
 
-        {/* The login/signup form card. */}
-        <View style={styles.card}>
-          {/* The label changes depending on which mode we're in. */}
-          <Text style={styles.cardLabel}>{isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}</Text>
+        {/* Sign in / Create account tabs; forgot password replaces them with a back link. */}
+        {mode === 'forgot' ? (
+          <Pressable onPress={() => switchTo('signin')} hitSlop={8} style={{ marginBottom: 14 }}>
+            <Text style={st.back}>‹ BACK TO SIGN IN</Text>
+          </Pressable>
+        ) : (
+          <View style={st.tabs}>
+            {(['signin', 'signup'] as const).map(m => (
+              <Pressable key={m} onPress={() => switchTo(m)} style={[st.tab, mode === m && st.tabOn]}>
+                <Text style={[st.tabText, mode === m && st.tabTextOn]}>{m === 'signin' ? 'SIGN IN' : 'CREATE ACCOUNT'}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
-          {/* Email input. autoCapitalize="none" stops the phone from capitalising the first letter.
-              keyboardType="email-address" shows the @ symbol on the keyboard. */}
-          <TextInput
-            style={styles.input}
-            placeholder="EMAIL"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={setEmail} // Updates the email state every time the user types a character.
-            autoCapitalize="none"
-            keyboardType="email-address"
+        <View style={st.card}>
+          <Text style={st.cardLabel}>{COPY[mode].label}</Text>
+          {mode === 'forgot' && <Text style={st.note}>Enter your account's email and we'll send a link to set a new password.</Text>}
+
+          <AuthField
+            label="EMAIL" placeholder="you@example.com" value={email} onChangeText={setEmail}
+            keyboardType="email-address" textContentType="emailAddress" autoComplete="email"
+            returnKeyType={mode === 'forgot' ? 'send' : 'next'}
+            onSubmitEditing={() => (mode === 'forgot' ? submit() : passRef.current?.focus())}
           />
 
-          {/* Password input. secureTextEntry hides the characters as the user types. */}
-          <TextInput
-            style={styles.input}
-            placeholder="PASSWORD"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          {mode !== 'forgot' && (
+            <AuthField
+              ref={passRef} label="PASSWORD" secret value={password} onChangeText={setPassword}
+              placeholder={mode === 'signup' ? `${MIN_PASSWORD}+ characters, with a number` : 'Your password'}
+              textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              ok={mode === 'signup' && strong}
+              returnKeyType={mode === 'signup' ? 'next' : 'go'}
+              onSubmitEditing={() => (mode === 'signup' ? confirmRef.current?.focus() : submit())}
+            />
+          )}
 
-          {/* The submit button. disabled={loading} prevents double-tapping while the request is in flight. */}
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {/* Show a spinner while loading, otherwise show the button label. */}
-            {loading
-              ? <ActivityIndicator color={C.onHot} />
-              : <Text style={styles.buttonText}>{isSignUp ? 'CREATE ACCOUNT  ›' : 'SIGN IN  ›'}</Text>
-            }
-          </TouchableOpacity>
+          {mode === 'signup' && (
+            <>
+              <AuthField
+                ref={confirmRef} label="CONFIRM PASSWORD" secret value={confirm} onChangeText={setConfirm}
+                placeholder="Type it again" textContentType="newPassword" autoComplete="new-password"
+                ok={confirm.length > 0 && !mismatch && strong} problem={mismatch ? "Passwords don't match." : null}
+                returnKeyType="go" onSubmitEditing={submit}
+              />
+              <PasswordRules password={password} confirm={confirm} />
+            </>
+          )}
+
+          {mode === 'signin' && (
+            <Pressable onPress={() => switchTo('forgot')} hitSlop={8} style={{ alignSelf: 'flex-end' }}>
+              <Text style={st.link}>FORGOT PASSWORD?</Text>
+            </Pressable>
+          )}
+
+          {!!error && <Text style={st.error}>{error}</Text>}
+          {unconfirmed && (
+            <Pressable onPress={resendConfirm} hitSlop={8}>
+              <Text style={st.link}>RESEND CONFIRMATION EMAIL ›</Text>
+            </Pressable>
+          )}
+
+          <Pressable style={({ pressed }) => [st.button, pressed && { opacity: 0.85 }]} onPress={submit} disabled={loading}>
+            {loading ? <ActivityIndicator color={C.onHot} /> : <Text style={st.buttonText}>{COPY[mode].cta}</Text>}
+          </Pressable>
         </View>
 
-        {/* Toggle between sign in and sign up modes.
-            !isSignUp flips the boolean — true becomes false and vice versa. */}
-        <TouchableOpacity onPress={() => setIsSignUp(!isSignUp)} style={styles.switchBtn}>
-          <Text style={styles.switchText}>
-            {isSignUp ? '← BACK TO SIGN IN' : 'NO ACCOUNT? SIGN UP →'}
-          </Text>
-        </TouchableOpacity>
-
-      </View>
+        {mode === 'signup' && <Text style={st.fine}>We'll email you a link to confirm it's you.</Text>}
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-// All visual styles are defined here and referenced by name above.
-// This keeps the layout code clean — styles live separately from structure.
-const styles = StyleSheet.create({
-  // The outermost container — fills the whole screen with a light grey background.
-  container: {
-    flex: 1,
-    backgroundColor: C.bg,
-  },
-  // Centres the content vertically on the screen and adds horizontal padding.
-  inner: {
-    flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
-  },
-  // Mark + wordmark side by side.
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
+const st = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg },
+  inner: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 48, justifyContent: 'center' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   title: { fontFamily: F.dot, fontSize: 44, color: C.ink, letterSpacing: 6, marginLeft: 18 },
-  // The small tagline below the title.
-  tagline: {
-    fontFamily: F.mono,
-    fontSize: 11,
-    color: C.dim,
-    letterSpacing: 2,
-    marginBottom: 40,
-  },
-  // The white rounded card that wraps the form fields.
-  card: {
-    backgroundColor: C.surface,
-    borderRadius: 4,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: C.line,
-  },
-  // "SIGN IN" / "CREATE ACCOUNT" label inside the card.
-  cardLabel: {
-    fontFamily: F.mono,
-    fontSize: 10,
-    color: C.hot,
-    marginBottom: 20,
-    letterSpacing: 1,
-  },
-  // Styling for both text input fields (email and password).
-  input: {
-    backgroundColor: C.bg,
-    borderWidth: 1,
-    borderColor: C.line,
-    borderRadius: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 13,
-    fontFamily: F.mono,
-    color: C.ink,
-    marginBottom: 12,
-  },
-  // The orange submit button.
-  button: {
-    backgroundColor: C.hot,
-    borderRadius: 4,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  // White text inside the button.
-  buttonText: {
-    fontFamily: F.mono,
-    color: C.onHot,
-    fontSize: 11,
-    letterSpacing: 1,
-  },
-  // The "NO ACCOUNT? SIGN UP" toggle link at the bottom.
-  switchBtn: { alignItems: 'center', justifyContent: 'center', marginTop: 12, minHeight: 48 },
-  switchText: { fontFamily: F.mono, fontSize: 12, color: C.hot, letterSpacing: 1 },
+  tagline: { fontFamily: F.mono, fontSize: 11, color: C.dim, letterSpacing: 2, marginBottom: 32 },
+
+  tabs: { flexDirection: 'row', gap: 6, marginBottom: 14, padding: 4, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  tab: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  tabOn: { backgroundColor: C.hot },
+  tabText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.6 },
+  tabTextOn: { color: C.onHot },
+  back: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1.6 },
+
+  card: { backgroundColor: C.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: C.line, gap: 14 },
+  cardLabel: { fontFamily: F.dot, fontSize: 12, color: C.hot, letterSpacing: 2 },
+  note: { fontFamily: F.mono, fontSize: 12, color: C.dim, lineHeight: 17 },
+  link: { fontFamily: F.dot, fontSize: 9, color: C.ink, letterSpacing: 1.6 },
+  error: { fontFamily: F.mono, fontSize: 12, color: C.alert, lineHeight: 17 },
+  button: { backgroundColor: C.hot, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 4 },
+  buttonText: { fontFamily: F.dot, color: C.onHot, fontSize: 12, letterSpacing: 2 },
+  fine: { fontFamily: F.mono, fontSize: 11, color: C.faint, textAlign: 'center', marginTop: 14 },
 });

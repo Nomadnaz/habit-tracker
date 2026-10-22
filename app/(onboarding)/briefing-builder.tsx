@@ -1,17 +1,14 @@
-// Screen 10/10 — briefing-builder. Which sources feed the daily briefing
+// Screen 9/10 — briefing-builder. Which sources feed the daily briefing
 // (components/BriefingCard.tsx, tasks 018+019) — module keys match
-// buildContext's source keys directly (see tasks/019 notes). This is the
-// true end of onboarding: finishing here calls flushOnboardingIfNeeded(),
-// which writes user_profiles/nutrition_targets/first habit/briefing_preferences
-// all at once and marks onboarding_complete, then explicitly routes to
-// (tabs) — app/_layout.tsx deliberately does NOT auto-redirect out of
-// (onboarding) on session alone, since signUp() on the account screen makes
-// a session appear one screen before this one is even shown.
+// buildContext's source keys directly (see tasks/019 notes). Saves the
+// choice into the local answers and moves on to the account step (screen
+// 10), which is now last so every answer exists before there's a session to
+// flush them against.
 import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import OnboardingShell from '@/components/OnboardingShell';
-import { updateAnswers, flushOnboardingIfNeeded } from '@/lib/onboarding-data';
+import { updateAnswers } from '@/lib/onboarding-data';
 
 import { C, F } from '@/lib/theme';
 const ORANGE = C.hot;
@@ -39,19 +36,18 @@ export default function BriefingBuilder() {
   async function finish() {
     setFinishing(true);
     await updateAnswers({ briefingModules: selected });
-    await flushOnboardingIfNeeded();
-    router.replace('/(tabs)');
+    setFinishing(false);
+    router.push('/(onboarding)/account');
   }
 
   return (
     <OnboardingShell
-      step={10}
+      step={9}
       title="Build your daily briefing"
       subtitle="Pick what feeds your morning summary. You can change this anytime."
       onNext={finish}
-      nextLabel={finishing ? 'FINISHING…' : 'FINISH'}
+      nextLabel={finishing ? 'SAVING…' : 'CONTINUE'}
       nextDisabled={finishing}
-      showBack={false}
     >
       {MODULES.map(m => {
         const active = selected.includes(m.key);

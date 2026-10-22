@@ -11,8 +11,8 @@ export default function OnboardingLayout() {
       <Stack.Screen name="skills" />
       <Stack.Screen name="book" />
       <Stack.Screen name="connect" />
-      <Stack.Screen name="account" />
       <Stack.Screen name="briefing-builder" />
+      <Stack.Screen name="account" />
     </Stack>
   );
 }

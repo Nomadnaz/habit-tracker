@@ -41,7 +41,7 @@ export default function Connect() {
   }
 
   return (
-    <OnboardingShell step={8} title="Connect your data" subtitle="Optional — you can always do this later from the Body tab." onNext={() => router.push('/(onboarding)/account')}>
+    <OnboardingShell step={8} title="Connect your data" subtitle="Optional — you can always do this later from the Body tab." onNext={() => router.push('/(onboarding)/briefing-builder')}>
       {featureFlags.healthKitConnect && (
         <TouchableOpacity
           style={[styles.row, connected && styles.rowConnected]}
