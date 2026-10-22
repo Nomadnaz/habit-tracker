@@ -14,7 +14,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type LiftRep = { romCm: number; peakMps: number; meanMps: number; durMs: number };
+export type LiftRep = { romCm: number; peakMps: number; meanMps: number; durMs: number; n?: number /* rep number, 1-based */ };
 
 export type LiftSet = {
   at: string;              // ISO, when the phone got it (the set's end)
@@ -24,7 +24,7 @@ export type LiftSet = {
   romCm: number | null;    // best rep
   peakMps: number | null;
   tempoS: number | null;   // mean rep duration
-  repData: LiftRep[] | null; // null when the rep chunks didn't arrive (Wi-Fi path)
+  repData: LiftRep[] | null; // the reps that arrived, in order (may skip a lost chunk); null when none did (Wi-Fi path)
 };
 
 export type LiftSession = {
@@ -50,7 +50,7 @@ export function parseReps(r: string): LiftRep[] {
   });
 }
 
-/** Collects one set's `set_reps` chunks; `take` returns the reps once all n have arrived. */
+/** Collects one set's `set_reps` chunks; `take` returns the reps that arrived, numbered, so one lost chunk doesn't cost the chart. */
 export class RepAssembler {
   private sets = new Map<number, { n: number; ms: number | null; reps: (LiftRep | undefined)[]; at: number }>();
 
@@ -66,8 +66,8 @@ export class RepAssembler {
     const s = this.sets.get(set);
     this.sets.delete(set);
     if (!s) return { reps: null, ms: null };
-    const reps = s.reps.slice(0, s.n);
-    return { reps: reps.length === s.n && reps.every(Boolean) ? (reps as LiftRep[]) : null, ms: s.ms };
+    const reps = s.reps.slice(0, s.n).flatMap((r, i) => (r ? [{ ...r, n: i + 1 }] : []));
+    return { reps: reps.length ? reps : null, ms: s.ms };
   }
 }
 
@@ -109,8 +109,9 @@ export function sessionStats(s: LiftSession): SessionStats {
     bestRomCm: max(s.sets.flatMap(x => (x.repData ? x.repData.map(r => r.romCm) : x.romCm != null ? [x.romCm] : []))),
     peakMps: max(s.sets.flatMap(x => (x.repData ? x.repData.map(r => r.peakMps) : x.peakMps != null ? [x.peakMps] : []))),
     tutS: allReps.length ? allReps.reduce((a, r) => a + r.durMs, 0) / 1000 : null,
-    velocityLossPct: last && last.length >= 2 && last[0].peakMps > 0
-      ? Math.round((1 - last[last.length - 1].peakMps / last[0].peakMps) * 100) : null,
+    // Velocity loss as coaches use it: fastest rep's average speed to the last rep's.
+    velocityLossPct: last && last.length >= 2 && Math.max(...last.map(r => r.meanMps)) > 0
+      ? Math.max(0, Math.round((1 - last[last.length - 1].meanMps / Math.max(...last.map(r => r.meanMps))) * 100)) : null,
   };
 }
 

@@ -13,15 +13,19 @@ describe('rep chunks', () => {
     ]);
   });
 
-  it('joins chunks by set id and only hands back a complete set', () => {
+  it('joins chunks by set id, numbering each rep, and keeps what arrived', () => {
     const a = new RepAssembler();
     a.add({ set: 7, i: 5, n: 6, ms: 9000, r: '30,0.6,0.4,1500' });
     a.add({ set: 7, i: 0, n: 6, r: '40,1,0.8,1000;39,0.9,0.7,1100;38,0.8,0.6,1200;37,0.7,0.5,1300;36,0.7,0.5,1400' });
     const got = a.take(7);
     expect(got.ms).toBe(9000);
     expect(got.reps?.map(r => r.romCm)).toEqual([40, 39, 38, 37, 36, 30]);
-    a.add({ set: 8, i: 0, n: 6, r: '40,1,0.8,1000' });
-    expect(a.take(8).reps).toBeNull();
+    expect(got.reps?.map(r => r.n)).toEqual([1, 2, 3, 4, 5, 6]);
+    // A lost chunk leaves a gap, not an empty chart.
+    a.add({ set: 8, i: 3, n: 6, r: '37,0.7,0.5,1300;36,0.7,0.5,1400;30,0.6,0.4,1500' });
+    expect(a.take(8).reps?.map(r => r.n)).toEqual([4, 5, 6]);
+    a.add({ set: 9, i: 0, n: 2, r: 'nan,nan,0,0' });
+    expect(a.take(9).reps).toBeNull();
     expect(a.take(99)).toEqual({ reps: null, ms: null });
   });
 });

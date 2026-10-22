@@ -219,9 +219,12 @@ export default function LiftReceiptScreen() {
                 </View>
                 <View onLayout={e => setChartW(Math.round(e.nativeEvent.layout.width))}>
                   {reps
-                    ? <RepChart reps={reps} width={chartW} play={stage !== 'processing'} />
+                    ? <RepChart reps={reps} total={shown.reps} width={chartW} play={stage !== 'processing'} />
                     : <Text style={s.note}>Rep-by-rep data didn't come through for this set — the totals below are from the puck.</Text>}
                 </View>
+                {reps && reps.length < shown.reps && (
+                  <Text style={s.note}>{`${reps.length} of ${shown.reps} reps came through — the rest were lost over Bluetooth.`}</Text>
+                )}
 
                 {reps && (
                   <>
@@ -230,7 +233,7 @@ export default function LiftReceiptScreen() {
                     </View>
                     {reps.map((r, i) => (
                       <View key={i} style={s.table}>
-                        <Text style={[s.td, s.cRep]}>{String(i + 1)}</Text>
+                        <Text style={[s.td, s.cRep]}>{String(r.n ?? i + 1)}</Text>
                         <Text style={s.td}>{`${r.romCm.toFixed(1)}cm`}</Text>
                         <Text style={s.td}>{r.peakMps.toFixed(2)}</Text>
                         <Text style={s.td}>{r.meanMps.toFixed(2)}</Text>
