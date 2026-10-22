@@ -85,7 +85,7 @@ export default function LiftReceiptScreen() {
     const off = onLiftSession((s, kind) => {
       if (s.id !== id) return;
       setSession(s);
-      if (kind === 'set') { setSetIdx(null); setSent(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+      if (kind === 'set') { setSetIdx(null); setSent(false); }
     });
     return () => { off(); setOpenReceipt(null); };
   }, [id]);

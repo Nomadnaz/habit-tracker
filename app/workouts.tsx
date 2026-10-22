@@ -141,8 +141,15 @@ export default function LogWorkout() {
   useFocusEffect(useCallback(() => { if (template) void loadTemplate(template.id); }, [template?.id]));
 
   // Sets the puck logs land here live.
+  // A set the puck logs for a lift on today's list ticks that lift off (the
+  // receipt does the buzz). A ref, so the listener sees this render's list.
+  const puckSet = useRef<(id: string) => void>(() => {});
+  puckSet.current = id => {
+    const r = rows.find(x => x.ex.id === id);
+    if (r && !ticked.has(id)) tick(r.ex);
+  };
   useEffect(() => bleBridge.onSetLogged(id => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    puckSet.current(id);
     void getSetsForDay(id, toDateKey(new Date())).then(xs => setLogged(l => ({ ...l, [id]: xs.length })));
   }), []);
 
