@@ -20,6 +20,12 @@ const TONE: Record<DayStatus, string> = { hit: C.live, half: C.food, miss: C.ale
 const WORD: Record<DayStatus, string> = { hit: 'HIT', half: 'HALFWAY', miss: 'MISSED', none: 'NOT LOGGED' };
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+/** A heatmap shade: the day's colour, stronger the more of the goal it reached.
+ *  Over the goal (a miss or a sugar overshoot) is full strength. */
+function heat(status: DayStatus, pct: number): string {
+  const a = pct > 1 ? 1 : 0.28 + 0.72 * Math.max(0, pct);
+  return TONE[status] + Math.round(a * 255).toString(16).padStart(2, '0');
+}
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 const KEYS = Object.keys(FUEL_GOALS) as FuelKey[];
 
@@ -144,11 +150,17 @@ export default function FuelGoal() {
             </Pressable>
           </View>
 
-          <View style={st.counts}>
+          {/* The month at a glance: one strip split by how the days went. */}
+          <View style={st.strip}>
+            {(['hit', 'half', 'miss', 'none'] as const).filter(s => counts[s] > 0).map(s => (
+              <View key={s} style={{ flex: counts[s], backgroundColor: s === 'none' ? C.raised : TONE[s] }} />
+            ))}
+          </View>
+          <View style={st.legend}>
             {(['hit', 'half', 'miss', 'none'] as const).map(s => (
-              <View key={s} style={st.count}>
-                <Text style={[st.countNum, { color: s === 'none' ? C.dim : TONE[s] }]}>{counts[s]}</Text>
-                <Text style={st.countWord}>{WORD[s]}</Text>
+              <View key={s} style={st.legendItem}>
+                <View style={[st.legendDot, { backgroundColor: s === 'none' ? C.raised : TONE[s] }]} />
+                <Text style={st.legendText}><Text style={{ color: C.ink }}>{counts[s]}</Text>{` ${WORD[s]}`}</Text>
               </View>
             ))}
           </View>
@@ -163,12 +175,12 @@ export default function FuelGoal() {
                 <Pressable key={i} style={st.cellWrap} onPress={() => !d.future && setPicked(on ? null : d)}>
                   <View style={[
                     st.cell,
-                    { backgroundColor: d.future ? 'transparent' : d.status === 'none' ? C.raised : TONE[d.status] },
+                    { backgroundColor: d.future ? 'transparent' : d.status === 'none' ? C.raised : heat(d.status, goal > 0 ? d.value / goal : 0) },
                     d.future && { borderWidth: 1, borderColor: C.line },
                     isToday && st.cellToday,
                     on && st.cellOn,
                   ]}>
-                    <Text style={[st.cellNum, { color: d.future || d.status === 'none' ? C.dim : C.onHot }]}>{d.date.getDate()}</Text>
+                    <Text style={[st.cellNum, { color: d.future || d.status === 'none' ? C.faint : C.onHot }]}>{d.date.getDate()}</Text>
                   </View>
                 </Pressable>
               );
@@ -186,15 +198,6 @@ export default function FuelGoal() {
           ) : (
             <Text style={st.tapHint}>Tap a day to see it.</Text>
           )}
-
-          <View style={st.legend}>
-            {(['hit', 'half', 'miss', 'none'] as const).map(s => (
-              <View key={s} style={st.legendItem}>
-                <View style={[st.legendDot, { backgroundColor: s === 'none' ? C.raised : TONE[s] }]} />
-                <Text style={st.legendText}>{WORD[s]}</Text>
-              </View>
-            ))}
-          </View>
         </View>
 
         <View style={st.streak}>
@@ -239,23 +242,20 @@ const st = StyleSheet.create({
 
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   month: { fontFamily: F.dot, fontSize: 14, color: C.ink, letterSpacing: 2 },
-  counts: { flexDirection: 'row', gap: 6 },
-  count: { flex: 1, alignItems: 'center', paddingVertical: 10, borderWidth: 1, borderColor: C.line, borderRadius: 10 },
-  countNum: { fontFamily: F.dot, fontSize: 26 },
-  countWord: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1.2, marginTop: 2 },
+  strip: { flexDirection: 'row', height: 6, gap: 2, borderRadius: 3, overflow: 'hidden' },
   week: { flexDirection: 'row' },
   dow: { flex: 1, textAlign: 'center', fontFamily: F.dot, fontSize: 9, color: C.faint, letterSpacing: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: -4 },
-  cellWrap: { width: `${100 / 7}%`, aspectRatio: 1, padding: 3 },
-  cell: { flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  cellWrap: { width: `${100 / 7}%`, aspectRatio: 1, padding: 2 },
+  cell: { flex: 1, borderRadius: 4, padding: 4 },
   cellToday: { borderWidth: 2, borderColor: C.hot },
   cellOn: { transform: [{ scale: 1.08 }], borderWidth: 2, borderColor: C.hot },
-  cellNum: { fontFamily: F.dot, fontSize: 12 },
+  cellNum: { fontFamily: F.dot, fontSize: 8, opacity: 0.75 },
   picked: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pickedDot: { width: 8, height: 8 },
   pickedText: { fontFamily: F.dot, fontSize: 11, color: C.ink, letterSpacing: 1, flexShrink: 1 },
   tapHint: { fontFamily: F.mono, fontSize: 11, color: C.faint },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 2 },
   legendText: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.2 },
