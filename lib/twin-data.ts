@@ -37,6 +37,8 @@ export type TodayView = {
   resting: number;
   now: {
     steps: number; waterMl: number; kcal: number; proteinG: number; carbsG: number; fatG: number;
+    /** Absent on a view cached before sugar was tracked. */
+    sugarG?: number; sugarLimitG?: number;
     sleepMin: number | null; activeKcal: number | null; activeMin: number | null;
     rhr: number | null; hrv: number | null; weightKg: number | null; weightDelta: number | null;
   };
@@ -113,6 +115,7 @@ export async function loadToday(): Promise<{ view: TodayView; input: TwinInput }
     twin, today: coach.today, lifts: plan.keep.length, resting: plan.rest.length,
     now: {
       steps: todaySteps(body), waterMl: todayWaterMl(body), kcal: todayTotals.calories, proteinG: todayTotals.proteinG, carbsG: todayTotals.carbsG, fatG: todayTotals.fatG,
+      sugarG: todayTotals.sugarG, sugarLimitG: (await getTargets()).sugarG,
       sleepMin: sleep[back(0)] ?? null,
       activeKcal: body.activityToday?.caloriesKcal ?? null, activeMin: body.activityToday?.activeMinutes ?? null,
       rhr: vit?.rhr[back(0)] ?? vit?.rhr[back(1)] ?? null,

@@ -13,6 +13,7 @@ import { FOCUS_TITLE, LEVEL } from '@/lib/coach';
 import type { TodayView } from '@/lib/twin-data';
 import { TypeLine } from '@/components/TypeLine';
 import { Count, Pixel, Segs } from './bits';
+import { DotIcon } from './DotIcon';
 
 export type SheetKind = 'steps' | 'water' | 'fuel' | 'sleep' | 'readiness' | 'week' | 'goal';
 export type DeckActions = {
@@ -125,7 +126,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
       const pct = v.now.steps / t.steps.value;
       return {
         led: ledFor(pct, v.now.steps > 0), tag: delta(t.steps.lines), onPress: () => act.open('steps'),
-        body: <Half big={<Count value={v.now.steps} style={st.big} />} sub={`of ${fmt(t.steps.value)}`} pct={pct} tone={C.live} />,
+        body: <Half icon={<DotIcon kind="foot" pct={pct} tone={C.live} />} big={<Count value={v.now.steps} style={st.big} />} sub={`of ${fmt(t.steps.value)}`} pct={pct} tone={C.live} />,
       };
     }
     case 'water': {
@@ -134,6 +135,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
         led: ledFor(pct, v.now.waterMl > 0), tag: delta(t.water.lines, ' ML'), onPress: () => act.open('water'),
         body: (
           <Half
+            icon={<DotIcon kind="drop" pct={pct} tone={C.water} />}
             big={<Count value={v.now.waterMl} style={st.big} />}
             sub={`of ${fmt(t.water.value)} ml`} pct={pct} tone={C.water}
             side={<Pressable onPress={() => act.addWater(250)} hitSlop={8} style={({ pressed }) => [st.miniKey, pressed && st.miniKeyOn]}><Text style={st.miniKeyText}>+250</Text></Pressable>}
@@ -145,7 +147,7 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
       const pct = v.now.kcal / t.fuel.value;
       return {
         led: { tone: pct > 1.05 ? C.alert : pct >= 0.9 ? C.live : v.now.kcal > 0 ? C.hot : C.ghost }, tag: delta(t.fuel.lines), onPress: () => act.open('fuel'),
-        body: <Half top={`${Math.round(v.now.proteinG)} / ${t.fuel.proteinG} g protein`} big={<Count value={v.now.kcal} style={st.big} />} sub={`of ${fmt(t.fuel.value)} kcal`} pct={pct} tone={C.food} />,
+        body: <Half icon={<DotIcon kind="can" pct={pct} tone={C.food} alarm={pct > 1.05} />} top={`${Math.round(v.now.proteinG)}/${t.fuel.proteinG} g protein`} big={<Count value={v.now.kcal} style={st.big} />} sub={`of ${fmt(t.fuel.value)} kcal`} pct={pct} tone={C.food} />,
       };
     }
     case 'sleep': {
@@ -292,20 +294,33 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
       };
     }
     case 'macros': {
-      const rows: [string, number, number][] = [
-        ['P', v.now.proteinG, t.fuel.proteinG], ['C', v.now.carbsG, t.fuel.carbsG], ['F', v.now.fatG, t.fuel.fatG],
+      const sugarLimit = v.now.sugarLimitG ?? 90;
+      const cols: { word: string; have: number; want: number; limit?: boolean }[] = [
+        { word: 'PROTEIN', have: v.now.proteinG, want: t.fuel.proteinG },
+        { word: 'CARBS', have: v.now.carbsG, want: t.fuel.carbsG },
+        { word: 'FAT', have: v.now.fatG, want: t.fuel.fatG },
+        { word: 'SUGAR', have: v.now.sugarG ?? 0, want: sugarLimit, limit: true },
       ];
+      const proteinHit = v.now.proteinG >= t.fuel.proteinG;
       return {
+        led: { tone: v.now.kcal > 0 ? C.food : C.ghost, blink: v.now.kcal > 0 && !proteinHit },
+        tag: proteinHit ? 'PROTEIN HIT' : undefined,
         onPress: () => act.go('/calorie'),
         body: (
-          <View style={{ flex: 1, justifyContent: 'flex-end', gap: 9 }}>
-            {rows.map(([k, have, want]) => (
-              <View key={k} style={st.factor}>
-                <Text style={[st.factorLabel, { width: 12 }]}>{k}</Text>
-                <Segs pct={want ? have / want : 0} tone={C.food} n={10} h={4} style={{ flex: 1 }} />
-                <Text style={[st.factorVal, { width: 54 }]}>{Math.round(have)}/{want}</Text>
-              </View>
-            ))}
+          <View style={st.macros}>
+            {cols.map(m => {
+              const pct = m.want ? m.have / m.want : 0;
+              const tone = m.limit ? (pct > 1 ? C.alert : C.food) : pct >= 1 ? C.live : C.food;
+              return (
+                <View key={m.word} style={st.macro}>
+                  <Text style={st.macroWord}>{m.limit ? 'SUGAR·MAX' : m.word}</Text>
+                  <Text style={[st.macroVal, tone !== C.food && { color: tone }]} numberOfLines={1}>
+                    {fmt(m.have)}<Text style={st.macroOf}>{`/${fmt(m.want)}G`}</Text>
+                  </Text>
+                  <Battery pct={pct} tone={tone} />
+                </View>
+              );
+            })}
           </View>
         ),
       };
@@ -313,11 +328,40 @@ function moduleOf(id: ModuleId, v: TodayView, act: DeckActions): Mod {
   }
 }
 
+/** The workout screen's battery, small: a bordered row of cells and a nub. The
+ *  next cell to light blinks, like it's charging; past the goal the end cell
+ *  blinks red for a limit. */
+function Battery({ pct, tone, n = 8 }: { pct: number; tone: string; n?: number }) {
+  const lit = Math.max(0, Math.min(n, Math.round(pct * n)));
+  const charging = lit < n ? lit : tone === C.alert ? n - 1 : -1;
+  const o = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (charging < 0) { o.setValue(1); return; }
+    const l = Animated.loop(Animated.sequence([
+      Animated.timing(o, { toValue: 0.15, duration: 600, useNativeDriver: true }),
+      Animated.timing(o, { toValue: 1, duration: 600, useNativeDriver: true }),
+    ]));
+    l.start();
+    return () => l.stop();
+  }, [charging]);
+  return (
+    <View style={st.batteryRow}>
+      <View style={st.battery}>
+        {Array.from({ length: n }, (_, i) => i === charging
+          ? <Animated.View key={i} style={[st.cell, { backgroundColor: tone, opacity: o }]} />
+          : <View key={i} style={[st.cell, { backgroundColor: i < lit ? tone : C.ghost }]} />)}
+      </View>
+      <View style={st.nub} />
+    </View>
+  );
+}
+
 /** The half-width layout: big number, a line under it, a meter along the bottom. */
-function Half({ top, big, sub, pct, tone, side }: { top?: string; big: React.ReactNode; sub: string; pct?: number; tone?: string; side?: React.ReactNode }) {
+function Half({ top, big, sub, pct, tone, side, icon }: { top?: string; big: React.ReactNode; sub: string; pct?: number; tone?: string; side?: React.ReactNode; icon?: React.ReactNode }) {
   return (
     <View style={st.half}>
-      {!!top && <Text style={st.top} numberOfLines={1}>{top}</Text>}
+      {icon && <View style={st.icon} pointerEvents="none">{icon}</View>}
+      {!!top && <Text style={[st.top, icon != null && { paddingRight: 46 }]} numberOfLines={1}>{top}</Text>}
       {big}
       <View style={st.halfSubRow}>
         <Text style={st.sub} numberOfLines={1}>{sub}</Text>
@@ -358,6 +402,17 @@ const st = StyleSheet.create({
   eject: { position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: C.raised, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
 
   half: { flex: 1, justifyContent: 'flex-end' },
+  icon: { position: 'absolute', top: -2, right: 0 },
+
+  macros: { flexDirection: 'row', gap: 12, paddingTop: 2 },
+  macro: { flex: 1, gap: 4 },
+  macroWord: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.2 },
+  macroVal: { fontFamily: F.dot, fontSize: 24, color: C.hot },
+  macroOf: { fontFamily: F.dot, fontSize: 10, color: C.faint },
+  batteryRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  battery: { flex: 1, flexDirection: 'row', gap: 2, padding: 2, borderWidth: 1, borderColor: C.lineHi, borderRadius: 4 },
+  cell: { flex: 1, height: 10, borderRadius: 1 },
+  nub: { width: 2, height: 6, backgroundColor: C.lineHi, marginLeft: 1, borderTopRightRadius: 1, borderBottomRightRadius: 1 },
   top: { fontFamily: F.mono, fontSize: 10, color: C.faint, marginBottom: 2 },
   big: { fontFamily: F.dot, fontSize: 30, color: C.hot, letterSpacing: 0.5 },
   halfSubRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },

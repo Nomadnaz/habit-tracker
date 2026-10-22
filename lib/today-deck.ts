@@ -21,7 +21,7 @@ export const MODULES: Record<ModuleId, { word: string; wide: boolean }> = {
   heart: { word: 'HEART', wide: false },
   weight: { word: 'WEIGHT', wide: false },
   active: { word: 'ACTIVE', wide: false },
-  macros: { word: 'MACROS', wide: false },
+  macros: { word: 'MACROS', wide: true },
 };
 
 export const ALL_MODULES = Object.keys(MODULES) as ModuleId[];
