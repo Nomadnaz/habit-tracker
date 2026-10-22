@@ -33,6 +33,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 // Our Supabase client — the connection to our backend/database.
 import { supabase } from '@/lib/supabase';
+import { adoptAccount } from '@/lib/account-switch';
 
 // Registers the background-location TaskManager task at module scope (must
 // happen on cold start, not inside a component) — see that file's header
@@ -155,7 +156,9 @@ export default function RootLayout() {
   // Also subscribe to future login/logout events so we react to them in real time.
   useEffect(() => {
     // getSession checks AsyncStorage for a saved login token.
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      // Local data belongs to one account at a time — see lib/account-switch.ts.
+      if (session) await adoptAccount(session.user.id).catch(() => false);
       setSession(session);
       setLoading(false); // We now know the login state, so stop showing the loading screen.
       // Never auto-flush while still inside the onboarding flow itself: an
@@ -170,7 +173,9 @@ export default function RootLayout() {
 
     // onAuthStateChange fires whenever the user logs in or logs out.
     // This keeps our session state in sync automatically.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // A different account signing in on this phone gets its own data, before any screen reads it.
+      if (session) await adoptAccount(session.user.id).catch(() => false);
       setSession(session);
       // Covers the "email confirmation required" onboarding path: the first
       // login after confirming is where the cached answers finally get a
