@@ -46,7 +46,7 @@ export type Meal = {
   fatG: number;
   sugarG?: number;       // total sugars, g; absent on meals logged before sugar was tracked
   photoUrl?: string;     // local file URI for MVP (Storage upload is a later step)
-  loggedVia: 'manual' | 'photo' | 'quick_add' | 'barcode';
+  loggedVia: 'manual' | 'photo' | 'quick_add' | 'barcode' | 'ai_text';
   createdAt: string;     // ISO timestamp
   synced?: boolean;      // last pull saw the server agree (see lib/syncMerge.ts)
 };

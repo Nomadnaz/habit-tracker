@@ -90,7 +90,7 @@ export default function CalorieScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await addMeal({
       date: dk, mealType: m.mealType, name: m.name, calories: m.calories,
-      proteinG: m.proteinG, carbsG: m.carbsG, fatG: m.fatG, loggedVia: 'quick_add',
+      proteinG: m.proteinG, carbsG: m.carbsG, fatG: m.fatG, sugarG: m.sugarG ?? 0, loggedVia: 'quick_add',
     });
     refresh();
   }
@@ -108,7 +108,8 @@ export default function CalorieScreen() {
       params: {
         editingId: m.id, name: m.name, mealType: m.mealType,
         calories: String(m.calories), proteinG: String(m.proteinG),
-        carbsG: String(m.carbsG), fatG: String(m.fatG), photoUri: m.photoUrl ?? '',
+        carbsG: String(m.carbsG), fatG: String(m.fatG), sugarG: String(m.sugarG ?? 0),
+        photoUri: m.photoUrl ?? '', loggedVia: m.loggedVia,
       },
     });
   }
@@ -196,7 +197,7 @@ export default function CalorieScreen() {
                   {m.photoUrl
                     ? <Image source={{ uri: m.photoUrl }} style={styles.mealThumb} />
                     : <View style={[styles.mealThumb, styles.mealThumbEmpty]}>
-                        <MaterialCommunityIcons name={m.loggedVia === 'barcode' ? 'barcode' : 'silverware-fork-knife'} size={16} color={C.faint} />
+                        <MaterialCommunityIcons name={m.loggedVia === 'barcode' ? 'barcode' : m.loggedVia === 'ai_text' ? 'auto-fix' : 'silverware-fork-knife'} size={16} color={C.faint} />
                       </View>}
                   <View style={{ flex: 1 }}>
                     <Text style={styles.mealName} numberOfLines={1}>{m.name}</Text>

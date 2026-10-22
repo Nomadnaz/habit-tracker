@@ -36,11 +36,18 @@ function coerceNumber(v: unknown, fallback = 0): number {
  *          or returned something unusable — never a fabricated placeholder.
  */
 export async function estimateMealFromPhoto(base64Jpeg: string): Promise<MealEstimate | null> {
+  return estimate({ image: base64Jpeg });
+}
+
+/** The same estimate from a typed description ("2 eggs, toast, flat white"). */
+export async function estimateMealFromText(text: string): Promise<MealEstimate | null> {
+  return text.trim() ? estimate({ text: text.trim() }) : null;
+}
+
+async function estimate(body: { image: string } | { text: string }): Promise<MealEstimate | null> {
   try {
-    const { data, error } = await supabase.functions.invoke('food-vision', {
-      body: { image: base64Jpeg },
-    });
-    if (error || !data) return null;
+    const { data, error } = await supabase.functions.invoke('food-vision', { body });
+    if (error || !data || data.error) return null;
 
     return {
       name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : 'Meal',
