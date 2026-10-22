@@ -14,22 +14,13 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 import { estimateMealFromPhoto } from '@/lib/foodVision';
-import type { MealType } from '@/lib/meals-data';
+import { guessMealType } from '@/lib/meals-data';
 
 import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const BOLD = F.mono;
 const REG = F.mono;
-
-// Rough time-of-day guess so a snapped meal lands in a sensible group.
-function guessMealType(): MealType {
-  const h = new Date().getHours();
-  if (h < 11) return 'breakfast';
-  if (h < 15) return 'lunch';
-  if (h < 21) return 'dinner';
-  return 'snack';
-}
 
 export default function CaptureScreen() {
   const router = useRouter();
@@ -74,7 +65,7 @@ export default function CaptureScreen() {
         pathname: '/calorie/confirm',
         params: {
           name: estimate.name, mealType: guessMealType(), calories: String(estimate.calories),
-          proteinG: String(estimate.proteinG), carbsG: String(estimate.carbsG), fatG: String(estimate.fatG),
+          proteinG: String(estimate.proteinG), carbsG: String(estimate.carbsG), fatG: String(estimate.fatG), sugarG: String(estimate.sugarG),
           photoUri: compressed.uri, source: 'ai',
         },
       });

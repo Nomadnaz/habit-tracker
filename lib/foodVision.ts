@@ -21,6 +21,7 @@ export type MealEstimate = {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  sugarG: number;
   isEstimate: true; // always an estimate — the UI must say so
 };
 
@@ -47,6 +48,7 @@ export async function estimateMealFromPhoto(base64Jpeg: string): Promise<MealEst
       proteinG: Math.round(coerceNumber(data.protein_g)),
       carbsG: Math.round(coerceNumber(data.carbs_g)),
       fatG: Math.round(coerceNumber(data.fat_g)),
+      sugarG: Math.round(coerceNumber(data.sugar_g)),
       isEstimate: true,
     };
   } catch {

@@ -3,8 +3,8 @@ import { computeTargets } from './nutritionFormulas';
 
 describe('computeTargets', () => {
   it('falls back to the honest default when the profile is incomplete', () => {
-    expect(computeTargets({})).toEqual({ calories: 2000, proteinG: 150, carbsG: 200, fatG: 65, waterMl: 3000 });
-    expect(computeTargets({ age: 30 })).toEqual({ calories: 2000, proteinG: 150, carbsG: 200, fatG: 65, waterMl: 3000 });
+    expect(computeTargets({})).toEqual({ calories: 2000, proteinG: 150, carbsG: 200, fatG: 65, waterMl: 3000, sugarG: 90 });
+    expect(computeTargets({ age: 30 })).toEqual({ calories: 2000, proteinG: 150, carbsG: 200, fatG: 65, waterMl: 3000, sugarG: 90 });
   });
 
   it('computes real Mifflin-St Jeor targets for a male profile', () => {

@@ -44,16 +44,26 @@ export type Meal = {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  sugarG?: number;       // total sugars, g; absent on meals logged before sugar was tracked
   photoUrl?: string;     // local file URI for MVP (Storage upload is a later step)
-  loggedVia: 'manual' | 'photo' | 'quick_add';
+  loggedVia: 'manual' | 'photo' | 'quick_add' | 'barcode';
   createdAt: string;     // ISO timestamp
   synced?: boolean;      // last pull saw the server agree (see lib/syncMerge.ts)
 };
 
-export type DailyTotals = { calories: number; proteinG: number; carbsG: number; fatG: number };
+export type DailyTotals = { calories: number; proteinG: number; carbsG: number; fatG: number; sugarG: number };
 
 // ── Date helper ──────────────────────────────────────────────────────────────
 export function todayKey(): string { return toDateKey(new Date()); }
+
+/** Rough time-of-day guess so a snapped or scanned meal lands in a sensible group. */
+export function guessMealType(): MealType {
+  const h = new Date().getHours();
+  if (h < 11) return 'breakfast';
+  if (h < 15) return 'lunch';
+  if (h < 21) return 'dinner';
+  return 'snack';
+}
 
 // ── Meals: load / mutate ─────────────────────────────────────────────────────
 
@@ -104,6 +114,7 @@ const fromDbRow = (r: Record<string, unknown>): Meal => ({
   proteinG: Number(r.protein_g ?? 0),
   carbsG: Number(r.carbs_g ?? 0),
   fatG: Number(r.fat_g ?? 0),
+  sugarG: Number(r.sugar_g ?? 0),
   photoUrl: (r.photo_url as string) ?? undefined,
   loggedVia: (r.logged_via as Meal['loggedVia']) ?? 'manual',
   createdAt: String(r.created_at ?? new Date().toISOString()),
@@ -125,7 +136,7 @@ export async function pullRemoteMeals(dateKey: string): Promise<boolean> {
 
     const { data, error } = await supabase
       .from('meals')
-      .select('id, date, meal_type, name, calories, protein_g, carbs_g, fat_g, photo_url, logged_via, created_at')
+      .select('id, date, meal_type, name, calories, protein_g, carbs_g, fat_g, sugar_g, photo_url, logged_via, created_at')
       .eq('user_id', userId)
       .eq('date', dateKey);
     if (error || !data) return false;
@@ -137,7 +148,7 @@ export async function pullRemoteMeals(dateKey: string): Promise<boolean> {
       const { merged, changed } = mergeRemote(
         map[dateKey] ?? [], data.map(fromDbRow), (m) => m.id, sameMealValues, undefined,
         (l, r) => ({ ...l, name: r.name, mealType: r.mealType, calories: r.calories,
-                     proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG }),
+                     proteinG: r.proteinG, carbsG: r.carbsG, fatG: r.fatG, sugarG: r.sugarG }),
       );
       if (!changed) return false;
 
@@ -152,12 +163,13 @@ export async function pullRemoteMeals(dateKey: string): Promise<boolean> {
 
 const sameMealValues = (a: Meal, b: Meal) =>
   a.name === b.name && a.mealType === b.mealType && a.calories === b.calories
-  && a.proteinG === b.proteinG && a.carbsG === b.carbsG && a.fatG === b.fatG;
+  && a.proteinG === b.proteinG && a.carbsG === b.carbsG && a.fatG === b.fatG
+  && (a.sugarG ?? 0) === (b.sugarG ?? 0);
 
 function toDbRow(m: Meal, userId: string) {
   return {
     id: m.id, user_id: userId, date: m.date, meal_type: m.mealType, name: m.name,
-    calories: m.calories, protein_g: m.proteinG, carbs_g: m.carbsG, fat_g: m.fatG,
+    calories: m.calories, protein_g: m.proteinG, carbs_g: m.carbsG, fat_g: m.fatG, sugar_g: m.sugarG ?? 0,
     photo_url: m.photoUrl ?? null, logged_via: m.loggedVia,
   };
 }
@@ -268,8 +280,9 @@ export function dailyTotals(meals: Meal[]): DailyTotals {
       proteinG: acc.proteinG + m.proteinG,
       carbsG:   acc.carbsG   + m.carbsG,
       fatG:     acc.fatG     + m.fatG,
+      sugarG:   acc.sugarG   + (m.sugarG ?? 0),
     }),
-    { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+    { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, sugarG: 0 },
   );
 }
 
@@ -278,7 +291,8 @@ export function dailyTotals(meals: Meal[]): DailyTotals {
 export async function getTargets(): Promise<NutritionTargets> {
   try {
     const raw = await AsyncStorage.getItem(TARGETS_KEY);
-    if (raw) return JSON.parse(raw) as NutritionTargets;
+    // Spread over the defaults: targets saved before a field existed (sugar) get its default.
+    if (raw) return { ...DEFAULT_TARGETS, ...(JSON.parse(raw) as Partial<NutritionTargets>) };
   } catch { /* fall through */ }
   await AsyncStorage.setItem(TARGETS_KEY, JSON.stringify(DEFAULT_TARGETS));
   return DEFAULT_TARGETS;
@@ -291,7 +305,7 @@ export async function saveTargets(t: NutritionTargets): Promise<void> {
     if (!userId) return;
     await supabase.from('nutrition_targets').upsert({
       user_id: userId, calories: t.calories, protein_g: t.proteinG,
-      carbs_g: t.carbsG, fat_g: t.fatG, water_ml: t.waterMl,
+      carbs_g: t.carbsG, fat_g: t.fatG, water_ml: t.waterMl, sugar_g: t.sugarG,
       last_updated: new Date().toISOString(),
     });
   });

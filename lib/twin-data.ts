@@ -133,5 +133,5 @@ async function applyTargets(twin: Twin): Promise<void> {
   await setDailyGoals(twin.steps.value, twin.water.value);
   const cur = await getTargets();
   const next = { calories: twin.fuel.value, proteinG: twin.fuel.proteinG, carbsG: twin.fuel.carbsG, fatG: twin.fuel.fatG, waterMl: twin.water.value };
-  if ((Object.keys(next) as (keyof typeof next)[]).some(k => cur[k] !== next[k])) await saveTargets(next);
+  if ((Object.keys(next) as (keyof typeof next)[]).some(k => cur[k] !== next[k])) await saveTargets({ ...cur, ...next });
 }

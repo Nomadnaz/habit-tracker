@@ -474,6 +474,7 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
       protein_g: num(data.proteinG) ?? num(data.protein_g) ?? 0,
       carbs_g: num(data.carbsG) ?? num(data.carbs_g) ?? 0,
       fat_g: num(data.fatG) ?? num(data.fat_g) ?? 0,
+      sugar_g: num(data.sugarG) ?? num(data.sugar_g) ?? 0,
       logged_via: 'manual',
     };
     const { error } = await supabase.from('meals').insert(row);
@@ -502,6 +503,8 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
     if (carbs !== undefined) patch.carbs_g = carbs;
     const fat = num(data.fatG) ?? num(data.fat_g);
     if (fat !== undefined) patch.fat_g = fat;
+    const sugar = num(data.sugarG) ?? num(data.sugar_g);
+    if (sugar !== undefined) patch.sugar_g = sugar;
     const mealType = str(data.mealType) ?? str(data.meal_type);
     if (mealType) patch.meal_type = mealType;
     if (!Object.keys(patch).length) throw new Error('update_meal needs at least one field to change');
@@ -514,6 +517,7 @@ const INTERNAL_EXECUTORS: Record<string, InternalExecutor> = {
       protein_g: patch.protein_g ?? target.protein_g,
       carbs_g: patch.carbs_g ?? target.carbs_g,
       fat_g: patch.fat_g ?? target.fat_g,
+      sugar_g: patch.sugar_g ?? target.sugar_g,
     };
   },
 
@@ -687,7 +691,7 @@ async function resolveMeal(
   data: Record<string, unknown>,
   tzOffsetMinutes: number,
 ): Promise<Record<string, unknown>> {
-  const cols = 'id, name, date, meal_type, calories, protein_g, carbs_g, fat_g';
+  const cols = 'id, name, date, meal_type, calories, protein_g, carbs_g, fat_g, sugar_g';
   const id = str(data.id) ?? str(data.mealId) ?? str(data.meal_id);
   if (id) {
     const { data: row } = await supabase.from('meals').select(cols)
@@ -758,9 +762,9 @@ export const ACTION_SPECS: Record<string, string> = {
   log_set:
     'log_set — log one set (weight x reps). Always logs to exercise_sets; also updates pb_log if this set beats the exercise\'s best estimated-1RM. data: { "exerciseName": string (the exercise as the user said it, e.g. "pec fly machine", "assisted pull up"), "exerciseId"?: string, "weightKg": number (0 for bodyweight; on an assisted machine, the assistance weight), "reps": number, "date"?: "YYYY-MM-DD" }. Every set the user reports needs its own log_set, even when the same exercise was logged a moment ago.',
   log_meal:
-    'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }. There is no photo -- ALWAYS estimate calories/proteinG/carbsG/fatG from the food name and a typical portion, even when no size was given (assume one typical individual serving). Never omit calories or send 0 for a real, named food.',
+    'log_meal — log a meal. data: { "name": string, "calories": number, "proteinG"?: number, "carbsG"?: number, "fatG"?: number, "sugarG"?: number (total sugars), "mealType"?: "breakfast"|"lunch"|"dinner"|"snack", "date"?: "YYYY-MM-DD"|"today" }. There is no photo -- ALWAYS estimate calories/proteinG/carbsG/fatG/sugarG from the food name and a typical portion, even when no size was given (assume one typical individual serving). Never omit calories or send 0 for a real, named food.',
   update_meal:
-    'update_meal — CORRECT a meal already in the log. Use this, NEVER a second log_meal, whenever the user amends something they just logged: "it had two sugars in it", "that was a large one", "make it 300 calories", "it was semi-skimmed". data: { "id"?: string (the id shown beside the meal in RECENT MEALS — always prefer this), "match"?: string (the meal\'s CURRENT name, only if you have no id), "date"?: "YYYY-MM-DD"|"today", plus ONLY the fields that change: "name"?, "calories"?, "proteinG"?, "carbsG"?, "fatG"?, "mealType"? }. Re-estimate the macros for the corrected description and send the NEW TOTAL for the whole item, never the difference. When renaming, "match" is the OLD name and "name" is the new one.',
+    'update_meal — CORRECT a meal already in the log. Use this, NEVER a second log_meal, whenever the user amends something they just logged: "it had two sugars in it", "that was a large one", "make it 300 calories", "it was semi-skimmed". data: { "id"?: string (the id shown beside the meal in RECENT MEALS — always prefer this), "match"?: string (the meal\'s CURRENT name, only if you have no id), "date"?: "YYYY-MM-DD"|"today", plus ONLY the fields that change: "name"?, "calories"?, "proteinG"?, "carbsG"?, "fatG"?, "sugarG"?, "mealType"? }. Re-estimate the macros for the corrected description and send the NEW TOTAL for the whole item, never the difference. When renaming, "match" is the OLD name and "name" is the new one.',
   delete_meal:
     'delete_meal — remove a meal from the log: "delete that", "I logged the cheddar twice", "remove the banana". data: { "id"?: string (preferred, from RECENT MEALS), "match"?: string (its name), "date"?: "YYYY-MM-DD"|"today" }',
   remember_about_user:

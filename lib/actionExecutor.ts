@@ -370,6 +370,7 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
         proteinG: numOrUndef(data.proteinG) ?? numOrUndef(data.protein_g) ?? 0,
         carbsG: numOrUndef(data.carbsG) ?? numOrUndef(data.carbs_g) ?? 0,
         fatG: numOrUndef(data.fatG) ?? numOrUndef(data.fat_g) ?? 0,
+        sugarG: numOrUndef(data.sugarG) ?? numOrUndef(data.sugar_g) ?? 0,
         loggedVia: 'manual',
       });
       return { summary: `Logged ${meal.name} · ${meal.calories} kcal` };
@@ -389,6 +390,7 @@ export async function executeAction(action: ProcessedAction): Promise<{ summary:
         proteinG: numOrUndef(data.proteinG) ?? numOrUndef(data.protein_g) ?? target.proteinG,
         carbsG: numOrUndef(data.carbsG) ?? numOrUndef(data.carbs_g) ?? target.carbsG,
         fatG: numOrUndef(data.fatG) ?? numOrUndef(data.fat_g) ?? target.fatG,
+        sugarG: numOrUndef(data.sugarG) ?? numOrUndef(data.sugar_g) ?? target.sugarG,
       };
       await updateMeal(updated);
       return { summary: `Updated ${updated.name} · ${updated.calories} kcal` };

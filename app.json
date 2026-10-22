@@ -50,7 +50,8 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.BLUETOOTH_SCAN",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
       ]
     },
     "web": {
@@ -96,7 +97,14 @@
           "microphonePermission": "Hold the dot to speak a log or ask a question — audio is transcribed, then discarded."
         }
       ],
-      "./plugins/with-fmt-cxx17"
+      "./plugins/with-fmt-cxx17",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Puck uses the camera to scan food barcodes and snap meals for your food log.",
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "extra": {
       "router": {},

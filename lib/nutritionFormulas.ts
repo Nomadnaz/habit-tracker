@@ -12,6 +12,8 @@ export type NutritionTargets = {
   carbsG: number;
   fatG: number;
   waterMl: number;
+  /** Daily limit for total sugars (labels' "of which sugars"), g. */
+  sugarG: number;
 };
 
 export type ProfileForTargets = {
@@ -25,6 +27,8 @@ export type ProfileForTargets = {
 // average adult" default, not a personalized number.
 export const DEFAULT_TARGETS: NutritionTargets = {
   calories: 2000, proteinG: 150, carbsG: 200, fatG: 65, waterMl: 3000,
+  // The UK/EU reference intake for total sugars — what a label's %RI is of.
+  sugarG: 90,
 };
 
 // Mifflin-St Jeor BMR × a fixed "lightly active" multiplier. Onboarding
@@ -49,5 +53,5 @@ export function computeTargets(profile: ProfileForTargets): NutritionTargets {
   const fatG = Math.round(fatCalories / 9);
   const carbsG = Math.max(0, Math.round((calories - proteinG * 4 - fatCalories) / 4));
 
-  return { calories, proteinG, carbsG, fatG, waterMl: DEFAULT_TARGETS.waterMl };
+  return { calories, proteinG, carbsG, fatG, waterMl: DEFAULT_TARGETS.waterMl, sugarG: DEFAULT_TARGETS.sugarG };
 }

@@ -21,7 +21,8 @@ const CORS = {
 
 const PROMPT = `Identify the food in this image and estimate its nutrition for the portion shown.
 Return ONLY valid JSON, no prose, in exactly this shape:
-{"name": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number}
+{"name": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "sugar_g": number}
+sugar_g is total sugars (natural + added), as a food label's "of which sugars" counts them.
 If you cannot identify food, return your best generic estimate for a single plate. Numbers only — no units.`;
 
 function parseMacros(text: string) {

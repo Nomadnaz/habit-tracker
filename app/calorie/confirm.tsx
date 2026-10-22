@@ -32,9 +32,9 @@ function num(s: string): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
-function NumField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function NumField({ label, value, onChange, full }: { label: string; value: string; onChange: (v: string) => void; full?: boolean }) {
   return (
-    <View style={styles.numCell}>
+    <View style={full ? styles.numFull : styles.numCell}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         style={styles.input} value={value} onChangeText={onChange}
@@ -48,7 +48,7 @@ export default function ConfirmScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     editingId?: string; name?: string; mealType?: string; calories?: string;
-    proteinG?: string; carbsG?: string; fatG?: string; photoUri?: string; source?: string;
+    proteinG?: string; carbsG?: string; fatG?: string; sugarG?: string; photoUri?: string; source?: string;
   }>();
 
   const editingId = str(params.editingId) || null;
@@ -61,13 +61,14 @@ export default function ConfirmScreen() {
   const [proteinG, setProteinG] = useState(str(params.proteinG));
   const [carbsG, setCarbsG] = useState(str(params.carbsG));
   const [fatG, setFatG] = useState(str(params.fatG));
+  const [sugarG, setSugarG] = useState(str(params.sugarG));
   const photoUri = str(params.photoUri) || undefined;
 
   async function save() {
     const dk = todayKey();
     const input = {
       date: dk, mealType, name: name.trim() || 'Meal',
-      calories: num(calories), proteinG: num(proteinG), carbsG: num(carbsG), fatG: num(fatG),
+      calories: num(calories), proteinG: num(proteinG), carbsG: num(carbsG), fatG: num(fatG), sugarG: num(sugarG),
       photoUrl: photoUri,
       loggedVia: (photoUri ? 'photo' : 'manual') as 'photo' | 'manual',
     };
@@ -117,10 +118,11 @@ export default function ConfirmScreen() {
           </View>
 
           <View style={styles.numGrid}>
-            <NumField label="CALORIES" value={calories} onChange={setCalories} />
+            <NumField label="CALORIES" value={calories} onChange={setCalories} full />
             <NumField label="PROTEIN g" value={proteinG} onChange={setProteinG} />
             <NumField label="CARBS g" value={carbsG} onChange={setCarbsG} />
             <NumField label="FAT g" value={fatG} onChange={setFatG} />
+            <NumField label="SUGAR g" value={sugarG} onChange={setSugarG} />
           </View>
         </ScrollView>
 
@@ -157,6 +159,7 @@ const styles = StyleSheet.create({
   typePillTextActive: { color: C.onHot },
   numGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   numCell: { width: '48.5%' },
+  numFull: { width: '100%' },
 
   actions: { flexDirection: 'row', gap: 10, paddingHorizontal: 18, paddingBottom: 18, paddingTop: 6 },
   cancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 999, borderWidth: 1, borderColor: C.lineHi },

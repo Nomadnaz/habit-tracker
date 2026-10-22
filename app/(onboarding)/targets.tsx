@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import OnboardingShell from '@/components/OnboardingShell';
 import { getAnswers, updateAnswers } from '@/lib/onboarding-data';
 import { computeTargets } from '@/lib/meals-data';
+import { DEFAULT_TARGETS } from '@/lib/nutritionFormulas';
 
 import { C, F } from '@/lib/theme';
 const REG = F.mono;
@@ -43,6 +44,7 @@ export default function Targets() {
         carbsG: parseInt(carbsG, 10) || 200,
         fatG: parseInt(fatG, 10) || 65,
         waterMl: parseInt(waterMl, 10) || 3000,
+        sugarG: DEFAULT_TARGETS.sugarG,
       },
     });
     router.push('/(onboarding)/first-habit');

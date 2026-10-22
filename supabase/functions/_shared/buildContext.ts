@@ -208,22 +208,24 @@ export async function buildContext(
           // TASKS. Without it the model could only ever append -- asked to
           // fix a meal it had just logged, its only move was a second
           // log_meal row, double-counting the item.
-          .select('id, date, meal_type, name, calories, protein_g')
+          .select('id, date, meal_type, name, calories, protein_g, sugar_g')
           .eq('user_id', userId)
           .gte('date', localDateKeyPlusDays(-3, tzOffsetMinutes))
           .order('date', { ascending: false })
           .limit(30),
-        supabase.from('nutrition_targets').select('calories, protein_g').eq('user_id', userId).maybeSingle(),
+        supabase.from('nutrition_targets').select('calories, protein_g, sugar_g').eq('user_id', userId).maybeSingle(),
       ]);
       raw.meals = data ?? [];
       raw.nutrition_targets = targets ?? null;
       if (data?.length) {
         const todayTotal = data.filter((m: { date: string }) => m.date === today)
           .reduce((s: number, m: { calories?: number }) => s + (m.calories ?? 0), 0);
-        lines.push(`MEALS TODAY: ${todayTotal} cal logged so far.`);
-        if (targets?.calories) lines.push(`CALORIE TARGET: ${targets.calories}/day, protein target ${targets.protein_g ?? '?'}g/day.`);
+        const sugarToday = data.filter((m: { date: string }) => m.date === today)
+          .reduce((s: number, m: { sugar_g?: number }) => s + Number(m.sugar_g ?? 0), 0);
+        lines.push(`MEALS TODAY: ${todayTotal} cal, ${Math.round(sugarToday)}g sugar logged so far.`);
+        if (targets?.calories) lines.push(`CALORIE TARGET: ${targets.calories}/day, protein target ${targets.protein_g ?? '?'}g/day, sugar limit ${targets.sugar_g ?? 90}g/day.`);
         lines.push('RECENT MEALS (last 3 days):');
-        for (const m of data.slice(0, 10)) lines.push(`- (id:${m.id}) ${m.date} ${m.meal_type}: ${m.name} (${m.calories} cal, ${m.protein_g ?? 0}g protein)`);
+        for (const m of data.slice(0, 10)) lines.push(`- (id:${m.id}) ${m.date} ${m.meal_type}: ${m.name} (${m.calories} cal, ${m.protein_g ?? 0}g protein, ${m.sugar_g ?? 0}g sugar)`);
       } else {
         lines.push('MEALS: none logged in the last 3 days.');
       }
