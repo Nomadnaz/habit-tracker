@@ -21,6 +21,7 @@ import { toDateKey } from '@/lib/dateKey';
 import { loadBodyData } from '@/lib/body-data';
 
 import { C, F } from '@/lib/theme';
+import { useInFlight } from '@/lib/use-in-flight';
 import { TAP } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
@@ -86,6 +87,8 @@ export default function SleepDetailModal() {
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
+  const [saving, once] = useInFlight(); // one write per tap
+
   async function saveSleep() {
     if (!bedtime.trim() || !wakeTime.trim()) return;
     await logSleep({ date: today, bedtime: bedtime.trim(), wakeTime: wakeTime.trim(), qualityScore: quality });
@@ -129,7 +132,7 @@ export default function SleepDetailModal() {
               onChangeText={setPhoneDownTime}
               keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
             />
-            <TouchableOpacity style={styles.smallBtn} onPress={savePhoneDown}>
+            <TouchableOpacity style={[styles.smallBtn, saving && { opacity: 0.5 }]} onPress={() => once(savePhoneDown)} disabled={saving}>
               <Text style={styles.smallBtnText}>LOG</Text>
             </TouchableOpacity>
           </View>
@@ -182,7 +185,7 @@ export default function SleepDetailModal() {
           {tonight?.totalHours != null && (
             <Text style={styles.sub}>Total: {tonight.totalHours}h</Text>
           )}
-          <TouchableOpacity style={styles.saveBtn} onPress={saveSleep}>
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={() => once(saveSleep)} disabled={saving}>
             <Text style={styles.saveBtnText}>SAVE</Text>
           </TouchableOpacity>
         </View>

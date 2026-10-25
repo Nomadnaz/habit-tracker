@@ -7,6 +7,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-nativ
 import * as Haptics from 'expo-haptics';
 import { addWater, logWeight, todayWaterMl, latestWeight, type BodyData } from '@/lib/body-data';
 import { C, F } from '@/lib/theme';
+import { useInFlight } from '@/lib/use-in-flight';
 import { Sheet } from '@/components/today/bits';
 
 /** `spot` floats above the dimmed screen (BODY's tapped readout, still lit). */
@@ -48,6 +49,8 @@ export function WeightSheet({ visible, data, onData, onClose, spot }: {
   const [input, setInput] = useState('');
   const weight = latestWeight(data);
 
+  const [saving, once] = useInFlight(); // a double tap logs one weigh-in
+
   async function save() {
     const kg = parseFloat(input);
     if (!kg || kg <= 0) return;
@@ -72,7 +75,7 @@ export function WeightSheet({ visible, data, onData, onClose, spot }: {
           keyboardType="decimal-pad"
           autoFocus
         />
-        <TouchableOpacity style={styles.doneBtn} onPress={save}>
+        <TouchableOpacity style={[styles.doneBtn, saving && { opacity: 0.5 }]} onPress={() => once(save)} disabled={saving}>
           <Text style={styles.doneBtnText}>SAVE</Text>
         </TouchableOpacity>
       </View>

@@ -18,6 +18,7 @@ import { shortDate } from '@/lib/history';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Corners } from '@/components/Corners';
 import { C, F } from '@/lib/theme';
+import { useInFlight } from '@/lib/use-in-flight';
 import { TAP } from '@/lib/hit';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -57,6 +58,8 @@ export default function PBs() {
   const top = lifts.find(l => l.best);
 
   const toggle = (id: string) => { void Haptics.selectionAsync(); animate(); setDraft(''); setOpen(o => (o === id ? null : id)); };
+
+  const [saving, once] = useInFlight(); // a double tap logs one PB
 
   async function save(l: Lift) {
     const kg = parseWeightToKg(draft.replace(',', '.'), unitSystem);
@@ -130,9 +133,9 @@ export default function PBs() {
                       autoFocus
                       style={st.input}
                       returnKeyType="done"
-                      onSubmitEditing={() => save(l)}
+                      onSubmitEditing={() => once(() => save(l))}
                     />
-                    <Pressable onPress={() => save(l)} style={({ pressed }) => [st.save, pressed && { opacity: 0.8 }]}>
+                    <Pressable onPress={() => once(() => save(l))} disabled={saving} style={({ pressed }) => [st.save, (pressed || saving) && { opacity: 0.6 }]}>
                       <Text style={st.saveText}>SAVE</Text>
                     </Pressable>
                   </View>

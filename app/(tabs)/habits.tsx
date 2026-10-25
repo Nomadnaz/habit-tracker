@@ -34,6 +34,7 @@ import { useRevalidate } from '@/lib/revalidate';
 import HeatmapCalendar from '@/components/HeatmapCalendar';
 
 import { C, F } from '@/lib/theme';
+import { useInFlight } from '@/lib/use-in-flight';
 import { TAP, hit } from '@/lib/hit';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 import { Sheet } from '@/components/today/bits';
@@ -63,6 +64,8 @@ export default function HabitsScreen() {
   const [medType, setMedType] = useState<MedType>('medication');
   const [medCourseLength, setMedCourseLength] = useState('');
   const gone = usePendingRemovals();
+  // A double tap on ADD can't make two (lib/use-in-flight.ts).
+  const [saving, once] = useInFlight();
 
   const refresh = useCallback(async () => {
     // Habits ticked by the voice device are written server-side; this layer is
@@ -285,7 +288,7 @@ export default function HabitsScreen() {
               </TouchableOpacity>
             ))}
           </View>
-          <TouchableOpacity style={styles.saveBtn} onPress={save}>
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={() => once(save)} disabled={saving}>
             <Text style={styles.saveBtnText}>ADD HABIT</Text>
           </TouchableOpacity>
         </View>
@@ -324,7 +327,7 @@ export default function HabitsScreen() {
             onChangeText={setMedCourseLength}
             keyboardType="number-pad"
           />
-          <TouchableOpacity style={styles.saveBtn} onPress={saveMed}>
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={() => once(saveMed)} disabled={saving}>
             <Text style={styles.saveBtnText}>ADD</Text>
           </TouchableOpacity>
         </View>

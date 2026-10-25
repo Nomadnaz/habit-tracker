@@ -16,6 +16,7 @@ import {
 import { toDateKey } from '@/lib/dateKey';
 
 import { C, F } from '@/lib/theme';
+import { useInFlight } from '@/lib/use-in-flight';
 import { TAP, hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
@@ -37,6 +38,8 @@ export default function CycleTrackingModal() {
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
+  const [saving, once] = useInFlight(); // one write per tap
+
   async function enable() {
     await setOptedIn(true);
     refresh();
@@ -56,7 +59,7 @@ export default function CycleTrackingModal() {
         <View style={styles.optInWrap}>
           <MaterialCommunityIcons name="calendar-heart" size={40} color={C.hot} />
           <Text style={styles.optInText}>Cycle tracking is opt-in and hidden from everyone else, including the AI companions — nothing here is shared unless you turn it on.</Text>
-          <TouchableOpacity style={styles.saveBtn} onPress={enable}>
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={() => once(enable)} disabled={saving}>
             <Text style={styles.saveBtnText}>TURN ON CYCLE TRACKING</Text>
           </TouchableOpacity>
         </View>
@@ -77,7 +80,7 @@ export default function CycleTrackingModal() {
           ) : (
             <Text style={styles.predictText}>Log your last period to start predictions.</Text>
           )}
-          <TouchableOpacity style={styles.saveBtn} onPress={logPeriodToday}>
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={() => once(logPeriodToday)} disabled={saving}>
             <Text style={styles.saveBtnText}>LOG PERIOD TODAY</Text>
           </TouchableOpacity>
         </View>

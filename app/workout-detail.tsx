@@ -28,6 +28,7 @@ import {
 } from '@/lib/unit-preference';
 
 import { C, F } from '@/lib/theme';
+import { useInFlight } from '@/lib/use-in-flight';
 import { TAP, hit } from '@/lib/hit';
 import { bleBridge } from '@/lib/ble-bridge';
 import { toDateKey } from '@/lib/dateKey';
@@ -464,6 +465,8 @@ export default function WorkoutDetailScreen() {
     load();
   }
 
+  const [logging, once] = useInFlight(); // a double tap logs one PB
+
   async function handleLogPB() {
     if (!editEx || !pbInput.trim()) return;
     const kg = parseWeightToKg(pbInput, unitSystem);
@@ -664,7 +667,7 @@ export default function WorkoutDetailScreen() {
                         placeholderTextColor={C.faint}
                         keyboardType="decimal-pad"
                       />
-                      <TouchableOpacity style={s.pbLogBtn} onPress={handleLogPB}>
+                      <TouchableOpacity style={[s.pbLogBtn, logging && { opacity: 0.5 }]} onPress={() => once(handleLogPB)} disabled={logging}>
                         <Text style={s.pbLogBtnText}>LOG PB</Text>
                       </TouchableOpacity>
                     </View>

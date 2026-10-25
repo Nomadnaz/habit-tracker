@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { getRecentMoodLogs, getTodayMood, logMood, pullRemoteMood, TRIGGERS, type MoodLog } from '@/lib/mood-data';
 
 import { C, F } from '@/lib/theme';
+import { useInFlight } from '@/lib/use-in-flight';
 import { TAP, hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
@@ -40,6 +41,8 @@ export default function MoodModal() {
   function toggleTrigger(t: string) {
     setTriggers(cur => (cur.includes(t) ? cur.filter(x => x !== t) : [...cur, t]));
   }
+
+  const [saving, once] = useInFlight(); // one check-in per tap, however fast
 
   async function save() {
     await logMood({ moodScore: mood, stressScore: stress, triggers, note: note.trim() || undefined });
@@ -79,7 +82,7 @@ export default function MoodModal() {
 
           <TextInput style={styles.input} placeholder="Note (optional)" placeholderTextColor={C.dim} value={note} onChangeText={setNote} multiline />
 
-          <TouchableOpacity style={styles.saveBtn} onPress={save}>
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={() => once(save)} disabled={saving}>
             <Text style={styles.saveBtnText}>SAVE TODAY</Text>
           </TouchableOpacity>
         </View>
