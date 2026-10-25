@@ -111,7 +111,7 @@ const s = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40, alignItems: 'center' },
   date: { fontFamily: REG, fontSize: 11, color: C.dim, letterSpacing: 0.5, marginBottom: 12, alignSelf: 'flex-start' },
 
-  statsCard: { width: '100%', backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 16, marginBottom: 14 },
+  statsCard: { width: '100%', backgroundColor: C.surface, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 16, marginBottom: 14 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   statCol: { alignItems: 'center', flex: 1 },
   statValue: { fontFamily: BOLD, fontSize: 16, color: C.ink },
@@ -122,7 +122,7 @@ const s = StyleSheet.create({
 
   splitRow: {
     flexDirection: 'row', justifyContent: 'space-between', width: '100%',
-    backgroundColor: C.surface, borderRadius: 8, borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.surface, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line,
     paddingVertical: 10, paddingHorizontal: 14, marginBottom: 6,
   },
   splitKm: { fontFamily: BOLD, fontSize: 12, color: C.ink },

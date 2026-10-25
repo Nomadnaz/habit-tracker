@@ -789,14 +789,14 @@ const s = StyleSheet.create({
   countLabel: { fontFamily: F.mono, fontSize: 9, color: C.faint, letterSpacing: 1, marginBottom: 14 },
   empty: { fontFamily: F.mono, fontSize: 11, color: C.dim, textAlign: 'center', marginVertical: 16 },
 
-  exRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 10 },
+  exRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 10 },
   indexBubble: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   indexText: { fontFamily: F.mono, fontSize: 12, color: C.onHot },
   exBody: { flex: 1 },
   exName: { fontFamily: F.mono, fontSize: 12, color: C.ink, letterSpacing: 1 },
   exMeta: { fontFamily: F.mono, fontSize: 9, color: C.dim, marginTop: 4, letterSpacing: 1 },
 
-  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 14, marginTop: 6 },
+  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dashed', borderRadius: 10, borderCurve: 'continuous', paddingVertical: 14, marginTop: 6 },
   addText: { fontFamily: F.mono, fontSize: 11, color: C.hot, letterSpacing: 1 },
 
   // ── Shared modal shell ─────────────────────────────────────────────────
@@ -805,7 +805,7 @@ const s = StyleSheet.create({
   centreCard: {
     width: '100%',
     backgroundColor: C.surface,
-    borderRadius: 16,
+    borderRadius: 16, borderCurve: 'continuous',
     padding: 20,
     maxHeight: '88%',
     position: 'relative',
@@ -886,7 +886,7 @@ const s = StyleSheet.create({
     color: C.ink,
     borderWidth: 1,
     borderColor: C.line,
-    borderRadius: 8,
+    borderRadius: 8, borderCurve: 'continuous',
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 14,
@@ -899,7 +899,7 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: C.line,
-    borderRadius: 8,
+    borderRadius: 8, borderCurve: 'continuous',
     backgroundColor: C.surface,
     paddingHorizontal: 12,
     paddingVertical: 11,
@@ -909,7 +909,7 @@ const s = StyleSheet.create({
     marginTop: 8,
     borderWidth: 1,
     borderColor: C.line,
-    borderRadius: 8,
+    borderRadius: 8, borderCurve: 'continuous',
     backgroundColor: C.surface,
     overflow: 'hidden',
   },
@@ -961,7 +961,7 @@ const s = StyleSheet.create({
     ...(Platform.OS === 'android' ? { includeFontPadding: false, textAlignVertical: 'center' as const } : {}),
   },
   setChipTextActive: { color: C.surface },
-  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 13, alignItems: 'center', marginBottom: 2 },
+  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 13, alignItems: 'center', marginBottom: 2 },
   saveBtnText: { fontFamily: F.mono, fontSize: 12, color: C.onHot, letterSpacing: 1 },
 
   // ── PB section ─────────────────────────────────────────────────────────
@@ -969,7 +969,7 @@ const s = StyleSheet.create({
   puckBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.hot, borderRadius: 999, minHeight: 48, marginBottom: 8 },
   puckBtnText: { fontFamily: F.dot, fontSize: 13, color: C.onHot, letterSpacing: 2 },
   puckHint: { fontFamily: F.mono, fontSize: 11, color: C.dim, textAlign: 'center', lineHeight: 16, marginBottom: 16 },
-  loggedList: { borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 12, marginBottom: 18, backgroundColor: C.bg },
+  loggedList: { borderWidth: 1, borderColor: C.line, borderRadius: 12, borderCurve: 'continuous', padding: 12, marginBottom: 18, backgroundColor: C.bg },
   loggedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   loggedIdx: { fontFamily: F.dot, fontSize: 12, color: C.faint, width: 16 },
   loggedMain: { fontFamily: F.mono, fontSize: 14, color: C.ink },
@@ -979,7 +979,7 @@ const s = StyleSheet.create({
   chartWrap: { alignItems: 'center', marginBottom: 12 },
   pbInputRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'center' },
   pbWeightInput: { flex: 1, fontFamily: F.dot, fontSize: 15, color: C.ink, borderBottomWidth: 2, borderBottomColor: C.line, paddingVertical: 8, textAlign: 'center' },
-  pbLogBtn: { backgroundColor: ORANGE, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10 },
+  pbLogBtn: { backgroundColor: ORANGE, borderRadius: 20, borderCurve: 'continuous', paddingHorizontal: 20, paddingVertical: 10 },
   pbLogBtnText: { fontFamily: F.mono, fontSize: 11, color: C.onHot, letterSpacing: 1 },
   pbList: { borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 },
   pbRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line },
@@ -988,9 +988,9 @@ const s = StyleSheet.create({
   pbWeightBest: { color: ORANGE },
 
   // ── Add exercise modal ─────────────────────────────────────────────────
-  tabRow: { flexDirection: 'row', marginBottom: 16, borderRadius: 8, backgroundColor: C.surface, padding: 4 },
+  tabRow: { flexDirection: 'row', marginBottom: 16, borderRadius: 8, borderCurve: 'continuous', backgroundColor: C.surface, padding: 4 },
   tabRowBelowToggle: { marginTop: 34 },
-  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
+  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6, borderCurve: 'continuous' },
   tabActive: { backgroundColor: C.surface },
   tabText: { fontFamily: F.mono, fontSize: 10, color: C.dim, letterSpacing: 1 },
   tabTextActive: { color: INK },

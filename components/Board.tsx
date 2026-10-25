@@ -35,7 +35,7 @@ export function BoardRow({ index, label, sub, right, onPress, last }: {
 const styles = StyleSheet.create({
   board: { marginHorizontal: 16, marginTop: 14 },
   boardTitle: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3 },
-  boardBody: { borderWidth: 1, borderColor: C.line, borderRadius: 16, overflow: 'hidden', backgroundColor: C.surface },
+  boardBody: { borderWidth: 1, borderColor: C.line, borderRadius: 16, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: C.surface },
   boardEmpty: { fontFamily: F.dot, fontSize: 12, color: C.faint, letterSpacing: 2, textAlign: 'center', paddingVertical: 22 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 12, minHeight: 52, borderBottomWidth: 1, borderBottomColor: C.line },
   rowIdx: { fontFamily: F.dot, fontSize: 13, color: C.faint, minWidth: 16 },

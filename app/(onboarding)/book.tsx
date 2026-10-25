@@ -42,7 +42,7 @@ export default function Book() {
 
 const styles = StyleSheet.create({
   row: {
-    flexDirection: 'row', gap: 12, padding: 14, borderRadius: 10,
+    flexDirection: 'row', gap: 12, padding: 14, borderRadius: 10, borderCurve: 'continuous',
     borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, alignItems: 'flex-start',
   },
   title: { fontFamily: BOLD, fontSize: 12, color: C.ink },

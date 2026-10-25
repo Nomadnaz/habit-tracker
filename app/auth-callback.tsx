@@ -59,6 +59,6 @@ const st = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.bg, justifyContent: 'center', paddingHorizontal: 28, gap: 14 },
   title: { fontFamily: F.dot, fontSize: 24, color: C.ink, letterSpacing: 2 },
   sub: { fontFamily: F.mono, fontSize: 13, color: C.dim, lineHeight: 19 },
-  btn: { backgroundColor: C.hot, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 10 },
+  btn: { backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 16, alignItems: 'center', marginTop: 10 },
   btnText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
 });

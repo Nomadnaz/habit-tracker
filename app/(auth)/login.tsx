@@ -180,19 +180,19 @@ const st = StyleSheet.create({
   title: { fontFamily: F.dot, fontSize: 44, color: C.ink, letterSpacing: 6, marginLeft: 18 },
   tagline: { fontFamily: F.mono, fontSize: 11, color: C.dim, letterSpacing: 2, marginBottom: 32 },
 
-  tabs: { flexDirection: 'row', gap: 6, marginBottom: 14, padding: 4, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  tabs: { flexDirection: 'row', gap: 6, marginBottom: 14, padding: 4, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  tab: { flex: 1, paddingVertical: 10, borderRadius: 8, borderCurve: 'continuous', alignItems: 'center' },
   tabOn: { backgroundColor: C.hot },
   tabText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.6 },
   tabTextOn: { color: C.onHot },
   back: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1.6 },
 
-  card: { backgroundColor: C.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: C.line, gap: 14 },
+  card: { backgroundColor: C.surface, borderRadius: 16, borderCurve: 'continuous', padding: 20, borderWidth: 1, borderColor: C.line, gap: 14 },
   cardLabel: { fontFamily: F.dot, fontSize: 12, color: C.hot, letterSpacing: 2 },
   note: { fontFamily: F.mono, fontSize: 12, color: C.dim, lineHeight: 17 },
   link: { fontFamily: F.dot, fontSize: 9, color: C.ink, letterSpacing: 1.6 },
   error: { fontFamily: F.mono, fontSize: 12, color: C.alert, lineHeight: 17 },
-  button: { backgroundColor: C.hot, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 4 },
+  button: { backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 16, alignItems: 'center', marginTop: 4 },
   buttonText: { fontFamily: F.dot, color: C.onHot, fontSize: 12, letterSpacing: 2 },
   fine: { fontFamily: F.mono, fontSize: 11, color: C.faint, textAlign: 'center', marginTop: 14 },
 });

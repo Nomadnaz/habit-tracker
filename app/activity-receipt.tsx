@@ -427,7 +427,7 @@ const s = StyleSheet.create({
   statLabel: { fontFamily: RECEIPT_REG, fontSize: 8, color: RECEIPT_FADED, letterSpacing: 1 },
   statValue: { fontFamily: RECEIPT_BOLD, fontSize: 13, color: RECEIPT_INK },
 
-  mapFrame: { marginTop: 4, borderRadius: 3, overflow: 'hidden', backgroundColor: C.bg },
+  mapFrame: { marginTop: 4, borderRadius: 3, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: C.bg },
 
   splitsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 4 },
   section: { fontFamily: RECEIPT_BOLD, fontSize: 10, color: RECEIPT_INK, letterSpacing: 2 },
@@ -447,9 +447,9 @@ const s = StyleSheet.create({
   footText: { fontFamily: RECEIPT_REG, fontSize: 8, color: RECEIPT_FADED, letterSpacing: 1 },
 
   actions: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
-  primaryBtn: { flex: 1.4, backgroundColor: C.hot, borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
+  primaryBtn: { flex: 1.4, backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 13, alignItems: 'center' },
   primaryBtnText: { fontFamily: F.dot, fontSize: 13, color: C.onHot, letterSpacing: 1 },
-  secondaryBtn: { flex: 1, borderRadius: 10, borderWidth: 1, borderColor: C.line, paddingVertical: 13, alignItems: 'center' },
+  secondaryBtn: { flex: 1, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, paddingVertical: 13, alignItems: 'center' },
   secondaryBtnText: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
   off: { opacity: 0.4 },
   pressed: { transform: [{ scale: 0.97 }], opacity: 0.85 },

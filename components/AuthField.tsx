@@ -69,7 +69,7 @@ const st = StyleSheet.create({
 
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   label: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2 },
-  box: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.bg, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 14 },
+  box: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.bg, borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', paddingHorizontal: 14 },
   boxFocus: { borderColor: C.lineHi },
   boxBad: { borderColor: C.alert },
   input: { flex: 1, paddingVertical: 14, fontFamily: F.mono, fontSize: 14, color: C.ink },

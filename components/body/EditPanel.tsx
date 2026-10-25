@@ -122,7 +122,7 @@ export function EditPanel({ draft, pinOn, items, swapItems, onPick, onSwap, onUs
 
 const st = StyleSheet.create({
   panel: {
-    position: 'absolute', left: 8, right: 8, bottom: 8, borderRadius: 20, borderWidth: 1, borderColor: C.lineHi,
+    position: 'absolute', left: 8, right: 8, bottom: 8, borderRadius: 20, borderCurve: 'continuous', borderWidth: 1, borderColor: C.lineHi,
     backgroundColor: C.surface, paddingHorizontal: 12, paddingBottom: 12, gap: 8,
     shadowColor: C.bg, shadowOpacity: 0.7, shadowRadius: 20, shadowOffset: { width: 0, height: -6 },
   },
@@ -134,7 +134,7 @@ const st = StyleSheet.create({
   done: { backgroundColor: C.hot, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   doneText: { fontFamily: F.dot, fontSize: 10, color: C.onHot, letterSpacing: 2 },
   steps: { flexDirection: 'row', gap: 6 },
-  step: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.line, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, minHeight: 40 },
+  step: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.line, borderRadius: 8, borderCurve: 'continuous', paddingHorizontal: 8, paddingVertical: 6, minHeight: 40 },
   stepN: { fontFamily: F.dot, fontSize: 12, color: C.faint, width: 8 },
   stepDot: { width: 8, height: 8 },
   stepWord: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5 },

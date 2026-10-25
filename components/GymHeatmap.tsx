@@ -73,8 +73,8 @@ export function GymHeatmapLegend({ items }: { items: { kind: SquareKind; label: 
 }
 
 const hs = StyleSheet.create({
-  sq: { width: SQ, height: SQ, borderRadius: 3, overflow: 'hidden' },
-  cell: { borderRadius: 6, overflow: 'hidden' },
+  sq: { width: SQ, height: SQ, borderRadius: 3, borderCurve: 'continuous', overflow: 'hidden' },
+  cell: { borderRadius: 6, borderCurve: 'continuous', overflow: 'hidden' },
   invisible: {},
   solid: { backgroundColor: ORANGE },
   dotted: { borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dotted' },

@@ -71,7 +71,7 @@ export default function Connect() {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14,
-    borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
+    borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
   },
   rowConnected: { borderColor: GREEN },
   rowDisabled: { opacity: 0.5 },

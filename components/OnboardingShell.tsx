@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: REG, fontSize: 13, color: C.dim, marginTop: 8, lineHeight: 19 },
   body: { marginTop: 24, gap: 12 },
   footer: { paddingHorizontal: 24, paddingBottom: 16, gap: 10 },
-  nextBtn: { backgroundColor: ORANGE, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+  nextBtn: { backgroundColor: ORANGE, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 16, alignItems: 'center' },
   nextBtnDisabled: { opacity: 0.4 },
   nextBtnText: { fontFamily: BOLD, fontSize: 13, color: C.onHot },
 });

@@ -64,7 +64,7 @@ export default function BriefingBuilder() {
 
 const styles = StyleSheet.create({
   row: {
-    padding: 14, borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
+    padding: 14, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface,
   },
   rowActive: { backgroundColor: ORANGE, borderColor: C.hot },
   label: { fontFamily: REG, fontSize: 13, color: C.ink },

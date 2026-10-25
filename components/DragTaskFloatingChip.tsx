@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     backgroundColor: C.surface,
-    borderRadius: 8,
+    borderRadius: 8, borderCurve: 'continuous',
     zIndex: 1000,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },

@@ -129,9 +129,9 @@ const styles = StyleSheet.create({
   photo: { width: 72, height: 72, borderRadius: 36 },
   photoLabel: { fontFamily: REG, fontSize: 10, color: C.dim },
   input: {
-    width: '100%', borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 14,
+    width: '100%', borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 14,
     fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
-  saveBtn: { width: '100%', backgroundColor: C.hot, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  saveBtn: { width: '100%', backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center' },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

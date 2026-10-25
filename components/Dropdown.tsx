@@ -47,7 +47,7 @@ export function Dropdown({ label, summary, open: shown, onToggle, initiallyOpen,
 }
 
 const st = StyleSheet.create({
-  box: { borderWidth: 1, borderColor: C.line, borderRadius: 12, backgroundColor: C.bg, overflow: 'hidden' },
+  box: { borderWidth: 1, borderColor: C.line, borderRadius: 12, borderCurve: 'continuous', backgroundColor: C.bg, overflow: 'hidden' },
   boxOpen: { borderColor: C.lineHi },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 36, paddingHorizontal: 12 },
   label: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 2 },

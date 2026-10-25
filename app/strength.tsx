@@ -102,7 +102,7 @@ const s = StyleSheet.create({
   empty: { fontFamily: REG, fontSize: 12, color: C.dim, marginBottom: 12, lineHeight: 16 },
   emptySmall: { fontFamily: REG, fontSize: 10, color: C.dim, marginVertical: 8 },
 
-  liftCard: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 10 },
+  liftCard: { backgroundColor: CARD, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 10 },
   liftHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   liftName: { fontFamily: BOLD, fontSize: 13, color: C.ink, letterSpacing: 1 },
   liftValue: { fontFamily: NUM, fontSize: 20, color: C.hot },
@@ -110,7 +110,7 @@ const s = StyleSheet.create({
   liftSub: { fontFamily: REG, fontSize: 9, color: C.dim, marginTop: 2, marginBottom: 8 },
   liftDelta: { fontFamily: REG, fontSize: 10, color: C.dim, marginTop: 6 },
 
-  trendCard: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 12, alignItems: 'center' },
+  trendCard: { backgroundColor: CARD, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 14, marginBottom: 12, alignItems: 'center' },
   trendPct: { fontFamily: NUM, fontSize: 32 },
   trendSub: { fontFamily: REG, fontSize: 10, color: C.dim, marginTop: 4, marginBottom: 12, textAlign: 'center' },
 

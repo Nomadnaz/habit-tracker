@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: F.dot, fontSize: 44, color: C.ink, letterSpacing: 6, marginLeft: 18 },
   tagline: { fontFamily: REG, fontSize: 12, color: C.dim, marginTop: 12, letterSpacing: 1 },
   footer: { paddingHorizontal: 24, paddingBottom: 24, gap: 10 },
-  primaryBtn: { backgroundColor: ORANGE, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+  primaryBtn: { backgroundColor: ORANGE, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 16, alignItems: 'center' },
   primaryBtnText: { fontFamily: BOLD, fontSize: 13, color: C.onHot },
   secondaryBtn: { paddingVertical: 10, alignItems: 'center' },
   secondaryBtnText: { fontFamily: REG, fontSize: 12, color: C.dim },

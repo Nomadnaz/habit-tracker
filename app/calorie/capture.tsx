@@ -120,7 +120,7 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
   hint: { fontFamily: REG, fontSize: 13, color: C.dim, textAlign: 'center', marginBottom: 8, lineHeight: 19 },
-  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 50, borderRadius: 12 },
+  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 50, borderRadius: 12, borderCurve: 'continuous' },
   btnPrimary: { backgroundColor: ORANGE },
   btnPrimaryText: { fontFamily: BOLD, fontSize: 13, color: C.onHot, letterSpacing: 1 },
   btnGhost: { borderWidth: 1.5, borderColor: C.hot, backgroundColor: C.surface },

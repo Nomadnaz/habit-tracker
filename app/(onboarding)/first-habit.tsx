@@ -53,14 +53,14 @@ export default function FirstHabit() {
 
 const styles = StyleSheet.create({
   input: {
-    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 14,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 14,
     fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line },
   chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   freqRow: { flexDirection: 'row', gap: 8 },
-  freqChip: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: C.line, alignItems: 'center' },
+  freqChip: { flex: 1, paddingVertical: 10, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, alignItems: 'center' },
   freqChipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   freqChipText: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   freqChipTextActive: { color: C.surface },

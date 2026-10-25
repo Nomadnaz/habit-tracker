@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
 
   squares: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 14 },
 
-  statsLine: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 18, paddingHorizontal: 14, minHeight: 46, borderWidth: 1, borderColor: C.line, borderRadius: 16, backgroundColor: C.surface },
+  statsLine: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 18, paddingHorizontal: 14, minHeight: 46, borderWidth: 1, borderColor: C.line, borderRadius: 16, borderCurve: 'continuous', backgroundColor: C.surface },
   statsText: { flex: 1, fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5 },
   statsVal: { fontSize: 14, color: C.ink },
 

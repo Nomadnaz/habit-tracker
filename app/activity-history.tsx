@@ -82,7 +82,7 @@ const s = StyleSheet.create({
   empty: { fontFamily: REG, fontSize: 13, color: C.dim, paddingVertical: 12 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 12,
+    backgroundColor: C.surface, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 12,
   },
   rowTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   rowSub: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 2 },

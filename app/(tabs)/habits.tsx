@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 40 },
   card: {
-    backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line,
+    backgroundColor: C.surface, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line,
     padding: 14, gap: 10,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -348,18 +348,18 @@ const styles = StyleSheet.create({
   sheet: { gap: 14, paddingBottom: 4 },
   sheetTitle: { fontFamily: BOLD, fontSize: 14, color: C.ink },
   input: {
-    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 12,
     fontFamily: REG, fontSize: 13, color: C.ink,
   },
   freqRow: { flexDirection: 'row', gap: 8 },
   freqChip: {
-    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: C.line,
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line,
   },
   freqChipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   freqChipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   freqChipTextActive: { color: C.surface },
   saveBtn: {
-    backgroundColor: C.hot, borderRadius: 10, paddingVertical: 14, alignItems: 'center',
+    backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center',
   },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

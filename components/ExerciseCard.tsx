@@ -88,13 +88,13 @@ export function ExerciseCard({ name, role, guide, bodyKg, onClose }: {
 const st = StyleSheet.create({
   scrim: { backgroundColor: C.scrim },
   center: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  card: { width: '100%', maxWidth: 420, backgroundColor: C.surface, borderRadius: 22, borderWidth: 1, borderColor: C.lineHi, padding: 18 },
+  card: { width: '100%', maxWidth: 420, backgroundColor: C.surface, borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: C.lineHi, padding: 18 },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   eyebrow: { fontFamily: F.dot, fontSize: 9, color: C.live, letterSpacing: 2 },
   title: { fontFamily: F.dot, fontSize: 22, color: C.hot, letterSpacing: 1, marginTop: 4 },
-  demo: { alignItems: 'center', marginVertical: 12, paddingVertical: 6, backgroundColor: C.bg, borderRadius: 16 },
+  demo: { alignItems: 'center', marginVertical: 12, paddingVertical: 6, backgroundColor: C.bg, borderRadius: 16, borderCurve: 'continuous' },
   demoCable: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  stats: { flexDirection: 'row', borderWidth: 1, borderColor: C.line, borderRadius: 14 },
+  stats: { flexDirection: 'row', borderWidth: 1, borderColor: C.line, borderRadius: 14, borderCurve: 'continuous' },
   stat: { flex: 1, padding: 12, gap: 4 },
   statRule: { borderLeftWidth: 1, borderLeftColor: C.line },
   statLabel: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5 },
@@ -105,7 +105,7 @@ const st = StyleSheet.create({
   note: { fontFamily: F.mono, fontSize: 11, color: C.faint, marginTop: 4, lineHeight: 15 },
   video: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16,
-    backgroundColor: C.hot, borderRadius: 12, paddingVertical: 13,
+    backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 13,
   },
   videoText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 1.5 },
 });

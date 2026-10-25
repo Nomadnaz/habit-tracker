@@ -157,10 +157,10 @@ const st = StyleSheet.create({
   stepText: { fontFamily: F.mono, fontSize: 13, color: C.ink },
   note: { fontFamily: F.mono, fontSize: 12, color: C.live, marginTop: 24, lineHeight: 17 },
   footer: { paddingHorizontal: 24, paddingBottom: 20, gap: 14, alignItems: 'stretch' },
-  primary: { backgroundColor: C.hot, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+  primary: { backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 16, alignItems: 'center' },
   primaryText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
   row: { flexDirection: 'row', gap: 10 },
-  ghost: { flex: 1, borderWidth: 1, borderColor: C.lineHi, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  ghost: { flex: 1, borderWidth: 1, borderColor: C.lineHi, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 13, alignItems: 'center' },
   ghostText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1.6 },
   fine: { fontFamily: F.mono, fontSize: 11, color: C.dim, textAlign: 'center' },
 });

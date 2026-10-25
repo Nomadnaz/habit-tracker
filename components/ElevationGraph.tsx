@@ -35,7 +35,7 @@ export function ElevationGraph({ waypoints, width = 280, height = 100 }: { waypo
 
   return (
     <View>
-      <Svg width={width} height={height} style={{ backgroundColor: C.bg, borderRadius: 8 }}>
+      <Svg width={width} height={height} style={{ backgroundColor: C.bg, borderRadius: 8, borderCurve: 'continuous' }}>
         <Polyline points={points} fill="none" stroke={C.hot} strokeWidth={2} />
       </Svg>
       <View style={s.range}>
@@ -47,7 +47,7 @@ export function ElevationGraph({ waypoints, width = 280, height = 100 }: { waypo
 }
 
 const s = StyleSheet.create({
-  empty: { backgroundColor: BG, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  empty: { backgroundColor: BG, borderRadius: 8, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontFamily: REG, fontSize: 12, color: C.dim },
   range: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   rangeText: { fontFamily: REG, fontSize: 10, color: C.dim },

@@ -497,6 +497,6 @@ const st = StyleSheet.create({
   core: { width: CORE, height: CORE, borderRadius: CORE / 2, backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center' },
   coreStop: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.lineHi },
   btnText: { fontFamily: F.dot, fontSize: 16, color: C.onHot, letterSpacing: 2 },
-  stopSquare: { width: 26, height: 26, borderRadius: 5, backgroundColor: C.alert },
+  stopSquare: { width: 26, height: 26, borderRadius: 5, borderCurve: 'continuous', backgroundColor: C.alert },
   btnHint: { fontFamily: F.dot, fontSize: 8, color: C.faint, letterSpacing: 2 },
 });

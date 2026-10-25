@@ -219,11 +219,11 @@ function FlagString({ s, scale }: { s: Flagline; scale: number }) {
 }
 
 const st = StyleSheet.create({
-  stage: { overflow: 'hidden', borderRadius: 22, backgroundColor: C.bg, borderWidth: 1, borderColor: C.line },
+  stage: { overflow: 'hidden', borderRadius: 22, borderCurve: 'continuous', backgroundColor: C.bg, borderWidth: 1, borderColor: C.line },
   ascii: { fontFamily: F.mono, fontSize: FS, lineHeight: LH, height: LH, includeFontPadding: false, color: C.ink },
   probe: { position: 'absolute', opacity: 0, top: -100 },
   cloud: { fontFamily: F.mono, fontSize: 10, lineHeight: 10, color: MTN.cloud, opacity: 0.55 },
-  tag: { position: 'absolute', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1 },
+  tag: { position: 'absolute', borderRadius: 4, borderCurve: 'continuous', paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1 },
   tagOn: { backgroundColor: C.hot, borderColor: C.hot },
   tagOff: { backgroundColor: C.bg, borderColor: C.lineHi },
   tagText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1 },

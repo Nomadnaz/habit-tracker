@@ -371,7 +371,7 @@ export default function BodyScreen() {
   const spotR = spot ? readoutOf(spot.id, data, act) : null;
   const spotNode = spot && spotR ? (
     <View pointerEvents="none" style={[st.spot, { left: spot.box.x, top: spot.box.y, width: spot.box.w, minHeight: spot.box.h, borderColor: spotR.tone, shadowColor: spotR.tone }]}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: spotR.tone, opacity: 0.1, borderRadius: 7 }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: spotR.tone, opacity: 0.1, borderRadius: 7, borderCurve: 'continuous' }]} />
       <ReadoutNode r={spotR} right={slotSide(pins.find(p => p.id === spot.id)?.slot ?? 0) === 'r'} />
     </View>
   ) : null;
@@ -625,12 +625,12 @@ const st = StyleSheet.create({
   keyText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 2 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
   // The tapped readout over a sheet's backdrop: solid, ringed in its colour.
-  spot: { position: 'absolute', padding: 4, borderWidth: 1, borderRadius: 8, backgroundColor: C.bg, shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
+  spot: { position: 'absolute', padding: 4, borderWidth: 1, borderRadius: 8, borderCurve: 'continuous', backgroundColor: C.bg, shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
 
   twin: { marginHorizontal: 20, gap: 6, paddingBottom: 4 },
   twinHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   twinWord: { fontFamily: F.dot, fontSize: 9, color: C.live, letterSpacing: 2.5, marginRight: 2 },
-  goalChip: { borderRadius: 5, backgroundColor: C.hot, paddingHorizontal: 6, paddingVertical: 2 },
+  goalChip: { borderRadius: 5, borderCurve: 'continuous', backgroundColor: C.hot, paddingHorizontal: 6, paddingVertical: 2 },
   goalChipText: { fontFamily: F.dot, fontSize: 8, color: C.onHot, letterSpacing: 1.5 },
   pace: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5 },
   outlook: { color: C.hot, letterSpacing: 1, flexShrink: 1 },

@@ -178,7 +178,7 @@ const st = StyleSheet.create({
   tabOn: { backgroundColor: 'rgba(116,242,91,0.07)' },
   tabLabel: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1.8 },
   tabValue: { fontFamily: F.dot, fontSize: 15, color: C.dim, letterSpacing: 0.5 },
-  ruler: { height: RULER_H, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.bg, overflow: 'hidden' },
+  ruler: { height: RULER_H, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.bg, overflow: 'hidden' },
   lens: { position: 'absolute', top: 3, bottom: 3, backgroundColor: 'rgba(116,242,91,0.07)' },
   num: { fontFamily: F.dot, fontSize: 15, color: C.ink, letterSpacing: 0.5 },
   tick: { position: 'absolute', bottom: 4, width: 1, height: 4, backgroundColor: C.lineHi },

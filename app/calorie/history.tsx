@@ -102,7 +102,7 @@ const s = StyleSheet.create({
   dateLabel: { fontFamily: BOLD, fontSize: 14, color: C.ink, letterSpacing: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 32 },
 
-  totalsCard: { backgroundColor: CARD, borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 16, marginBottom: 16, alignItems: 'center' },
+  totalsCard: { backgroundColor: CARD, borderWidth: 1, borderColor: C.line, borderRadius: 14, borderCurve: 'continuous', padding: 16, marginBottom: 16, alignItems: 'center' },
   totalsBig: { fontFamily: F.dot, fontSize: 24, color: C.hot },
   totalsUnit: { fontFamily: REG, fontSize: 12, color: C.dim },
   totalsMacros: { fontFamily: REG, fontSize: 12, color: C.dim, marginTop: 6 },
@@ -113,9 +113,9 @@ const s = StyleSheet.create({
   groupTitle: { fontFamily: F.dot, fontSize: 12, color: C.dim, letterSpacing: 1, marginBottom: 6 },
   mealRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface,
-    borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10, marginBottom: 6,
+    borderWidth: 1, borderColor: C.line, borderRadius: 12, borderCurve: 'continuous', padding: 10, marginBottom: 6,
   },
-  mealThumb: { width: 38, height: 38, borderRadius: 8, backgroundColor: C.surface },
+  mealThumb: { width: 38, height: 38, borderRadius: 8, borderCurve: 'continuous', backgroundColor: C.surface },
   mealThumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   mealName: { fontFamily: REG, fontSize: 14, color: C.ink },
   mealMacros: { fontFamily: REG, fontSize: 12, color: C.dim, marginTop: 2 },

@@ -318,7 +318,7 @@ const st = StyleSheet.create({
   keyText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 2 },
 
   tabs: { flexDirection: 'row', gap: 6, marginHorizontal: 16, marginBottom: 6 },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, borderWidth: 1, borderColor: C.line, borderRadius: 8 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, borderWidth: 1, borderColor: C.line, borderRadius: 8, borderCurve: 'continuous' },
   tabOn: { backgroundColor: C.hot, borderColor: C.hot },
   tabText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2 },
   tabCount: { fontFamily: F.dot, fontSize: 9, color: C.faint },

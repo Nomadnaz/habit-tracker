@@ -186,10 +186,10 @@ const styles = StyleSheet.create({
   btn: { backgroundColor: C.hot, borderRadius: 999, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   btnDisconnect: { backgroundColor: C.raised, borderWidth: 1, borderColor: C.hot },
   btnText: { color: C.onHot, fontFamily: F.dot, fontSize: 12, letterSpacing: 1 },
-  bubble: { backgroundColor: C.raised, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 12 },
+  bubble: { backgroundColor: C.raised, borderRadius: 14, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 12 },
   bubbleAi: { borderColor: C.hot, backgroundColor: C.surface },
   bubbleText: { color: C.ink, fontFamily: F.mono, fontSize: 12, lineHeight: 18 },
   hint: { color: C.dim, fontFamily: F.mono, fontSize: 12, lineHeight: 17 },
-  linkRow: { flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 14, borderWidth: 1, borderColor: C.line, borderRadius: 14 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 14, borderWidth: 1, borderColor: C.line, borderRadius: 14, borderCurve: 'continuous' },
   linkText: { flex: 1, color: C.ink, fontFamily: F.dot, fontSize: 11, letterSpacing: 1.5 },
 });

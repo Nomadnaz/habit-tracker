@@ -196,11 +196,11 @@ export default function Settings() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   content: { paddingBottom: 40 },
-  card: { backgroundColor: CARD, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
+  card: { backgroundColor: CARD, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink, flex: 1 },
   sub: { fontFamily: REG, fontSize: 12, color: C.dim },
-  input: { borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: C.ink },
-  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  input: { borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 12, fontFamily: REG, fontSize: 12, color: C.ink },
+  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 10, alignItems: 'center' },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

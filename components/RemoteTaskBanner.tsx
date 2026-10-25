@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: C.surface,
-    borderRadius: 14,
+    borderRadius: 14, borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: C.line,
     borderLeftWidth: 4,

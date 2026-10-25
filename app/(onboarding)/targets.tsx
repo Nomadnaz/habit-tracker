@@ -80,7 +80,7 @@ function Field({ label, value, onChangeText }: { label: string; value: string; o
 const styles = StyleSheet.create({
   field: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, backgroundColor: C.surface,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 12, backgroundColor: C.surface,
   },
   label: { fontFamily: REG, fontSize: 13, color: C.ink },
   input: { fontFamily: BOLD, fontSize: 14, color: C.ink, minWidth: 70, textAlign: 'right' },

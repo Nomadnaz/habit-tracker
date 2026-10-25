@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   sheetTotal: { fontFamily: F.dot, fontSize: 25, color: C.ink, marginBottom: 18 },
   sheetTotalSub: { fontFamily: F.mono, fontSize: 12, color: C.dim },
   waterBtnRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
-  waterBtn: { flex: 1, backgroundColor: C.raised, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  waterBtn: { flex: 1, backgroundColor: C.raised, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, borderCurve: 'continuous', paddingVertical: 16, alignItems: 'center' },
   waterBtnText: { fontFamily: F.dot, fontSize: 18, color: C.ink },
   waterBtnUnit: { fontFamily: F.dot, fontSize: 9, color: C.dim, marginTop: 2, letterSpacing: 1 },
   weightInput: { fontFamily: F.dot, fontSize: 19, color: C.ink, borderBottomWidth: 1, borderBottomColor: C.lineHi, paddingVertical: 10, marginBottom: 20 },

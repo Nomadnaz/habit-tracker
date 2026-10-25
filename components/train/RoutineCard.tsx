@@ -104,7 +104,7 @@ const CORNER: Record<Kind, string> = { today: C.live, next: C.live, past: C.line
 const TEXT: Record<Kind, string> = { today: C.onHot, next: C.ink, past: C.dim, cheat: C.alert, rest: C.faint };
 
 const st = StyleSheet.create({
-  card: { marginHorizontal: 16, marginBottom: 18, backgroundColor: C.surface, borderRadius: 22, borderWidth: 1, borderColor: C.line, padding: 16, gap: 10 },
+  card: { marginHorizontal: 16, marginBottom: 18, backgroundColor: C.surface, borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 16, gap: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   label: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2 },
   caption: { flexShrink: 1, fontFamily: F.dot, fontSize: 8, color: C.faint, letterSpacing: 1.2, textAlign: 'right' },

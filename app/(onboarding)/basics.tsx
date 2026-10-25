@@ -53,13 +53,13 @@ export default function Basics() {
 
 const styles = StyleSheet.create({
   input: {
-    borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 14,
+    borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 14,
     fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
   row: { flexDirection: 'row', gap: 10 },
   half: { flex: 1 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: C.line },
+  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line },
   chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   chipTextActive: { color: C.surface, fontFamily: BOLD },

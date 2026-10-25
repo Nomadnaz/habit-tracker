@@ -377,7 +377,7 @@ const s = StyleSheet.create({
   },
   machineSlot: {
     position: 'absolute', left: 24, right: 24, bottom: INSET,
-    height: SLOT_HEIGHT, borderRadius: 4, borderWidth: 1,
+    height: SLOT_HEIGHT, borderRadius: 4, borderCurve: 'continuous', borderWidth: 1,
     borderColor: SHELL, backgroundColor: SHELL,
   },
 

@@ -141,8 +141,8 @@ export default function LibraryModal() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   captureRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 10 },
-  captureInput: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 12, color: C.ink, backgroundColor: C.surface },
-  captureBtn: { backgroundColor: ORANGE, borderRadius: 10, width: 44, alignItems: 'center', justifyContent: 'center' },
+  captureInput: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 12, fontFamily: REG, fontSize: 12, color: C.ink, backgroundColor: C.surface },
+  captureBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', width: 44, alignItems: 'center', justifyContent: 'center' },
   segmentRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 6, marginBottom: 12 },
   segment: { flex: 1, minHeight: 40, paddingHorizontal: 6, borderRadius: 999, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   segmentActive: { backgroundColor: ORANGE, borderColor: C.hot },
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 8 },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 20 },
   tmdbNote: { fontFamily: REG, fontSize: 10, color: C.dim, marginBottom: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 12 },
   rowLabel: { fontFamily: REG, fontSize: 12, color: C.ink, flex: 1 },
   rowSub: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 2 },
 });

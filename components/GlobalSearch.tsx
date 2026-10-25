@@ -157,10 +157,10 @@ export default function GlobalSearch({ onClose }: { onClose: () => void }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  input: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12, fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface },
+  input: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 12, fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 8 },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', marginTop: 24, lineHeight: 18 },
-  row: { backgroundColor: CARD, borderRadius: 10, borderWidth: 1, borderColor: C.line, padding: 12 },
+  row: { backgroundColor: CARD, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 12 },
   rowTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   rowSub: { fontFamily: REG, fontSize: 11, color: C.dim, marginTop: 2 },
 });

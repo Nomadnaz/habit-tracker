@@ -157,10 +157,10 @@ const styles = StyleSheet.create({
   title: { fontFamily: F.dot, fontSize: 40, color: C.ink, letterSpacing: 2, marginTop: 4 },
   allBtn: { paddingHorizontal: 4 },
   allText: { fontFamily: F.dot, fontSize: 11, color: C.ink, letterSpacing: 2 },
-  check: { width: 28, height: 28, borderRadius: 8, borderWidth: 1.5, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
+  check: { width: 28, height: 28, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1.5, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
   checkOn: { backgroundColor: C.hot, borderColor: C.hot },
   sectionTitle: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3, marginHorizontal: 20, marginTop: 18, marginBottom: 8 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: 16, borderWidth: 1, borderColor: C.line, borderRadius: 16, overflow: 'hidden', backgroundColor: C.surface },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: 16, borderWidth: 1, borderColor: C.line, borderRadius: 16, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: C.surface },
   tile: { width: '33.333%', minHeight: 78, alignItems: 'center', justifyContent: 'center', gap: 8, borderColor: C.line },
   tileText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1.5 },
 });

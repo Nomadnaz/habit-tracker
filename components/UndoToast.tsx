@@ -80,10 +80,10 @@ const st = StyleSheet.create({
   wrap: { position: 'absolute', left: 16, right: 16 },
   toast: {
     flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingLeft: 16, paddingRight: 6,
-    backgroundColor: C.raised, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, overflow: 'hidden',
+    backgroundColor: C.raised, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, borderCurve: 'continuous', overflow: 'hidden',
   },
   label: { flex: 1, fontFamily: F.dot, fontSize: 11, color: C.ink, letterSpacing: 1.5 },
-  undo: { height: 40, minWidth: 72, paddingHorizontal: 14, borderRadius: 10, backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center' },
+  undo: { height: 40, minWidth: 72, paddingHorizontal: 14, borderRadius: 10, borderCurve: 'continuous', backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center' },
   undoText: { fontFamily: F.dot, fontSize: 11, color: C.onHot, letterSpacing: 2 },
   track: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, overflow: 'hidden' },
   run: { height: 2, backgroundColor: C.hot },

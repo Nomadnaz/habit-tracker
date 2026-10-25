@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: C.hot,
-    borderRadius: 4,
+    borderRadius: 4, borderCurve: 'continuous',
     backgroundColor: C.raised,
   },
   taskRow: {
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     marginRight: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 3,
+    borderRadius: 3, borderCurve: 'continuous',
     flexShrink: 0,
   },
   checkboxDone: {

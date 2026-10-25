@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderWidth: 2,
     borderColor: C.line,
-    borderRadius: 8,
+    borderRadius: 8, borderCurve: 'continuous',
     backgroundColor: C.surface,
     overflow: 'hidden',
   },

@@ -282,12 +282,12 @@ const styles = StyleSheet.create({
   body: { padding: 20, gap: 14 },
   step: { color: '#888', fontFamily: F.dot, fontSize: 11, letterSpacing: 1, marginTop: 8 },
   input: {
-    backgroundColor: C.hot, borderRadius: 4, borderWidth: 1, borderColor: '#2A2A2A',
+    backgroundColor: C.hot, borderRadius: 4, borderCurve: 'continuous', borderWidth: 1, borderColor: '#2A2A2A',
     color: '#EEE', fontFamily: F.mono, fontSize: 13,
     paddingHorizontal: 12, paddingVertical: 10,
   },
   btn: {
-    backgroundColor: C.hot, borderRadius: 4,
+    backgroundColor: C.hot, borderRadius: 4, borderCurve: 'continuous',
     paddingVertical: 14, alignItems: 'center', marginTop: 4,
   },
   btnDisabled: { opacity: 0.4 },

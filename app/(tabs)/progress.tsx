@@ -116,10 +116,10 @@ const s = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 },
   sectionLabel: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3, marginBottom: 8 },
   sectionLabelSpaced: { marginTop: 24 },
-  card: { backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14 },
+  card: { backgroundColor: CARD, borderRadius: 16, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 14 },
 
   badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 },
-  badge: { width: '32%', backgroundColor: C.surface, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 10, alignItems: 'center', gap: 4, minHeight: 104 },
+  badge: { width: '32%', backgroundColor: C.surface, borderRadius: 14, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 10, alignItems: 'center', gap: 4, minHeight: 104 },
   badgeLocked: { opacity: 0.85 },
   badgeName: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1, textAlign: 'center' },
   badgeNameLocked: { color: MUTED },

@@ -48,7 +48,7 @@ export function PulleyChart({ pulley, height, side }: { pulley: number; height: 
 const st = StyleSheet.create({
   wrap: { width: PULLEY_CHART_W, alignItems: 'center' },
   label: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5, marginBottom: 4 },
-  col: { width: 16, borderWidth: 1, borderColor: C.lineHi, borderRadius: 4, backgroundColor: C.raised },
+  col: { width: 16, borderWidth: 1, borderColor: C.lineHi, borderRadius: 4, borderCurve: 'continuous', backgroundColor: C.raised },
   hole: { position: 'absolute', left: 4, width: 6, height: 6, borderRadius: 3, backgroundColor: C.ghost },
   holeOn: { backgroundColor: C.live, transform: [{ scale: 1.5 }] },
   arrow: { position: 'absolute', width: 18, height: 18 },

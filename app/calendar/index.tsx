@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  cell: { alignItems: 'center', justifyContent: 'center', borderRadius: 12, gap: 5 },
+  cell: { alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderCurve: 'continuous', gap: 5 },
   cellToday: {
     backgroundColor: C.hot,
   },

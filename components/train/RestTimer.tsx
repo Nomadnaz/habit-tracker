@@ -65,7 +65,7 @@ export function RestTimer({ rest, onAdd, onStop }: { rest: Rest; onAdd: (s: numb
 }
 
 const st = StyleSheet.create({
-  wrap: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 36, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: C.live, backgroundColor: C.bg, overflow: 'hidden' },
+  wrap: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 36, paddingHorizontal: 12, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.live, backgroundColor: C.bg, overflow: 'hidden' },
   wrapOver: { backgroundColor: C.live },
   bar: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(116,242,91,0.16)', transformOrigin: 'left' },
   label: { fontFamily: F.dot, fontSize: 9, color: C.live, letterSpacing: 1.5 },

@@ -120,7 +120,7 @@ export function CoachCard({ today, lifts, resting, onStart, onConnect }: {
 }
 
 const st = StyleSheet.create({
-  card: { marginHorizontal: 16, marginBottom: 18, backgroundColor: C.surface, borderRadius: 22, borderWidth: 1, borderColor: C.line, padding: 16, gap: 10 },
+  card: { marginHorizontal: 16, marginBottom: 18, backgroundColor: C.surface, borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 16, gap: 10 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3 },
@@ -134,9 +134,9 @@ const st = StyleSheet.create({
   reasonMark: { width: 14, marginTop: 1 },
   reasonText: { flex: 1, fontFamily: F.mono, fontSize: 12, color: C.ink, lineHeight: 16 },
   factors: { flexDirection: 'row', gap: 6 },
-  resting: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10 },
+  resting: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: C.line, borderRadius: 12, borderCurve: 'continuous', padding: 10 },
   restingText: { flex: 1, fontFamily: F.mono, fontSize: 11, color: C.dim, lineHeight: 15 },
-  factor: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 8, gap: 3, backgroundColor: C.bg },
+  factor: { flex: 1, borderWidth: 1, borderColor: C.line, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 8, paddingHorizontal: 8, gap: 3, backgroundColor: C.bg },
   factorLabel: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1 },
   factorValue: { fontFamily: F.dot, fontSize: 15, color: C.ink },
   segs: { flexDirection: 'row', gap: 2, marginTop: 2 },
@@ -144,9 +144,9 @@ const st = StyleSheet.create({
   why: { gap: 4, paddingTop: 2 },
   whyText: { fontFamily: F.mono, fontSize: 11, color: C.dim, lineHeight: 15 },
   flag: { fontFamily: F.mono, fontSize: 11, color: C.alert, lineHeight: 15 },
-  connect: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: C.lineHi, borderStyle: 'dashed', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  connect: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: C.lineHi, borderStyle: 'dashed', borderRadius: 12, borderCurve: 'continuous', paddingHorizontal: 12, paddingVertical: 10 },
   connectText: { flex: 1, fontFamily: F.dot, fontSize: 9, color: C.ink, letterSpacing: 1.5 },
-  start: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: C.hot, borderRadius: 14, paddingVertical: 15, marginTop: 2 },
+  start: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: C.hot, borderRadius: 14, borderCurve: 'continuous', paddingVertical: 15, marginTop: 2 },
   startGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.lineHi },
   startText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
 });

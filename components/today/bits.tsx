@@ -149,7 +149,7 @@ const s = StyleSheet.create({
   segRow: { flexDirection: 'row', gap: 2, height: '100%' },
   seg: { flex: 1, borderRadius: 1 },
   wrap: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderBottomWidth: 0, borderColor: C.lineHi, paddingHorizontal: 18 },
+  sheet: { backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderCurve: 'continuous', borderWidth: 1, borderBottomWidth: 0, borderColor: C.lineHi, paddingHorizontal: 18 },
   grab: { height: 46, alignItems: 'center', justifyContent: 'center' },
   close: { position: 'absolute', right: -6, top: 5, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   grabBar: { width: 38, height: 4, borderRadius: 2, backgroundColor: C.lineHi },

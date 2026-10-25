@@ -1201,7 +1201,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 18,
     borderWidth: 2,
-    borderRadius: 6,
+    borderRadius: 6, borderCurve: 'continuous',
   },
   startBtnInline: {
     flex: 1,
@@ -1317,7 +1317,7 @@ const styles = StyleSheet.create({
   failBtns: { gap: 12 },
   failRetryBtn: {
     backgroundColor: C.hot,
-    borderRadius: 4,
+    borderRadius: 4, borderCurve: 'continuous',
     paddingVertical: 18,
     alignItems: 'center',
   },
@@ -1332,7 +1332,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: C.lineHi,
-    borderRadius: 4,
+    borderRadius: 4, borderCurve: 'continuous',
   },
   failExitText: {
     fontFamily: F.mono,
@@ -1373,7 +1373,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 2,
     borderColor: C.hot,
-    borderRadius: 8,
+    borderRadius: 8, borderCurve: 'continuous',
     padding: 12,
     alignItems: 'center',
   },

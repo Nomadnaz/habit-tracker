@@ -927,19 +927,19 @@ export function Battery({ pct, tone = batteryTone(pct), cells = 10, cellW = 7, c
 const styles = StyleSheet.create({
   label: {
     position: 'absolute', paddingHorizontal: 9, justifyContent: 'center',
-    backgroundColor: C.surface, borderWidth: 1, borderColor: C.hot, borderRadius: 10,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.hot, borderRadius: 10, borderCurve: 'continuous',
   },
   labelTag: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   labelSwatch: { width: 5, height: 5 },
   labelCat: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5, flexShrink: 1 },
   labelName: { fontFamily: F.dot, fontSize: 11, color: C.ink, letterSpacing: 0.5, marginTop: 3, minHeight: 14 },
   battery: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-  batteryBody: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 2, borderWidth: 1, borderColor: C.lineHi, borderRadius: 3 },
+  batteryBody: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 2, borderWidth: 1, borderColor: C.lineHi, borderRadius: 3, borderCurve: 'continuous' },
   batteryNub: { width: 2, backgroundColor: C.lineHi, marginLeft: 1, borderTopRightRadius: 1, borderBottomRightRadius: 1 },
   batteryPct: { marginLeft: 7 },
-  hud: { position: 'absolute', padding: 4, borderWidth: 1, borderColor: 'transparent', borderRadius: 8 },
+  hud: { position: 'absolute', padding: 4, borderWidth: 1, borderColor: 'transparent', borderRadius: 8, borderCurve: 'continuous' },
   ghost: {
-    position: 'absolute', width: 74, height: 46, borderWidth: 1, borderStyle: 'dashed', borderColor: C.lineHi, borderRadius: 8,
+    position: 'absolute', width: 74, height: 46, borderWidth: 1, borderStyle: 'dashed', borderColor: C.lineHi, borderRadius: 8, borderCurve: 'continuous',
     alignItems: 'center', justifyContent: 'center', gap: 2,
   },
   ghostOn: { backgroundColor: C.hot, borderColor: C.hot, borderStyle: 'solid' },

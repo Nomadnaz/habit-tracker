@@ -49,7 +49,7 @@ export default function Skills() {
 
 const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  chip: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   chipTextActive: { color: C.surface, fontFamily: BOLD },

@@ -45,5 +45,5 @@ export function RouteLine({ waypoints, width = 280, height = 160 }: { waypoints:
 }
 
 const s = StyleSheet.create({
-  box: { borderRadius: 8 },
+  box: { borderRadius: 8, borderCurve: 'continuous' },
 });

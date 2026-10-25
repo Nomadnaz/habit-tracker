@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxHeight: '90%',
     backgroundColor: C.surface,
-    borderRadius: 16,
+    borderRadius: 16, borderCurve: 'continuous',
     padding: 20,
   },
   sheetLabel: {
