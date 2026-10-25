@@ -20,6 +20,7 @@ import { useHoldToTalk } from './useHoldToTalk';
 import { PuckMark } from '@/components/PuckMark';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
+import { BALANCE, PRETTY } from '@/lib/text-wrap';
 
 const H = Dimensions.get('window').height;
 /** The header is the sheet's handle: ChatSheet hands it these to drag the whole sheet. */
@@ -180,7 +181,7 @@ export function Empty() {
     <View style={styles.empty}>
       <View style={{ marginBottom: 28 }}><PuckMark size={54} lit={4} /></View>
       <Text style={styles.emptyTitle}>HOLD TO TALK</Text>
-      <Text style={styles.emptyBody}>
+      <Text style={styles.emptyBody} {...BALANCE}>
         Hold the square and say it — "two eggs on toast", "add call mum tomorrow at six", "how did I sleep this week". Or type.
       </Text>
     </View>
@@ -212,13 +213,13 @@ export function Bubble({ msg, threadId }: { msg: Msg; threadId: string }) {
       {mine ? (
         <View style={styles.mine}>
           {msg.voice && <View style={styles.voiceDot} />}
-          <Text style={styles.mineText}>{msg.text}</Text>
+          <Text style={styles.mineText} {...PRETTY}>{msg.text}</Text>
         </View>
       ) : (
         <View style={styles.theirs}>
           <View style={[styles.avatar, msg.logged && { backgroundColor: C.live }]} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.theirsText}>{msg.text}</Text>
+            <Text style={styles.theirsText} {...PRETTY}>{msg.text}</Text>
             {!!msg.stats?.length && (
               <View style={styles.statRow}>
                 {msg.stats.map((s, i) => (

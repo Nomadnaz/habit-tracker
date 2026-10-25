@@ -35,6 +35,7 @@ import HeatmapCalendar from '@/components/HeatmapCalendar';
 import { C, F } from '@/lib/theme';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 import { Sheet } from '@/components/today/bits';
+import { BALANCE } from '@/lib/text-wrap';
 // ── Design tokens (identical to BODY / CALORIE pages) ───────────────────────
 const ORANGE = C.hot;
 const BOLD = F.mono;
@@ -165,7 +166,7 @@ export default function HabitsScreen() {
       {section === 'habits' ? (
         <ScrollView contentContainerStyle={styles.list}>
           {shownRows.length === 0 && (
-            <Text style={styles.empty}>No habits yet. Tap + to add your first one.</Text>
+            <Text style={styles.empty} {...BALANCE}>No habits yet. Tap + to add your first one.</Text>
           )}
           {shownRows.map(row => {
             const streak = computeStreakWithFreezes(row.habit, row.logs);
@@ -213,7 +214,7 @@ export default function HabitsScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {shownMeds.length === 0 && (
-            <Text style={styles.empty}>No medications or supplements yet. Tap + to add one.</Text>
+            <Text style={styles.empty} {...BALANCE}>No medications or supplements yet. Tap + to add one.</Text>
           )}
           {shownMeds.map(row => {
             const streak = computeMedStreak(row.logs);

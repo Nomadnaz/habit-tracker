@@ -58,6 +58,7 @@ import {
 } from '@/components/body/BodyPanels';
 import { TodaySheet, type SheetKind, type You } from '@/components/today/Sheets';
 import { Pixel } from '@/components/today/bits';
+import { BALANCE } from '@/lib/text-wrap';
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -463,7 +464,7 @@ export default function BodyScreen() {
           )}
         </View>
 
-        <Text style={st.hint}>{arranging ? 'TAP THE BODY TO SET A LINE · DRAG TO TURN' : 'TAP A READOUT TO OPEN IT · HOLD TO MOVE'}</Text>
+        <Text style={st.hint} {...BALANCE}>{arranging ? 'TAP THE BODY TO SET A LINE · DRAG TO TURN' : 'TAP A READOUT TO OPEN IT · HOLD TO MOVE'}</Text>
 
         {!arranging && (
           <>
@@ -481,7 +482,7 @@ export default function BodyScreen() {
               <Text style={st.sectionTitle}>{`TARGETS · ${targets.length}`}</Text>
               <Pressable onPress={() => setCatEditing(true)} hitSlop={8}><Text style={st.sectionLink}>EDIT GOALS</Text></Pressable>
             </View>
-            {targets.length === 0 && <Text style={st.empty}>Tap a muscle on the figure and give it a GOAL.</Text>}
+            {targets.length === 0 && <Text style={st.empty} {...BALANCE}>Tap a muscle on the figure and give it a GOAL.</Text>}
             {targets.map((r, i) => {
               const mk = map.marks[r.id];
               const cat = map.categories.find(c => c.id === mk.category);

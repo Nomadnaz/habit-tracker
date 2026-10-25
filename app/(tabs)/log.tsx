@@ -31,6 +31,7 @@ import { onWrite } from '@/lib/postWrite';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import { buildFeed, type FeedDay, type FeedItem } from '@/lib/log-feed';
 import { Bone, BoneText, Loading, useLate } from '@/components/Skeleton';
+import { BALANCE } from '@/lib/text-wrap';
 import { getMealMap } from '@/lib/meals-data';
 import { getTrainingSessions } from '@/lib/workout-data';
 import { loadBodyData } from '@/lib/body-data';
@@ -190,7 +191,7 @@ function Chats({ threads, ready, activeId, onOpen }: { threads: Thread[]; ready:
       </Loading>
     ) : null;
   }
-  if (!threads.length) return <Text style={st.blank}>NO CHATS YET · HOLD THE SQUARE ON TALK AND SAY SOMETHING</Text>;
+  if (!threads.length) return <Text style={st.blank} {...BALANCE}>NO CHATS YET · HOLD THE SQUARE ON TALK AND SAY SOMETHING</Text>;
   const pinned = threads.filter(t => t.pinned);
   const rest = threads.filter(t => !t.pinned);
   const row = (t: Thread, i: number) => <ChatRow key={t.id} t={t} index={i} active={t.id === activeId} onOpen={onOpen} />;
@@ -262,7 +263,7 @@ function Logs({ feed, signals }: { feed: FeedDay[] | null; signals: TodayView['t
       </Loading>
     ) : null;
   }
-  if (!feed.length && !signals.length) return <Text style={st.blank}>NOTHING LOGGED THIS WEEK YET</Text>;
+  if (!feed.length && !signals.length) return <Text style={st.blank} {...BALANCE}>NOTHING LOGGED THIS WEEK YET</Text>;
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
       {signals.length > 0 && (

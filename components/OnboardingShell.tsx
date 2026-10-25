@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { C, F } from '@/lib/theme';
+import { BALANCE, PRETTY } from '@/lib/text-wrap';
 const ORANGE = C.hot;
 const BOLD = F.mono;
 const REG = F.mono;
@@ -50,8 +51,8 @@ export default function OnboardingShell({
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <Text style={styles.title} {...BALANCE}>{title}</Text>
+        {subtitle && <Text style={styles.subtitle} {...PRETTY}>{subtitle}</Text>}
         <View style={styles.body}>{children}</View>
       </ScrollView>
 

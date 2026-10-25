@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { C, F, numFace } from '@/lib/theme';
+import { PRETTY } from '@/lib/text-wrap';
 import { buildTwin, GOALS, goalWord, hm, PACES, paceWord, type Line, type TwinGoal, type TwinInput } from '@/lib/twin';
 import { LEVEL } from '@/lib/coach';
 import type { TodayView } from '@/lib/twin-data';
@@ -97,7 +98,7 @@ function Body({ kind, view, input, act, onClose, onGoal }: {
             <Text style={st.big}>{r.score}</Text>
             <Text style={st.level}>{LEVEL[r.level].word}</Text>
           </View>
-          <Text style={st.note}>{LEVEL[r.level].dose}</Text>
+          <Text style={st.note} {...PRETTY}>{LEVEL[r.level].dose}</Text>
           <Text style={st.section}>WHAT WENT IN</Text>
           {r.factors.map(f => (
             <View key={f.id} style={st.factor}>
@@ -132,7 +133,7 @@ function Body({ kind, view, input, act, onClose, onGoal }: {
               <Text style={st.weekNum}>{hm(d.sleepMin).toLowerCase()}</Text>
             </View>
           ))}
-          <Text style={st.foot}>Days ahead are a projection. Each morning the twin re-plans from what you actually did, slept and ate.</Text>
+          <Text style={st.foot} {...PRETTY}>Days ahead are a projection. Each morning the twin re-plans from what you actually did, slept and ate.</Text>
         </View>
       );
     case 'goal':
@@ -182,7 +183,7 @@ function Target({ word, value, unit, lines, unitOf, baseOf, done, extra, actions
           ))}
         </View>
       )}
-      <Text style={st.foot}>Re-planned each time you open TODAY, from your goal, recovery, sleep, yesterday and your trend.</Text>
+      <Text style={st.foot} {...PRETTY}>Re-planned each time you open TODAY, from your goal, recovery, sleep, yesterday and your trend.</Text>
     </View>
   );
 }
