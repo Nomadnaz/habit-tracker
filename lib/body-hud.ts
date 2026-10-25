@@ -4,7 +4,8 @@
 // the body that you choose. This is the layout: which module sits in which
 // slot, and where its line goes. Local only (@body_hud).
 //
-// Slots 0–4 run down the left of the stage, 5–9 down the right. A point
+// Slots 0–4 run down the left of the stage, 5–8 down the right; the
+// bottom-right spot (9) is the RECOVERY / READY gauge's. A point
 // is in the figure's own space (cm, +x = the body's left, +z = its front)
 // with the surface's normal there, so its line can fade while it's round
 // the back. Modules left off the figure are listed under it instead.
@@ -42,6 +43,8 @@ export const ROWS = 5;
 export const SLOTS = ROWS * 2;
 export const slotSide = (slot: number): 'l' | 'r' => (slot < ROWS ? 'l' : 'r');
 export const slotRow = (slot: number) => slot % ROWS;
+/** Bottom right: the gauge lives there, so no readout can. */
+export const GAUGE_SLOT = SLOTS - 1;
 
 export type Spot = { at: V3; n: V3 | null };
 export type Pin = Spot & { id: HudModule; slot: number };
@@ -69,14 +72,14 @@ export const HOME_SPOT: Record<HudModule, Spot> = {
 
 const pin = (id: HudModule, slot: number): Pin => ({ id, slot, ...HOME_SPOT[id] });
 
-/** Left: readiness, fuel, water, macros, steps. Right: sleep, heart, session, muscles, week. */
+/** Left: readiness, fuel, water, macros, steps. Right: sleep, heart, session, muscles (then the gauge). */
 export const DEFAULT_PINS: Pin[] = [
   pin('readiness', 0), pin('fuel', 1), pin('water', 2), pin('macros', 3), pin('steps', 4),
-  pin('sleep', 5), pin('heart', 6), pin('train', 7), pin('muscles', 8), pin('week', 9),
+  pin('sleep', 5), pin('heart', 6), pin('train', 7), pin('muscles', 8),
 ];
 
 export const pinIn = (pins: Pin[], slot: number) => pins.find(p => p.slot === slot) ?? null;
-export const freeSlots = (pins: Pin[]) => Array.from({ length: SLOTS }, (_, s) => s).filter(s => !pinIn(pins, s));
+export const freeSlots = (pins: Pin[]) => Array.from({ length: SLOTS }, (_, s) => s).filter(s => s !== GAUGE_SLOT && !pinIn(pins, s));
 /** Modules not on the figure, in picker order. */
 export const offBody = (pins: Pin[]) => ALL_MODULES.filter(m => !pins.some(p => p.id === m));
 
@@ -84,6 +87,7 @@ export const offBody = (pins: Pin[]) => ALL_MODULES.filter(m => !pins.some(p => 
  *  it moves (and whatever had the slot swaps into its old one); new → it
  *  takes the slot and whatever was there comes off. */
 export function place(pins: Pin[], id: HudModule, slot: number, spot: Spot): Pin[] {
+  if (slot === GAUGE_SLOT) return pins;
   const mine = pins.find(p => p.id === id);
   const there = pinIn(pins, slot);
   const rest = pins.filter(p => p.id !== id && p !== there);
@@ -95,7 +99,7 @@ export function place(pins: Pin[], id: HudModule, slot: number, spot: Spot): Pin
 /** Move a module to another slot, swapping with whatever is there. */
 export function move(pins: Pin[], id: HudModule, slot: number): Pin[] {
   const mine = pins.find(p => p.id === id);
-  if (!mine || mine.slot === slot) return pins;
+  if (!mine || mine.slot === slot || slot === GAUGE_SLOT) return pins;
   return place(pins, id, slot, mine);
 }
 
@@ -124,7 +128,7 @@ export function sanitize(raw: unknown): Pin[] | null {
     if (!r || typeof r !== 'object') continue;
     const { id, slot, at, n } = r as Record<string, unknown>;
     if (typeof id !== 'string' || !(id in MODULES)) continue;
-    if (typeof slot !== 'number' || !Number.isInteger(slot) || slot < 0 || slot >= SLOTS) continue;
+    if (typeof slot !== 'number' || !Number.isInteger(slot) || slot < 0 || slot >= GAUGE_SLOT) continue;
     if (!isV3(at) || (n !== null && !isV3(n))) continue;
     if (out.some(p => p.id === id || p.slot === slot)) continue;
     out.push({ id: id as HudModule, slot, at, n: n as V3 | null });

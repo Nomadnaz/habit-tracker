@@ -4,7 +4,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({ default: { getItem
 
 import { decodeBodyMesh, raycastHit } from './body-mesh';
 import {
-  ALL_MODULES, DEFAULT_PINS, HOME_SPOT, SLOTS, freeSlots, move, offBody, place, remove, repoint, sanitize, swapModule,
+  ALL_MODULES, DEFAULT_PINS, GAUGE_SLOT, HOME_SPOT, SLOTS, freeSlots, move, offBody, place, remove, repoint, sanitize, swapModule,
   type Pin,
 } from './body-hud';
 
@@ -12,32 +12,39 @@ const slots = (pins: Pin[]) => Object.fromEntries(pins.map(p => [p.id, p.slot]))
 const spot = { at: [1, 2, 3] as [number, number, number], n: [0, 0, 1] as [number, number, number] };
 
 describe('body hud layout', () => {
-  it('starts with ten modules in ten different slots', () => {
-    expect(DEFAULT_PINS).toHaveLength(SLOTS);
-    expect(new Set(DEFAULT_PINS.map(p => p.slot)).size).toBe(SLOTS);
+  it('starts with nine modules in nine different slots, the gauge\u2019s left free', () => {
+    expect(DEFAULT_PINS).toHaveLength(SLOTS - 1);
+    expect(new Set(DEFAULT_PINS.map(p => p.slot)).size).toBe(SLOTS - 1);
+    expect(DEFAULT_PINS.some(p => p.slot === GAUGE_SLOT)).toBe(false);
     expect(freeSlots(DEFAULT_PINS)).toEqual([]);
-    expect(offBody(DEFAULT_PINS)).toEqual(['goal', 'log', 'weight', 'active', 'mood']);
+    expect(offBody(DEFAULT_PINS)).toEqual(['week', 'goal', 'log', 'weight', 'active', 'mood']);
+  });
+
+  it('nothing can go in the gauge\u2019s slot', () => {
+    expect(place(DEFAULT_PINS, 'mood', GAUGE_SLOT, spot)).toBe(DEFAULT_PINS);
+    expect(move(DEFAULT_PINS, 'heart', GAUGE_SLOT)).toBe(DEFAULT_PINS);
+    expect(sanitize([{ id: 'mood', slot: GAUGE_SLOT, at: [0, 0, 0], n: null }])).toEqual([]);
   });
 
   it('a new module takes the slot and knocks the old one off', () => {
     const next = place(DEFAULT_PINS, 'mood', 5, spot);
     expect(next.find(p => p.slot === 5)).toMatchObject({ id: 'mood', at: spot.at });
     expect(next.some(p => p.id === 'sleep')).toBe(false);
-    expect(next).toHaveLength(SLOTS);
+    expect(next).toHaveLength(SLOTS - 1);
   });
 
   it('moving onto a taken slot swaps the two', () => {
-    const next = move(DEFAULT_PINS, 'readiness', 9);
-    expect(slots(next)).toMatchObject({ readiness: 9, week: 0 });
+    const next = move(DEFAULT_PINS, 'readiness', 8);
+    expect(slots(next)).toMatchObject({ readiness: 8, muscles: 0 });
     // Lines stay where they were.
-    expect(next.find(p => p.id === 'week')!.at).toEqual(HOME_SPOT.week.at);
+    expect(next.find(p => p.id === 'muscles')!.at).toEqual(HOME_SPOT.muscles.at);
   });
 
   it('placing a module already on the figure moves it rather than duplicating it', () => {
-    const one = remove(DEFAULT_PINS, 'week');
-    const next = place(one, 'steps', 9, spot);
+    const one = remove(DEFAULT_PINS, 'muscles');
+    const next = place(one, 'steps', 8, spot);
     expect(next.filter(p => p.id === 'steps')).toHaveLength(1);
-    expect(slots(next).steps).toBe(9);
+    expect(slots(next).steps).toBe(8);
     expect(freeSlots(next)).toEqual([4]);
   });
 

@@ -1,7 +1,7 @@
 // BODY's panels, kept out of the screen (app/(tabs)/index.tsx): the
 // floating panel for a framed zone or a picked muscle (recovery, GOAL, GO),
 // the GO sheet of lifts that work it, the goal-category editor, and the
-// caption above the figure for the lens it's coloured by.
+// caption above the figure for the gauge's mode (RECOVERY or READY).
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -12,23 +12,15 @@ import * as Haptics from 'expo-haptics';
 import { C, F, SPRING, numFace } from '@/lib/theme';
 import { REGION_BY_ID, type BodyMap, type Category, type Tone } from '@/lib/body-map';
 import { Battery, TONE, batteryTone } from '@/components/body/BodyStage';
-import { ZONE_BY_ID, MUSCLES, type Zone } from '@/lib/body-mesh';
+import { ZONE_BY_ID, type Zone } from '@/lib/body-mesh';
 import type { Exercise } from '@/lib/workout-data';
 import {
-  baseOf, byExercise, suggestionsFor, lastDay, daysSince, runSteps, type MuscleStatus, type Session, type Run,
+  baseOf, byExercise, suggestionsFor, runSteps, type MuscleStatus, type Session, type Run,
 } from '@/lib/muscle-recovery';
 import { TypeLine } from '@/components/TypeLine';
 import type { Guide } from '@/lib/exercise-guide';
 import { ExerciseCard } from '@/components/ExerciseCard';
 import { toDateKey } from '@/lib/dateKey';
-
-// What the figure is coloured by. GOALS = the user's categories; the rest
-// are lenses over the training history (lib/muscle-recovery.ts).
-export type Lens = 'goals' | 'next' | 'last' | 'since';
-/** The coach's next session: the lifts going ahead, and those resting for a tired muscle. */
-export type UpNext = { title: string; when: string; exercises: Exercise[]; resting: { name: string; muscle: string; pct: number }[] };
-export const SINCE_FULL_DAYS = 14; // LONGEST SINCE is fully yellow at two weeks
-const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 // ── floating assign panel ────────────────────────────────────────────────
 
@@ -491,46 +483,39 @@ export function LensCaption({ info }: { info: LensInfo | null }) {
   );
 }
 
-/** The bold line above the figure for a lens (or the recovery toggle), and its colour key. */
-export function lensCaption(
-  lens: Lens, recovery: boolean, next: UpNext | null, worn: Session[], runs: Run[], steps: Record<string, number>, now: number,
-): LensInfo | null {
-  if (lens === 'next') {
-    if (!next) return { title: 'NOTHING PLANNED', sub: 'Set your routine on TRAIN to see what is up next.', tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
-    const r = next.resting;
-    const resting = r.length ? ` · ${r.length} RESTING (${[...new Set(r.map(x => `${x.muscle} ${x.pct}%`))].slice(0, 2).join(', ')})` : '';
-    return { title: next.title, sub: `${next.when} · ${next.exercises.length} EXERCISES${resting}`, tone: C.live, from: 0.25, scale: 'LIGHT → HEAVY' };
-  }
-  if (lens === 'last') {
-    const ld = lastDay(worn);
-    if (!ld.date) return { title: 'LAST USED', sub: 'Nothing logged in the last three weeks.', tone: C.alert, from: 0.25, scale: 'LIGHT → HARD' };
-    const [y, m, d] = ld.date.split('-').map(Number);
-    return { title: 'LAST USED', sub: `${DAY_NAMES[new Date(y, m - 1, d).getDay()]} · ${ld.names.slice(0, 3).join(', ')}${ld.names.length > 3 ? '…' : ''}`, tone: C.alert, from: 0.25, scale: 'LIGHT → HARD' };
-  }
-  if (lens === 'since') {
-    const ds = Object.entries(daysSince(worn, now));
-    const never = ds.filter(([, d]) => d == null).length;
-    const oldest = ds.filter((e): e is [string, number] => e[1] != null).sort((a, b) => b[1] - a[1])[0];
-    const name = (b: string) => MUSCLES.find(x => baseOf(x.id) === b)?.name.replace(/^[LR] /, '') ?? b;
-    const sub = never ? `${never} MUSCLES NOT TRAINED IN 3 WEEKS` : oldest ? `${name(oldest[0])} · ${Math.floor(oldest[1])} DAYS` : '';
-    return { title: 'LONGEST SINCE', sub, tone: C.stale, from: 0, scale: `TODAY → ${SINCE_FULL_DAYS}D+` };
-  }
-  if (recovery) {
-    const week = now - 7 * 86_400_000;
-    const n = runs.filter(r => r.end >= week).length;
-    const total = Object.entries(steps).filter(([k]) => Date.parse(k) >= week - 86_400_000).reduce((a, [, v]) => a + v, 0);
-    const ran = runs.filter(r => r.end >= week).reduce((a, r) => a + runSteps(r), 0);
-    const lifts = worn.filter(x => x.name !== 'RUN' && x.name !== 'WALKING' && x.at >= week).length;
-    return {
-      title: 'RECOVERY',
-      sub: 'Last 7 days, weighted by how hard each hit',
-      tone: C.alert, from: 0, scale: 'FRESH → WORN',
-      chips: [
-        { value: `${Math.round(total / 1000)}K`, label: 'STEPS' },
-        { value: `${n}`, label: n === 1 ? 'RUN' : 'RUNS', note: n ? `${Math.round(ran / 1000)}K STRIDES` : undefined },
-        { value: `${lifts}`, label: lifts === 1 ? 'LIFT' : 'LIFTS' },
-      ],
-    };
-  }
-  return null;
+/** The caption above the figure for RECOVERY: last week's load. */
+export function recoveryCaption(worn: Session[], runs: Run[], steps: Record<string, number>, now: number): LensInfo {
+  const week = now - 7 * 86_400_000;
+  const n = runs.filter(r => r.end >= week).length;
+  const total = Object.entries(steps).filter(([k]) => Date.parse(k) >= week - 86_400_000).reduce((a, [, v]) => a + v, 0);
+  const ran = runs.filter(r => r.end >= week).reduce((a, r) => a + runSteps(r), 0);
+  const lifts = worn.filter(x => x.name !== 'RUN' && x.name !== 'WALKING' && x.at >= week).length;
+  return {
+    title: 'RECOVERY',
+    sub: 'Last 7 days, weighted by how hard each hit',
+    tone: C.alert, from: 0, scale: 'FRESH → WORN',
+    chips: [
+      { value: `${Math.round(total / 1000)}K`, label: 'STEPS' },
+      { value: `${n}`, label: n === 1 ? 'RUN' : 'RUNS', note: n ? `${Math.round(ran / 1000)}K STRIDES` : undefined },
+      { value: `${lifts}`, label: lifts === 1 ? 'LIFT' : 'LIFTS' },
+    ],
+  };
+}
+
+/** The caption above the figure for READY: how many muscles are good to go. */
+export function readyCaption(pct: Record<string, number>): LensInfo {
+  const v = Object.values(pct);
+  const ready = v.filter(p => p >= 90).length;
+  const coming = v.filter(p => p >= 50 && p < 90).length;
+  const worn = v.filter(p => p < 50).length;
+  return {
+    title: 'READY',
+    sub: 'Recovered muscles light up green',
+    tone: C.live, from: 0.15, scale: 'TIRED → READY',
+    chips: [
+      { value: `${ready}`, label: 'READY' },
+      { value: `${coming}`, label: 'COMING BACK' },
+      { value: `${worn}`, label: 'WORN' },
+    ],
+  };
 }

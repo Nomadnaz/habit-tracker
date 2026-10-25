@@ -5,12 +5,15 @@
 // line to a point on the body you choose (lib/body-hud.ts). EDIT arranges
 // them: tap the body for the point, turn the revolver for the module, tap a
 // slot for where it hangs. Everything comes from the twin (lib/twin.ts),
-// which also writes today's targets back for every other screen.
+// which also writes today's targets back for every other screen. The lines
+// stay hidden: tap a readout and its line draws out to the body with a
+// green ripple; tap it again to open it.
 //
-// Under the figure: the lift box (type a lift → its muscles light up, send
-// it to the puck), the GOALS / VIEW lenses, the modules left off the body,
-// your targets, and Apple Health. Spin the figure, pinch in, tap a zone →
-// its muscles; tap a muscle → recovery, a GOAL and GO (lifts that work it).
+// The figure is always coloured by the gauge (bottom right): RECOVERY reds
+// the worn muscles, READY lights the fresh ones green. Under it: the
+// modules left off the body, your targets, and Apple Health. Spin the
+// figure, pinch in, tap a zone → its muscles; tap a muscle → recovery, a
+// GOAL and GO (lifts that work it).
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,21 +28,15 @@ import { onWrite } from '@/lib/postWrite';
 import { C, F, numFace } from '@/lib/theme';
 import { REGIONS, loadBodyMap, saveBodyMap, type BodyMap } from '@/lib/body-map';
 import { BodyStage, TONE, type Facing, type Paint, type StageEdit, type StagePin } from '@/components/body/BodyStage';
-import { FanSelect, type FanOption } from '@/components/body/FanSelect';
 import { ZONE_BY_ID, ZONE_OF, MUSCLES } from '@/lib/body-mesh';
-import { getExercises, getTrainingSessions, getTemplates, getTemplateExercises, type Exercise } from '@/lib/workout-data';
+import { getExercises, getTrainingSessions, type Exercise } from '@/lib/workout-data';
 import {
-  baseOf, hasBattery, muscleStatus, withIntensity, cardioSessions, loadOf, lastDay, daysSince, RECOVERY_MUSCLES,
-  type Session, type Run,
+  baseOf, hasBattery, muscleStatus, withIntensity, cardioSessions, RECOVERY_MUSCLES, type Session, type Run,
 } from '@/lib/muscle-recovery';
-import { loadCoach } from '@/lib/routine';
-import { fitFor, focusOfName, muscleWord, planSession } from '@/lib/coach';
-import { RecoveryThermo, useRecoveryMix } from '@/components/body/RecoveryToggle';
+import { RecoveryThermo, useRecoveryMix, type GaugeMode } from '@/components/body/RecoveryToggle';
 import { TypeLine } from '@/components/TypeLine';
 import { getActivitiesInRange } from '@/lib/activity-data';
 import { guideFor, goalOf } from '@/lib/exercise-guide';
-import type { Share } from '@/lib/exercise-library';
-import { ExerciseCard } from '@/components/ExerciseCard';
 import { WaterSheet, WeightSheet } from '@/components/BodyLogSheets';
 import {
   addWater, loadBodyData, logWeight, onHealthSync, pullRemoteBody, refreshAppleHealthIfConnected, saveBodyProfile,
@@ -56,20 +53,14 @@ import {
 import { readoutOf, ReadoutNode, ReadoutRow, type ReadoutActs, type ReadoutData } from '@/components/body/Readouts';
 import { EditPanel, type Draft } from '@/components/body/EditPanel';
 import type { RevolverItem } from '@/components/body/Revolver';
-import { LiftFinder } from '@/components/body/LiftFinder';
 import {
-  AssignPanel, CategoryEditor, GoSheet, LensCaption, bestE1rm, lensCaption, SINCE_FULL_DAYS, type Lens, type UpNext,
+  AssignPanel, CategoryEditor, GoSheet, LensCaption, bestE1rm, readyCaption, recoveryCaption,
 } from '@/components/body/BodyPanels';
 import { TodaySheet, type SheetKind, type You } from '@/components/today/Sheets';
 import { Pixel } from '@/components/today/bits';
 
 const SIDES: Facing[] = ['front', 'back'];
-const LENSES: FanOption<Lens>[] = [
-  { id: 'goals', label: 'GOALS', color: C.ink, icon: 'target' },
-  { id: 'next', label: 'UP NEXT', color: C.live, icon: 'calendar-arrow-right' },
-  { id: 'last', label: 'LAST USED', color: C.alert, icon: 'history' },
-  { id: 'since', label: 'LONGEST SINCE', color: C.stale, icon: 'timer-sand' },
-];
+const LIT_MS = 4500; // a tapped readout stays lit this long; a second tap inside it opens it
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -91,19 +82,18 @@ export default function BodyScreen() {
   const [focused, setFocused] = useState(true);
   const [going, setGoing] = useState(false);
   const [library, setLibrary] = useState<Exercise[]>([]);
-  const [filter, setFilter] = useState<string | null>(null);
   const [side, setSide] = useState<Facing>('front');
   const [stageZoomed, setStageZoomed] = useState(false);
   const [catEditing, setCatEditing] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [appRuns, setAppRuns] = useState<Run[]>([]);
-  const [next, setNext] = useState<UpNext | null>(null);
-  const [lens, setLens] = useState<Lens>('goals');
-  const [recovery, setRecovery] = useState(false);
+  const [gauge, setGauge] = useState<GaugeMode>('worn');
+  const [visits, setVisits] = useState(0);
   const [mix, setMix] = useState(0);
-  useRecoveryMix(recovery, setMix);
-  const [liftShare, setLiftShare] = useState<Share | null>(null);
-  const [howTo, setHowTo] = useState<string | null>(null);
+  // The paint, gauge and caption all come in again on every visit and switch.
+  const play = `${visits}-${gauge}`;
+  useRecoveryMix(play, setMix);
+  const [lit, setLit] = useState<{ key: string; t0: number } | null>(null);
   // The day.
   const [body, setBody] = useState<BodyData | null>(null);
   const [profile, setProfile] = useState<BodyProfile>({ heightCm: null, sex: null, weightKg: null });
@@ -163,15 +153,7 @@ export default function BodyScreen() {
     void getActivitiesInRange(new Date(Date.now() - 14 * 86_400_000).toISOString(), new Date().toISOString())
       .then(a => setAppRuns(a.filter(x => x.type === 'run').map(x => ({ start: Date.parse(x.startTime), end: Date.parse(x.endTime), distanceM: x.distanceM }))))
       .catch(() => {});
-    // UP NEXT is the coach's pick (lib/coach.ts) — the same session TRAIN shows.
-    void (async () => {
-      const [{ today, sessions: worn }, templates, lib] = await Promise.all([loadCoach(), getTemplates(), getExercises()]);
-      const t = templates.find(x => !x.isArchived && focusOfName(x.name) === today.focus);
-      const lineup = t ? await getTemplateExercises(t.id) : lib.filter(e => fitFor(today.focus, e.name, e.muscleGroups) >= 0.5);
-      // Only what's recovered by then goes ahead; lifts on a tired muscle rest.
-      const { keep, rest } = planSession(lineup, worn, today.at);
-      setNext({ title: today.title, when: today.when, exercises: keep, resting: rest.map(r => ({ name: r.lift.name, muscle: muscleWord(r.muscle), pct: r.pct })) });
-    })().catch(() => {});
+    setVisits(v => v + 1);
     setFocused(true);
     return () => { off(); offWrite(); setFocused(false); };
   }, [loadTwin]));
@@ -272,7 +254,7 @@ export default function BodyScreen() {
   const commit = (n: Pin[]) => { setPins(n); void savePins(n); };
   const startArranging = (on: HudModule | null = null) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setZone(null); setSelected(null); setLiftShare(null);
+    setZone(null); setSelected(null); setLit(null);
     setDraft({});
     setPinOn(on);
     setArranging(true);
@@ -328,30 +310,24 @@ export default function BodyScreen() {
   const battery = selBase && status && hasBattery(selBase) ? status.pct : null;
   const batteryOf = (id: string) => (hasBattery(baseOf(id)) ? muscleStatus(baseOf(id), worn, now).pct : null);
 
-  // The figure's colours: a typed lift lights its muscles over everything;
-  // otherwise the recovery toggle (white → red by how worn each muscle is)
-  // underneath, the lens on top for the muscles it's about.
-  const lensLoad: Record<string, number> | null =
-    liftShare ? liftShare
-    : lens === 'next' ? (next ? loadOf(next.exercises) : {})
-    : lens === 'last' ? lastDay(worn).load
-    : lens === 'since' ? Object.fromEntries(Object.entries(daysSince(worn, now)).map(([m, d]) => [m, d == null ? 1 : Math.min(1, d / SINCE_FULL_DAYS)]))
-    : null;
-  const lensTone = liftShare || lens === 'next' ? C.live : lens === 'last' ? C.alert : C.stale;
-  const paint: Record<string, Paint> | null = (mix > 0.01 || lensLoad) ? {} : null;
+  // The figure's colours, faded in by `mix`: RECOVERY reds the worn
+  // muscles (the most worn glow); READY lights the fresh ones green.
+  const paint: Record<string, Paint> | null = mix > 0.01 ? {} : null;
   if (paint) {
     for (const m of MUSCLES) {
       const b = baseOf(m.id);
-      const l = lensLoad?.[b];
-      if (l != null && l > 0.02) paint[m.id] = { tone: lensTone, t: lens === 'since' && !liftShare ? l : 0.25 + 0.75 * l };
-      else if (!liftShare && mix > 0.01 && hasBattery(b)) {
-        // Worn muscles also glow, more the more worn — kept soft (BodyStage's shader).
-        const w = 1 - (recPct[b] ?? 100) / 100;
+      if (!hasBattery(b)) continue;
+      const fresh = (recPct[b] ?? 100) / 100;
+      if (gauge === 'worn') {
+        const w = 1 - fresh;
         paint[m.id] = { tone: C.alert, t: w * mix, glow: w > 0.08 ? Math.pow(w, 1.3) * mix : 0 };
+      } else {
+        const r = Math.pow(Math.max(0, (fresh - 0.4) / 0.6), 1.5);
+        paint[m.id] = { tone: C.live, t: r * mix, glow: fresh >= 0.95 ? 0.3 * mix : 0 };
       }
     }
   }
-  const lensInfo = liftShare ? null : lensCaption(lens, recovery, next, worn, runs, body?.stepsHistory ?? {}, now);
+  const lensInfo = gauge === 'worn' ? recoveryCaption(worn, runs, body?.stepsHistory ?? {}, now) : readyCaption(recPct);
   // A framed zone's battery: the average of its muscles that have one.
   const zonePcts = zone ? ZONE_BY_ID[zone].muscles.map(batteryOf).filter((p): p is number => p != null) : [];
   const zoneBattery = zonePcts.length ? Math.round(zonePcts.reduce((a, b) => a + b, 0) / zonePcts.length) : null;
@@ -363,7 +339,7 @@ export default function BodyScreen() {
     water: () => (view ? setSheet('water') : setLogSheet('water')),
     weight: () => setLogSheet('weight'),
     heart: () => void checkHeart(),
-    recovery: () => setRecovery(r => !r),
+    recovery: () => setGauge(g => (g === 'worn' ? 'ready' : 'worn')),
   };
   const data: ReadoutData = { view, body, mood };
   const stagePins: StagePin[] = pins.map(p => {
@@ -371,7 +347,12 @@ export default function BodyScreen() {
     return {
       key: p.id, slot: p.slot, at: p.at, n: p.n, tone: r.tone, on: arranging && pinOn === p.id,
       node: <ReadoutNode r={r} right={slotSide(p.slot) === 'r'} />,
-      onPress: arranging ? () => tapPin(p) : r.onPress,
+      // First tap shows where it lives on the body; a second, while it's lit, opens it.
+      onPress: arranging ? () => tapPin(p) : () => {
+        if (lit?.key === p.id && Date.now() - lit.t0 < LIT_MS) { r.onPress(); return; }
+        void Haptics.selectionAsync();
+        setLit({ key: p.id, t0: Date.now() });
+      },
       onLongPress: () => startArranging(p.id),
     };
   });
@@ -385,7 +366,6 @@ export default function BodyScreen() {
   const spare = offBody(pins);
 
   const stageH = Math.min(580, Math.round(width * 1.36));
-  const counts = Object.values(map.marks).reduce<Record<string, number>>((a, m) => ({ ...a, [m.category]: (a[m.category] ?? 0) + 1 }), {});
   const targets = REGIONS.filter(r => map.marks[r.id]).sort((a, b) =>
     map.categories.findIndex(c => c.id === map.marks[a.id].category) - map.categories.findIndex(c => c.id === map.marks[b.id].category));
   const n = new Date();
@@ -448,7 +428,7 @@ export default function BodyScreen() {
           </View>
         ))}
 
-        {arranging ? <View style={st.lensSpacer} /> : <LensCaption info={lensInfo} />}
+        {arranging ? <View style={st.lensSpacer} /> : <LensCaption key={play} info={lensInfo} />}
 
         <View>
           <BodyStage
@@ -458,7 +438,7 @@ export default function BodyScreen() {
             facing={side}
             zone={zone}
             selected={selected}
-            filter={filter}
+            filter={null}
             active={focused && !arranging}
             battery={selected ? battery : zoneBattery}
             onPick={pick}
@@ -467,36 +447,22 @@ export default function BodyScreen() {
             onZoomed={setStageZoomed}
             pins={stagePins}
             edit={stageEdit}
+            lit={arranging ? null : lit}
             paint={paint}
-            showGoals={!liftShare && lens === 'goals' && mix < 0.02}
-            dimRest={!!liftShare || lens !== 'goals'}
+            showGoals={false}
+            dimRest={false}
           />
           {/* RECOVERY: a dot that grows into a thermometer of overall wear; muscles fade white → red and the worn ones glow. */}
           {!arranging && (
-            <RecoveryThermo on={recovery} worn={overallWorn} onToggle={() => setRecovery(r => !r)}
+            <RecoveryThermo mode={gauge} worn={overallWorn} play={play} onToggle={() => setGauge(g => (g === 'worn' ? 'ready' : 'worn'))}
               style={[st.recovery, { right: stageZoomed || zone ? 64 : 12 }]} />
           )}
         </View>
 
-        <Text style={st.hint}>{arranging ? 'TAP THE BODY TO SET A LINE · DRAG TO TURN' : 'DRAG TO SPIN · PINCH TO ZOOM · HOLD A READOUT TO MOVE IT'}</Text>
+        <Text style={st.hint}>{arranging ? 'TAP THE BODY TO SET A LINE · DRAG TO TURN' : 'TAP A READOUT TO FIND IT · AGAIN TO OPEN · HOLD TO MOVE'}</Text>
 
         {!arranging && (
           <>
-            <LiftFinder onMuscles={setLiftShare} onHowTo={setHowTo} />
-
-            <View style={st.lenses}>
-              <FanSelect
-                eyebrow="GOALS"
-                options={[
-                  { id: 'all', label: `ALL ${targets.length}`, color: C.ink },
-                  ...map.categories.map(c => ({ id: c.id, label: `${c.name} ${counts[c.id] ?? 0}`, color: TONE[c.tone] })),
-                ]}
-                value={filter ?? 'all'}
-                onChange={id => { setFilter(id === 'all' ? null : id); setLens('goals'); }}
-              />
-              <FanSelect eyebrow="VIEW" options={LENSES} value={lens} onChange={setLens} />
-            </View>
-
             {spare.length > 0 && (
               <>
                 <View style={st.section}>
@@ -618,16 +584,6 @@ export default function BodyScreen() {
         })}
       />
 
-      {howTo && (
-        <ExerciseCard
-          name={howTo}
-          role="LIFT"
-          guide={guideFor(howTo, { goal: goalOf(null), bodyKg: (body && latestWeight(body)) || profile.weightKg, heightCm: profile.heightCm, sex: profile.sex, bestE1rmKg: bestE1rm(howTo, worn, library) })}
-          bodyKg={(body && latestWeight(body)) || profile.weightKg}
-          onClose={() => setHowTo(null)}
-        />
-      )}
-
       {body && (
         <>
           <WaterSheet visible={logSheet === 'water'} data={body} onData={d => { setBody(d); void loadTwin(); }} onClose={() => setLogSheet(null)} />
@@ -682,7 +638,6 @@ const st = StyleSheet.create({
   lensSpacer: { height: 12 },
   recovery: { position: 'absolute', bottom: 12 },
   hint: { fontFamily: F.mono, fontSize: 10, color: C.faint, letterSpacing: 1, textAlign: 'center', marginTop: 2, marginBottom: 10 },
-  lenses: { marginTop: 14 },
 
   section: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginTop: 24, marginBottom: 4 },
   sectionTitle: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3 },

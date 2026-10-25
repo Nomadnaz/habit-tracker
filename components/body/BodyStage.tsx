@@ -18,8 +18,11 @@
 // At the whole figure, the day's readouts hang in slots either side of it
 // (lib/body-hud.ts), each with a leader line to the point on the body it's
 // pinned to — the heart, the stomach, a foot — that follows the figure as
-// it turns. In edit mode a tap on the figure reports the point under the
-// finger instead of zooming, and the empty slots show.
+// it turns. The lines stay hidden: tapping a readout draws its one line out
+// to the point, then a faint dithered green ripple spreads from there over
+// the body and fades. In edit mode every line shows, a tap on the figure
+// reports the point under the finger instead of zooming, and the empty
+// slots show.
 // Rendering is plain WebGL through expo-gl: one shader, one draw per
 // muscle, redrawn only when something changes. React only re-renders for
 // the callout and the readouts' lines.
@@ -136,6 +139,11 @@ export type StageEdit = {
 type HudPt = { x: number; y: number; a: number };
 
 const HUD_W = 70; // until a readout has measured itself
+const LINE_MS = 380;    // a tapped readout's line drawing out to the body
+const PULSE_MS = 1900;  // then the ripple from its point
+const PULSE_R = 30;     // how far the ripple runs, cm
+const LIT_MS = 4500;    // how long the line stays before it fades
+const FADE_MS = 500;
 const SLOT_GAP = 12;
 /** A slot's top edge, as a fraction of the stage. */
 const slotTop = (slot: number) => 0.025 + slotRow(slot) * (0.95 / ROWS);
@@ -172,6 +180,8 @@ interface Props {
   /** The readouts round the whole figure; hidden while zoomed or framing a zone. */
   pins: StagePin[];
   edit: StageEdit | null;
+  /** The readout just tapped (and when): its line draws out and its point ripples. */
+  lit: { key: string; t0: number } | null;
   /** Lens / recovery colours, by muscle id: from ink (t 0) to `tone` (t 1). Wins over goals. */
   paint: Record<string, Paint> | null;
   /** Draw goal categories' colours (off while a lens is showing something else). */
@@ -227,6 +237,10 @@ uniform vec2 uPhase;   // per-muscle shift of the dot grid, in cells
 uniform vec3 uLight;
 uniform float uGlow;   // 0–1, worn muscles under RECOVERY
 uniform float uTime;   // seconds, for the glow's slow breathe
+uniform vec3 uPulseC;  // a tapped readout's point, cm
+uniform float uPulseR; // its ripple's radius, cm
+uniform float uPulseA; // and strength, 0 = none
+uniform vec3 uPulseCol;
 void main() {
   vec3 n = normalize(vN);
   if (!gl_FrontFacing) n = -n;
@@ -251,6 +265,19 @@ void main() {
       col = mix(col, solid, lit);
     }
     col += vec3(1.0 - smoothstep(0.0, 1.4, abs(d - uWave))) * step(uWave, 500.0);
+  }
+  if (uPulseA > 0.0) {
+    // The ripple: a ring running out from the point with a faint wake
+    // behind it, drawn on the halftone dots plus a scatter of pixels
+    // between them, so it reads as dithered light rather than paint.
+    float pd = distance(vW, uPulseC);
+    float ring = 1.0 - smoothstep(0.0, 5.5, abs(pd - uPulseR));
+    float wake = (1.0 - smoothstep(0.0, uPulseR + 1.0, pd)) * 0.35;
+    float g = (ring + wake) * uPulseA;
+    vec2 px = floor(gl_FragCoord.xy / (uCell * 0.5));
+    float hash = fract(sin(dot(px, vec2(12.9898, 78.233))) * 43758.5453);
+    float lit = max(dots, step(hash, g * 0.5));
+    col = mix(col, uPulseCol * (0.45 + 0.55 * dots), clamp(g * lit * 0.85, 0.0, 0.85));
   }
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -292,13 +319,13 @@ function setupGL(gl: ExpoWebGLRenderingContext): GLState {
   gl.enableVertexAttribArray(aPos);
   gl.enableVertexAttribArray(aNrm);
   const u: GLState['u'] = {};
-  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uMode', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight', 'uGlow', 'uTime']) u[name] = gl.getUniformLocation(prog, name);
+  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uMode', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight', 'uGlow', 'uTime', 'uPulseC', 'uPulseR', 'uPulseA', 'uPulseCol']) u[name] = gl.getUniformLocation(prog, name);
   gl.enable(gl.DEPTH_TEST);
   gl.clearColor(0, 0, 0, 1);
   return { gl, aPos, aNrm, u };
 }
 
-export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed, pins, edit, paint, showGoals, dimRest }: Props) {
+export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed, pins, edit, lit, paint, showGoals, dimRest }: Props) {
   const cam = useRef<Cam>({ ...HOME });
   const tween = useRef<Tween | null>(null);
   const spin = useRef(0);               // rad/s of momentum
@@ -317,6 +344,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   const zoomedRef = useRef(false);
   const hudSet = useRef<((p: Record<string, HudPt>) => void) | null>(null);
   const hudLast = useRef<Record<string, HudPt> | null>(null);
+  const pulse = useRef<{ c: V3; t0: number } | null>(null);
 
   // Latest props for the gesture callbacks (they're built once).
   const props = useRef({ onPick, onFacing, onZoomed, pins, edit });
@@ -391,6 +419,15 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     const wave = from ? (st >= WAVE[1] ? 1e4 : from.r * 1.05 * easeOut(phase(st, WAVE))) : 0;
     if (from) gl.uniform3f(u.uSelC, from.c[0], from.c[1], from.c[2]);
     gl.uniform1f(u.uWave, wave);
+    const pl = pulse.current;
+    const pu = pl ? (Date.now() - pl.t0) / PULSE_MS : -1;
+    if (pl && pu >= 0 && pu < 1) {
+      gl.uniform3f(u.uPulseC, pl.c[0], pl.c[1], pl.c[2]);
+      gl.uniform1f(u.uPulseR, PULSE_R * easeOut(pu));
+      gl.uniform1f(u.uPulseA, Math.pow(1 - pu, 1.1));
+      const g = rgb(C.live);
+      gl.uniform3f(u.uPulseCol, g[0], g[1], g[2]);
+    } else gl.uniform1f(u.uPulseA, 0);
     for (const p of MESH.parts) {
       const l = lk[p.mi];
       gl.uniform3f(u.uCol, l.col[0], l.col[1], l.col[2]);
@@ -466,6 +503,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     }
     if ((L.selPart || L.zv) && now - selT0.current < FILL[1] + 40) more = true; // ring / fill / callout still playing
     if (L.active && L.glowing) more = true; // the worn-muscle glow breathes
+    if (pulse.current && now - pulse.current.t0 < PULSE_MS + 50) more = true; // a ripple is running (or about to)
     settle();
     draw();
     if (live.current.selPart || live.current.zv) setFrame(f => f + 1); // the callout follows the muscle / zone
@@ -528,6 +566,13 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     const z = c.zoom > 1.02;
     if (z !== zoomedRef.current) { zoomedRef.current = z; setZoomed(z); props.current.onZoomed(z); }
   };
+
+  // A readout tapped: once its line reaches the body, ripple from its point.
+  useEffect(() => {
+    const p = lit ? props.current.pins.find(x => x.key === lit.key) : null;
+    pulse.current = p && lit ? { c: p.at, t0: lit.t0 + LINE_MS } : null;
+    if (pulse.current) kick();
+  }, [lit?.t0]);
 
   // Arranging the readouts: face front at the whole figure, so points are easy to tap.
   useEffect(() => { if (edit) fly({ ...HOME }, 600); }, [!!edit]);
@@ -775,7 +820,7 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
       )}
 
       {!zone && !zoomed && (pins.length > 0 || !!edit) && (
-        <Hud W={W} H={H} pins={pins} edit={edit} bind={hudSet} onBind={() => { hudLast.current = null; placeHud(); }} />
+        <Hud W={W} H={H} pins={pins} edit={edit} lit={lit} bind={hudSet} onBind={() => { hudLast.current = null; placeHud(); }} />
       )}
 
       {zoomed && (
@@ -790,11 +835,26 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
 /** The readouts in their slots with their leader lines, and in edit mode
  *  the empty slots and the picked point. Lines are re-placed by the stage
  *  through `bind` as the figure turns, without re-rendering the stage. */
-function Hud({ W, H, pins, edit, bind, onBind }: {
-  W: number; H: number; pins: StagePin[]; edit: StageEdit | null;
+function Hud({ W, H, pins, edit, lit, bind, onBind }: {
+  W: number; H: number; pins: StagePin[]; edit: StageEdit | null; lit: { key: string; t0: number } | null;
   bind: MutableRefObject<((p: Record<string, HudPt>) => void) | null>; onBind: () => void;
 }) {
   const [pts, setPts] = useState<Record<string, HudPt> | null>(null);
+  // The tapped readout's line: re-rendered each frame while it draws out and fades.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!lit) return;
+    let f: number | null = null;
+    const run = () => {
+      setTick(t => t + 1);
+      f = Date.now() - lit.t0 < LIT_MS + FADE_MS ? requestAnimationFrame(run) : null;
+    };
+    f = requestAnimationFrame(run);
+    return () => { if (f != null) cancelAnimationFrame(f); };
+  }, [lit?.t0]);
+  const age = lit ? Date.now() - lit.t0 : Infinity;
+  const draw = clamp01(age / LINE_MS);
+  const fadeOut = 1 - clamp01((age - LIT_MS) / FADE_MS);
   useEffect(() => {
     bind.current = setPts;
     onBind();
@@ -817,19 +877,20 @@ function Hud({ W, H, pins, edit, bind, onBind }: {
           <Svg width={W} height={H}>
             {pins.map(p => {
               const q = pts[p.key];
-              if (!q) return null;
+              const isLit = !edit && lit?.key === p.key && fadeOut > 0;
+              if (!q || (!edit && !isLit)) return null;
               const e = edge(p);
-              const line = `${e.x},${e.y} ${e.x + e.dx},${e.y} ${q.x},${q.y}`;
-              const op = (edit && !p.on ? 0.4 : 0.8) * q.a;
+              // Lit: the line draws out from the readout, then reaches the point.
+              const k = isLit ? draw : 1;
+              const sx = e.x + e.dx, sy = e.y;
+              const line = `${e.x},${e.y} ${sx},${sy} ${sx + (q.x - sx) * k},${sy + (q.y - sy) * k}`;
+              const op = (isLit ? 0.9 * fadeOut : p.on ? 0.85 : 0.45) * q.a;
               // A dark casing, so the line still reads across the lit figure.
               return [
-                <Polyline key={`${p.key}-c`} points={line} fill="none" stroke={C.bg} strokeWidth={3} strokeOpacity={0.7 * q.a} />,
-                <Polyline key={p.key} points={line} fill="none" stroke={p.tone} strokeWidth={p.on ? 1.5 : 1} strokeOpacity={op} />,
+                <Polyline key={`${p.key}-c`} points={line} fill="none" stroke={C.bg} strokeWidth={3} strokeOpacity={0.7 * op} />,
+                <Polyline key={p.key} points={line} fill="none" stroke={C.hot} strokeWidth={p.on || isLit ? 1.25 : 1} strokeOpacity={op} />,
+                (k >= 1 ? <Rect key={`${p.key}-p`} x={q.x - 2.5} y={q.y - 2.5} width={5} height={5} fill={C.hot} fillOpacity={op} /> : null),
               ];
-            })}
-            {pins.map(p => {
-              const q = pts[p.key];
-              return q ? <Rect key={p.key} x={q.x - 2.5} y={q.y - 2.5} width={5} height={5} fill={p.tone} fillOpacity={q.a} /> : null;
             })}
             {m && [
               <Rect key="m" x={m.x - 6} y={m.y - 6} width={12} height={12} fill="none" stroke={C.hot} strokeWidth={1.5} />,

@@ -37,6 +37,7 @@ export const C = {
   food:     '#FF7A3D', // calorie progress only
   stale:    '#FFE680', // BODY's LONGEST SINCE lens only
   wornDeep: '#6E1410', // BODY's RECOVERY thermometer, the deep end of the reds
+  freshDeep: '#1D5A15', // BODY's READY thermometer, the deep end of the greens
   scrim:    'rgba(0,0,0,0.72)',
 };
 
@@ -48,7 +49,7 @@ export const MOD = {
   water:     '#3FA9FF',
   fuel:      '#FF7A3D',
   sleep:     '#9D8CFF',
-  readiness: '#2EE6C5',
+  readiness: '#74F25B',
   train:     '#FFFFFF',
   muscles:   '#FFB23F',
   week:      '#8A8A8A',
