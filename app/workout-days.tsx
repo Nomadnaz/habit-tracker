@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useRef, useState } from 'react';
-import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
+import { Alert, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -67,12 +67,18 @@ export default function WorkoutDays() {
 
   const startRename = (d: Day) => { setDraft(d.t.name); setRenaming(d.t.id); };
 
+  // The new name shows at once; a failed save re-reads the old one and says so.
   const commitRename = async (id: string) => {
     const name = draft.trim();
     setRenaming(null);
     if (!name) return;
-    await renameTemplate(id, name);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setDays(ds => ds.map(d => (d.t.id === id ? { ...d, t: { ...d.t, name } } : d)));
+    try {
+      await renameTemplate(id, name);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("Couldn't rename that", "It's back how it was. Try again.");
+    }
     await load();
   };
 

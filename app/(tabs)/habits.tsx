@@ -10,7 +10,7 @@
 import { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  Modal, Pressable, KeyboardAvoidingView, Platform,
+  Modal, Pressable, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -19,12 +19,12 @@ import * as Haptics from 'expo-haptics';
 
 import {
   getActiveHabits, addHabit, deleteHabit, getLogsForHabit, pullRemoteHabitLogs,
-  toggleToday, computeStreakWithFreezes, buildHeatmap, isDoneOnDate, setAutoFreeze,
+  toggleToday, computeStreakWithFreezes, buildHeatmap, isDoneOnDate, setAutoFreeze, flipHabitDay,
   type Habit, type HabitLog, type Frequency,
 } from '@/lib/habits-data';
 import {
   getActiveMedications, addMedication, deleteMedication, getLogsForMedication,
-  toggleTodayDose, computeMedStreak, buildMedHeatmap, isDoseTakenOnDate,
+  toggleTodayDose, computeMedStreak, buildMedHeatmap, isDoseTakenOnDate, flipDoseDay,
   computeAdherence30d, courseProgress,
   type Medication, type MedicationLog, type MedType,
 } from '@/lib/medications-data';
@@ -43,6 +43,8 @@ const REG = F.mono;
 type Section = 'habits' | 'meds';
 type HabitRow = { habit: Habit; logs: HabitLog[] };
 type MedRow = { med: Medication; logs: MedicationLog[] };
+
+const notSaved = () => Alert.alert("Couldn't save that", "It's back how it was. Try again.");
 
 export default function HabitsScreen() {
   const [section, setSection] = useState<Section>('habits');
@@ -74,9 +76,13 @@ export default function HabitsScreen() {
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
+  // Ticks show the moment you tap; refresh() pulls from the server first, so
+  // waiting on it made every tap lag. A failed write re-reads and says so.
   async function handleToggle(row: HabitRow) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await toggleToday(row.habit);
+    const day = toDateKey(new Date());
+    setRows(rs => rs.map(r => (r.habit.id === row.habit.id ? { ...r, logs: flipHabitDay(r.logs, row.habit.id, day).logs } : r)));
+    try { await toggleToday(row.habit); } catch { notSaved(); }
     refresh();
   }
 
@@ -99,7 +105,16 @@ export default function HabitsScreen() {
 
   async function handleToggleDose(row: MedRow) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await toggleTodayDose(row.med);
+    const day = toDateKey(new Date());
+    setMedRows(rs => rs.map(r => (r.med.id === row.med.id ? { ...r, logs: flipDoseDay(r.logs, row.med.id, day).logs } : r)));
+    try { await toggleTodayDose(row.med); } catch { notSaved(); }
+    refresh();
+  }
+
+  async function toggleFreeze(row: HabitRow) {
+    const on = !row.habit.autoFreezeEnabled;
+    setRows(rs => rs.map(r => (r.habit.id === row.habit.id ? { ...r, habit: { ...r.habit, autoFreezeEnabled: on } } : r)));
+    try { await setAutoFreeze(row.habit.id, on); } catch { notSaved(); }
     refresh();
   }
 
@@ -180,7 +195,7 @@ export default function HabitsScreen() {
                 <HeatmapCalendar cells={cells} />
                 <TouchableOpacity
                   style={styles.freezeRow}
-                  onPress={() => setAutoFreeze(row.habit.id, !row.habit.autoFreezeEnabled).then(refresh)}
+                  onPress={() => toggleFreeze(row)}
                 >
                   <MaterialCommunityIcons
                     name={row.habit.autoFreezeEnabled ? 'snowflake' : 'snowflake-off'}

@@ -15,6 +15,7 @@ import { toDateKey, addDaysToKey, daysBetweenKeys } from './dateKey';
 import { postWrite } from './postWrite';
 import { computeStreak, type StreakInfo, type HeatmapCell } from './habits-data';
 import { withStorageLock } from './storageLock';
+import { flipDay } from './ticks';
 
 const LOCK = 'medications-data'; // covers both @medications and @medication_logs
 
@@ -140,28 +141,21 @@ export function isDoseTakenOnDate(logs: MedicationLog[], dateKey: string): boole
   return logs.some(l => l.date === dateKey && l.taken);
 }
 
+/** A med's dose for `date` flipped, as toggleTodayDose() writes it. Screens
+ *  use it to show the tick before the write lands. */
+export const flipDoseDay = (logs: MedicationLog[], medicationId: string, date: string) =>
+  flipDay(logs, date, 'taken', (): MedicationLog => ({ id: genId(), medicationId, date, taken: true, createdAt: new Date().toISOString() }));
+
 /** Toggle today's dose for a medication. Returns the new taken state. */
 export async function toggleTodayDose(med: Medication): Promise<boolean> {
   const today = toDateKey(new Date());
 
   const { nextTaken, record, wasExisting } = await withStorageLock(LOCK, async () => {
     const map = await loadLogMap();
-    const logs = map[med.id] ?? [];
-    const existing = logs.find(l => l.date === today);
-
-    let nextTaken: boolean;
-    let record: MedicationLog;
-    if (existing) {
-      nextTaken = !existing.taken;
-      record = { ...existing, taken: nextTaken };
-      map[med.id] = logs.map(l => (l.id === existing.id ? record : l));
-    } else {
-      nextTaken = true;
-      record = { id: genId(), medicationId: med.id, date: today, taken: true, createdAt: new Date().toISOString() };
-      map[med.id] = [...logs, record];
-    }
+    const flip = flipDoseDay(map[med.id] ?? [], med.id, today);
+    map[med.id] = flip.logs;
     await saveLogMap(map);
-    return { nextTaken, record, wasExisting: !!existing };
+    return { nextTaken: flip.record.taken, record: flip.record, wasExisting: flip.existed };
   });
 
   bg(async () => {

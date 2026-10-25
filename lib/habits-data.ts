@@ -18,6 +18,7 @@ import { supabase } from './supabase';
 import { toDateKey, addDaysToKey } from './dateKey';
 import { postWrite } from './postWrite';
 import { withStorageLock } from './storageLock';
+import { flipDay } from './ticks';
 
 // One lock key covers both @habits and @habit_logs: deleteHabit touches
 // both, so it must serialize against toggleToday (which only touches logs)
@@ -198,28 +199,21 @@ export function isDoneOnDate(logs: HabitLog[], dateKey: string): boolean {
   return logs.some(l => l.date === dateKey && l.completed);
 }
 
+/** A habit's tick for `date` flipped, as toggleToday() writes it. Screens use
+ *  it to show the tick before the write lands. */
+export const flipHabitDay = (logs: HabitLog[], habitId: string, date: string) =>
+  flipDay(logs, date, 'completed', (): HabitLog => ({ id: genId(), habitId, date, completed: true, createdAt: new Date().toISOString() }));
+
 /** Toggle today's completion for a habit. Returns the new completed state. */
 export async function toggleToday(habit: Habit): Promise<boolean> {
   const today = toDateKey(new Date());
 
   const { map, nextCompleted, record, wasExisting } = await withStorageLock(LOCK, async () => {
     const map = await loadLogMap();
-    const logs = map[habit.id] ?? [];
-    const existing = logs.find(l => l.date === today);
-
-    let nextCompleted: boolean;
-    let record: HabitLog;
-    if (existing) {
-      nextCompleted = !existing.completed;
-      record = { ...existing, completed: nextCompleted };
-      map[habit.id] = logs.map(l => (l.id === existing.id ? record : l));
-    } else {
-      nextCompleted = true;
-      record = { id: genId(), habitId: habit.id, date: today, completed: true, createdAt: new Date().toISOString() };
-      map[habit.id] = [...logs, record];
-    }
+    const flip = flipHabitDay(map[habit.id] ?? [], habit.id, today);
+    map[habit.id] = flip.logs;
     await saveLogMap(map);
-    return { map, nextCompleted, record, wasExisting: !!existing };
+    return { map, nextCompleted: flip.record.completed, record: flip.record, wasExisting: flip.existed };
   });
 
   bg(async () => {

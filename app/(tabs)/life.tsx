@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,11 +16,11 @@ import { Board, BoardRow } from '@/components/Board';
 import { toDateKey } from '@/lib/dateKey';
 import { usePendingRemovals } from '@/lib/undo';
 import {
-  getActiveHabits, getLogsForHabit, pullRemoteHabitLogs, toggleToday, isDoneOnDate,
+  getActiveHabits, getLogsForHabit, pullRemoteHabitLogs, toggleToday, isDoneOnDate, flipHabitDay,
   computeStreakWithFreezes, type Habit, type HabitLog,
 } from '@/lib/habits-data';
 import {
-  getActiveMedications, getLogsForMedication, toggleTodayDose, isDoseTakenOnDate,
+  getActiveMedications, getLogsForMedication, toggleTodayDose, isDoseTakenOnDate, flipDoseDay,
   type Medication, type MedicationLog,
 } from '@/lib/medications-data';
 
@@ -62,15 +62,19 @@ export default function LifeScreen() {
   const shownMeds = meds.filter(m => !gone.has(m.med.id));
   const doneCount = shown?.filter(h => isDoneOnDate(h.logs, today)).length ?? 0;
 
+  // The tick shows the moment you tap and the write follows. If the write
+  // fails, re-reading puts back what's really saved, and we say so.
   async function tick(habit: Habit) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await toggleToday(habit);
+    setHabits(hs => hs && hs.map(h => (h.habit.id === habit.id ? { ...h, logs: flipHabitDay(h.logs, habit.id, today).logs } : h)));
+    try { await toggleToday(habit); } catch { notSaved(); }
     void refresh();
   }
 
   async function dose(med: Medication) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await toggleTodayDose(med);
+    setMeds(ms => ms.map(m => (m.med.id === med.id ? { ...m, logs: flipDoseDay(m.logs, med.id, today).logs } : m)));
+    try { await toggleTodayDose(med); } catch { notSaved(); }
     void refresh();
   }
 
@@ -135,6 +139,8 @@ export default function LifeScreen() {
     </SafeAreaView>
   );
 }
+
+const notSaved = () => Alert.alert("Couldn't save that", "It's back how it was. Try again.");
 
 function Check({ on }: { on: boolean }) {
   return (

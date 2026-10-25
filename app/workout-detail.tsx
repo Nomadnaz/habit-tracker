@@ -354,8 +354,16 @@ export default function WorkoutDetailScreen() {
 
   async function toggleDone() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (done) { await unmarkDoneToday(templateId); setDone(false); }
-    else       { await markDoneToday(templateId);  setDone(true);  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+    // Shows now; the write follows, and a failure puts it back.
+    const was = done;
+    setDone(!was);
+    try {
+      if (was) await unmarkDoneToday(templateId);
+      else { await markDoneToday(templateId); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
+    } catch {
+      setDone(was);
+      Alert.alert("Couldn't save that", "It's back how it was. Try again.");
+    }
   }
 
   // Open exercise edit + PB modal.

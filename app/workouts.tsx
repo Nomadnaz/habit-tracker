@@ -274,9 +274,15 @@ export default function LogWorkout() {
   /** Saves the ticks: none clears today's entry; otherwise every lift not ticked is skipped. */
   async function saveTicks(next: Set<string>) {
     if (!template) return;
-    setTicked(next);
-    if (next.size) await markDoneToday(template.id, rows.filter(r => !next.has(r.ex.id)).map(r => r.ex.id));
-    else await unmarkDoneToday(template.id);
+    const before = ticked;
+    setTicked(next); // shows now; the write follows, and a failure puts it back
+    try {
+      if (next.size) await markDoneToday(template.id, rows.filter(r => !next.has(r.ex.id)).map(r => r.ex.id));
+      else await unmarkDoneToday(template.id);
+    } catch {
+      setTicked(before);
+      Alert.alert("Couldn't save that", "It's back how it was. Try again.");
+    }
     // No coach refresh here: it would count this very session as fatigue and
     // trim its sets mid-workout. The coach catches up next time you open it.
   }
