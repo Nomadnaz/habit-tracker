@@ -55,7 +55,7 @@ export function RemoteTaskBanner() {
       toValue: -160,
       duration: 220,
       useNativeDriver: true,
-    }).start(() => setLabel(null));
+    }).start(({ finished }) => { if (finished) setLabel(null); }); // not if a new banner cut it short
   };
 
   if (!label) return null;

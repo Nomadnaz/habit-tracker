@@ -75,25 +75,36 @@ export function Sheet({ visible, onClose, children, spot }: { visible: boolean; 
   const y = useRef(new Animated.Value(height)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(visible);
+  // Interruptible: every move starts from wherever the sheet is, and a release
+  // hands the finger's speed (px/ms; springs want px/s) to the next animation.
+  const from = useRef(0);
+  const fling = useRef(0);
 
   useEffect(() => {
+    // An animation cut short by the next one must not finish its job (unmount
+    // a sheet that has just been reopened), hence `finished`.
     if (reduce) {
       if (visible) { setMounted(true); y.setValue(0); }
-      if (visible || mounted) Animated.timing(fade, { toValue: visible ? 1 : 0, duration: 160, useNativeDriver: true }).start(() => { if (!visible) setMounted(false); });
+      if (visible || mounted) Animated.timing(fade, { toValue: visible ? 1 : 0, duration: 160, useNativeDriver: true }).start(({ finished }) => { if (finished && !visible) setMounted(false); });
       return;
     }
     if (visible) {
+      // Reopened mid-close: turn round from where it is rather than jumping to the bottom.
+      if (!mounted) y.setValue(height);
       setMounted(true);
-      y.setValue(height);
       Animated.parallel([
         Animated.spring(y, { toValue: 0, friction: 9, tension: 80, useNativeDriver: true }),
         Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }),
       ]).start();
     } else if (mounted) {
+      const v = fling.current;
+      fling.current = 0;
       Animated.parallel([
-        Animated.timing(y, { toValue: height, duration: 220, useNativeDriver: true }),
+        v > 0
+          ? Animated.spring(y, { toValue: height, velocity: v, stiffness: 260, damping: 30, overshootClamping: true, useNativeDriver: true })
+          : Animated.timing(y, { toValue: height, duration: 220, useNativeDriver: true }),
         Animated.timing(fade, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start(() => setMounted(false));
+      ]).start(({ finished }) => { if (finished) setMounted(false); });
     }
   }, [visible]);
 
@@ -101,12 +112,15 @@ export function Sheet({ visible, onClose, children, spot }: { visible: boolean; 
     onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
     // Once the handle has the finger, it keeps it until release.
     onPanResponderTerminationRequest: () => false,
-    onPanResponderMove: (_, g) => y.setValue(Math.max(0, g.dy)),
+    // Grabbed mid-spring: stop it there and follow the finger from that spot.
+    onPanResponderGrant: () => { from.current = 0; y.stopAnimation(v => { from.current = v; }); },
+    onPanResponderMove: (_, g) => y.setValue(Math.max(0, from.current + g.dy)),
     onPanResponderRelease: (_, g) => {
-      if (g.dy > 110 || g.vy > 0.8) onClose();
-      else Animated.spring(y, { toValue: 0, friction: 7, tension: 120, useNativeDriver: true }).start();
+      if (from.current + g.dy > 110 || g.vy > 0.8) { fling.current = Math.max(0, g.vy * 1000); onClose(); }
+      else if (reduce) y.setValue(0);
+      else Animated.spring(y, { toValue: 0, velocity: g.vy * 1000, friction: 7, tension: 120, useNativeDriver: true }).start();
     },
-  }), [onClose]);
+  }), [onClose, reduce]);
 
   if (!mounted) return null;
   return (

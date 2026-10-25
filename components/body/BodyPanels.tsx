@@ -46,7 +46,8 @@ export function AssignPanel({ map, zone, regionId, status, battery, batteryOf, o
       y.setValue(60);
       Animated.spring(y, { toValue: 0, ...SPRING.pop }).start();
     } else {
-      Animated.timing(y, { toValue: 400, duration: 200, useNativeDriver: true }).start(() => setShown(null));
+      // Only once it's really off: a tap that reopens it mid-slide must not lose it.
+      Animated.timing(y, { toValue: 400, duration: 200, useNativeDriver: true }).start(({ finished }) => { if (finished) setShown(null); });
     }
   }, [showing]);
 

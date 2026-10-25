@@ -35,11 +35,15 @@ export function ChatSheet() {
   const y = useRef(new Animated.Value(H)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(open);
+  // As the shared Sheet: moves start from where it is, releases carry the finger's speed.
+  const from = useRef(0);
+  const fling = useRef(0);
 
   useEffect(() => {
+    // `finished`: a close cut short by reopening must not unmount the sheet.
     if (reduce) {
       if (open) { setMounted(true); y.setValue(0); }
-      Animated.timing(fade, { toValue: open ? 1 : 0, duration: 160, useNativeDriver: true }).start(() => { if (!open) setMounted(false); });
+      Animated.timing(fade, { toValue: open ? 1 : 0, duration: 160, useNativeDriver: true }).start(({ finished }) => { if (finished && !open) setMounted(false); });
       return;
     }
     fade.setValue(1);
@@ -47,7 +51,12 @@ export function ChatSheet() {
       setMounted(true);
       Animated.spring(y, { toValue: 0, ...SPRING.settle }).start();
     } else {
-      Animated.timing(y, { toValue: H, duration: 220, useNativeDriver: true }).start(() => setMounted(false));
+      const v = fling.current;
+      fling.current = 0;
+      (v > 0
+        ? Animated.spring(y, { toValue: H, velocity: v, stiffness: 260, damping: 30, overshootClamping: true, useNativeDriver: true })
+        : Animated.timing(y, { toValue: H, duration: 220, useNativeDriver: true })
+      ).start(({ finished }) => { if (finished) setMounted(false); });
     }
   }, [open]);
 
@@ -55,13 +64,15 @@ export function ChatSheet() {
   const drag = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
     onPanResponderTerminationRequest: () => false,
-    onPanResponderMove: (_, g) => y.setValue(Math.max(0, g.dy)),
+    onPanResponderGrant: () => { from.current = 0; y.stopAnimation(v => { from.current = v; }); },
+    onPanResponderMove: (_, g) => y.setValue(Math.max(0, from.current + g.dy)),
     onPanResponderRelease: (_, g) => {
-      if (g.dy > 120 || g.vy > 0.8) closeSheet();
-      else Animated.spring(y, { toValue: 0, ...SPRING.settle }).start();
+      if (from.current + g.dy > 120 || g.vy > 0.8) { fling.current = Math.max(0, g.vy * 1000); closeSheet(); }
+      else if (reduce) y.setValue(0);
+      else Animated.spring(y, { toValue: 0, ...SPRING.settle, velocity: g.vy * 1000 }).start();
     },
     onPanResponderTerminate: () => Animated.spring(y, { toValue: 0, ...SPRING.settle }).start(),
-  }).panHandlers, []);
+  }).panHandlers, [reduce]);
 
   if (!mounted) return null;
   const thread = threads.find(t => t.id === activeId) ?? null;
