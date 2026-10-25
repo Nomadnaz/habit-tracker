@@ -1,4 +1,4 @@
-// TODAY's sheets: how the twin got each target (a ledger of base + every
+// BODY's sheets: how the twin got each target (a ledger of base + every
 // adjustment), readiness in full, the week ahead, and the goal picker, which
 // re-runs the twin live as you tap so you see what a goal would do first.
 
@@ -10,7 +10,13 @@ import { buildTwin, GOALS, goalWord, hm, PACES, paceWord, type Line, type TwinGo
 import { LEVEL } from '@/lib/coach';
 import type { TodayView } from '@/lib/twin-data';
 import { Sheet } from './bits';
-import type { DeckActions, SheetKind } from './Deck';
+
+export type SheetKind = 'steps' | 'water' | 'fuel' | 'sleep' | 'readiness' | 'week' | 'goal';
+export type DeckActions = {
+  open: (s: SheetKind) => void;
+  go: (path: string, params?: Record<string, string>) => void;
+  addWater: (ml: number) => void;
+};
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 const signed = (n: number, unit = '') => `${n >= 0 ? '+' : '-'}${fmt(Math.abs(n))}${unit}`;

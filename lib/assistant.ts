@@ -137,6 +137,14 @@ export const openFromDot = () => {
   set({ sheet: 'chat', activeId: fresh ? recent!.id : null });
 };
 export const closeSheet = () => set({ sheet: 'closed' });
+/** LOG's inline chat: which thread it shows, without opening the sheet. */
+export const setActive = (id: string | null) => set({ activeId: id });
+/** LOG on open: carry on a conversation from the last half hour, else start fresh. */
+export const resumeRecent = () => {
+  if (state.activeId) return;
+  const recent = [...state.threads].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  if (recent && Date.now() - recent.updatedAt < 30 * 60 * 1000) set({ activeId: recent.id });
+};
 export const newChat = () => set({ sheet: 'chat', activeId: null });
 export const togglePin = (id: string) =>
   persist(sortThreads(state.threads.map(t => (t.id === id ? { ...t, pinned: !t.pinned } : t))));

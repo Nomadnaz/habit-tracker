@@ -15,14 +15,15 @@
 // display — with a faint rim on the edges. The selected muscle is drawn
 // solid and lit, so its real shape reads at a glance. Marked muscles take
 // their category's colour.
-// At the whole figure, today's numbers float either side of it (heart rate
-// and HRV, calories, water, steps), each with a leader line to where it
-// lives on the body — the heart, the stomach, a foot — that follows the
-// figure as it turns.
+// At the whole figure, the day's readouts hang in slots either side of it
+// (lib/body-hud.ts), each with a leader line to the point on the body it's
+// pinned to — the heart, the stomach, a foot — that follows the figure as
+// it turns. In edit mode a tap on the figure reports the point under the
+// finger instead of zooming, and the empty slots show.
 // Rendering is plain WebGL through expo-gl: one shader, one draw per
 // muscle, redrawn only when something changes. React only re-renders for
 // the callout and the readouts' lines.
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, AppState } from 'react-native';
 import Svg, { Polyline, Rect } from 'react-native-svg';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
@@ -30,7 +31,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F, numFace } from '@/lib/theme';
-import { MUSCLES, MUSCLE_INDEX, ZONES, ZONE_BY_ID, decodeBodyMesh, raycast, type Part } from '@/lib/body-mesh';
+import { MUSCLES, MUSCLE_INDEX, ZONES, ZONE_BY_ID, decodeBodyMesh, raycast, raycastHit, type Part } from '@/lib/body-mesh';
+import { ROWS, slotRow, slotSide, type Spot } from '@/lib/body-hud';
 import type { BodyMap, Tone } from '@/lib/body-map';
 
 export const TONE: Record<Tone, string> = { hot: C.hot, signal: C.signal, live: C.live, dim: C.dim, alert: C.alert };
@@ -110,25 +112,42 @@ const ZONE_VIEW: Record<string, ZoneView> = Object.fromEntries(ZONES.map(z => {
 
 // ── readouts ─────────────────────────────────────────────────────────────
 
-export type HudId = 'hr' | 'hrv' | 'kcal' | 'water' | 'steps';
-/** A readout's progress to its goal, drawn as a battery that charges up. */
-export type HudFill = { pct: number; tone: string; icon: keyof typeof MaterialCommunityIcons.glyphMap };
-export type HudStat = { id: HudId; label: string; value: string; unit: string; sub: string; fill?: HudFill; onPress?: () => void };
-/** Beats per minute, for the HEART readout's pulse. */
-export type HudPulse = number | null;
+/** A readout hung in a slot beside the figure, its line run to `at`. */
+export type StagePin = Spot & {
+  key: string;
+  slot: number;
+  tone: string;
+  node: ReactNode;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  /** Picked in edit mode. */
+  on?: boolean;
+};
+/** Edit mode: the empty slots show and a tap on the figure reports its point. */
+export type StageEdit = {
+  free: number[];
+  /** The slot picked for the next readout. */
+  slotOn: number | null;
+  /** The point picked for the next readout (or the picked readout's new point). */
+  marker: Spot | null;
+  onSlot: (slot: number) => void;
+  onSpot: (s: Spot & { muscle: string | null }) => void;
+};
 type HudPt = { x: number; y: number; a: number };
 
-// Where each readout floats (which side, how far down the stage) and the
-// point on the body (cm) its line runs to, with the way that point faces —
-// its line fades while it's round the back. Feet show from any side.
 const HUD_W = 70; // until a readout has measured itself
-const HUD_SLOT: Record<HudId, { side: 'l' | 'r'; y: number; at: V3; n: V3 | null }> = {
-  hr: { side: 'r', y: 0.13, at: [6, 128, 11], n: [0.3, 0, 0.95] },
-  hrv: { side: 'r', y: 0.29, at: [6, 128, 11], n: [0.3, 0, 0.95] },
-  kcal: { side: 'l', y: 0.2, at: [-4, 112, 11], n: [0, 0, 1] },
-  water: { side: 'l', y: 0.35, at: [-3, 97, 10], n: [0, 0, 1] },
-  steps: { side: 'l', y: 0.78, at: [-9.5, 5, 8], n: null },
-};
+const SLOT_GAP = 12;
+/** A slot's top edge, as a fraction of the stage. */
+const slotTop = (slot: number) => 0.025 + slotRow(slot) * (0.95 / ROWS);
+/** How much a point faces the camera, 0.3–1 — its line fades round the back.
+ *  Only the turn matters, so the normal is flattened first; feet (no normal)
+ *  and points facing straight up or down always show. */
+function facingOf(R: [V3, V3, V3], n: V3 | null) {
+  if (!n) return 1;
+  const h = Math.hypot(n[0], n[2]);
+  if (h < 0.25) return 1;
+  return 0.3 + 0.7 * clamp01(((R[2][0] * n[0] + R[2][2] * n[2]) / h + 0.15) / 0.5);
+}
 
 interface Props {
   width: number;
@@ -150,9 +169,9 @@ interface Props {
   onFacing: (f: Facing) => void;
   /** True while zoomed in, so the page can stop scrolling under the finger. */
   onZoomed: (zoomed: boolean) => void;
-  /** Today's numbers around the whole figure; hidden while zoomed or framing a zone. */
-  hud: HudStat[];
-  pulse: HudPulse;
+  /** The readouts round the whole figure; hidden while zoomed or framing a zone. */
+  pins: StagePin[];
+  edit: StageEdit | null;
   /** Lens / recovery colours, by muscle id: from ink (t 0) to `tone` (t 1). Wins over goals. */
   paint: Record<string, Paint> | null;
   /** Draw goal categories' colours (off while a lens is showing something else). */
@@ -279,7 +298,7 @@ function setupGL(gl: ExpoWebGLRenderingContext): GLState {
   return { gl, aPos, aNrm, u };
 }
 
-export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed, hud, pulse, paint, showGoals, dimRest }: Props) {
+export function BodyStage({ width: W, height: H, map, facing, zone, selected, filter, active, battery, onPick, onHome, onFacing, onZoomed, pins, edit, paint, showGoals, dimRest }: Props) {
   const cam = useRef<Cam>({ ...HOME });
   const tween = useRef<Tween | null>(null);
   const spin = useRef(0);               // rad/s of momentum
@@ -296,12 +315,12 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   const [zoomed, setZoomed] = useState(false);
   const facingRef = useRef<Facing>(facing);
   const zoomedRef = useRef(false);
-  const hudSet = useRef<((p: Record<HudId, HudPt>) => void) | null>(null);
-  const hudLast = useRef<Record<HudId, HudPt> | null>(null);
+  const hudSet = useRef<((p: Record<string, HudPt>) => void) | null>(null);
+  const hudLast = useRef<Record<string, HudPt> | null>(null);
 
   // Latest props for the gesture callbacks (they're built once).
-  const props = useRef({ onPick, onFacing, onZoomed });
-  props.current = { onPick, onFacing, onZoomed };
+  const props = useRef({ onPick, onFacing, onZoomed, pins, edit });
+  props.current = { onPick, onFacing, onZoomed, pins, edit };
 
   const base = (H * 0.94) / FIG_H; // px per cm at 1×
   const selPart: Part | undefined = selected ? MESH.byMuscle[MUSCLE_INDEX[selected]] : undefined;
@@ -457,22 +476,28 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
 
   // Colours / size changed → redraw once.
   useEffect(() => { draw(); placeHud(); if (glowing) kick(); }, [look, W, H]);
+  // A readout moved or re-pointed, or a point picked → re-place the lines.
+  const pinSig = pins.map(p => `${p.key}@${p.slot}:${p.at.join(',')}`).join('|') + (edit?.marker ? `|m:${edit.marker.at.join(',')}` : '');
+  useEffect(() => { placeHud(); }, [pinSig]);
 
   // Moves the readouts' lines to where their points now are on screen —
   // only when one has moved, so a still figure re-renders nothing.
   const placeHud = () => {
     if (!hudSet.current) return;
     const R = rotation(cam.current.yaw);
-    const next = {} as Record<HudId, HudPt>;
+    const next: Record<string, HudPt> = {};
     let moved = !hudLast.current;
-    for (const id of Object.keys(HUD_SLOT) as HudId[]) {
-      const { at, n } = HUD_SLOT[id];
+    const { pins: ps, edit: ed } = props.current;
+    const spots: [string, Spot][] = ps.map(p => [p.key, p]);
+    if (ed?.marker) spots.push(['marker', ed.marker]);
+    for (const [key, { at, n }] of spots) {
       const p = project(at);
-      const a = n ? 0.3 + 0.7 * clamp01((dot3(R[2], n) + 0.15) / 0.5) : 1;
-      next[id] = { x: p.x, y: p.y, a };
-      const was = hudLast.current?.[id];
-      if (was && (Math.abs(was.x - p.x) > 0.5 || Math.abs(was.y - p.y) > 0.5 || Math.abs(was.a - a) > 0.02)) moved = true;
+      const a = facingOf(R, n);
+      next[key] = { x: p.x, y: p.y, a };
+      const was = hudLast.current?.[key];
+      if (!was || Math.abs(was.x - p.x) > 0.5 || Math.abs(was.y - p.y) > 0.5 || Math.abs(was.a - a) > 0.02) moved = true;
     }
+    if (hudLast.current && Object.keys(hudLast.current).length !== spots.length) moved = true;
     if (!moved) return;
     hudLast.current = next;
     hudSet.current(next);
@@ -503,6 +528,9 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     const z = c.zoom > 1.02;
     if (z !== zoomedRef.current) { zoomedRef.current = z; setZoomed(z); props.current.onZoomed(z); }
   };
+
+  // Arranging the readouts: face front at the whole figure, so points are easy to tap.
+  useEffect(() => { if (edit) fly({ ...HOME }, 600); }, [!!edit]);
 
   // FRONT / BACK from the header turns the figure.
   useEffect(() => {
@@ -575,6 +603,16 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   };
   const pickRef = useRef(pick);
   pickRef.current = pick;
+  // Edit mode: the exact point under the finger, scenery (head, feet) included.
+  const spotAt = (x: number, y: number) => {
+    const { o, d } = rayAt(x, y);
+    const hit = raycastHit(MESH, o, d);
+    if (!hit) return null;
+    const r1 = (v: V3) => v.map(q => Math.round(q * 10) / 10) as V3;
+    return { at: r1(hit.at), n: r1(hit.n), muscle: hit.part.mi >= 0 ? MUSCLES[hit.part.mi].id : null };
+  };
+  const spotRef = useRef(spotAt);
+  spotRef.current = spotAt;
 
   // ── gestures ───────────────────────────────────────────────────────────
   const gesture = useMemo(() => {
@@ -649,6 +687,12 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
       .maxDistance(10)
       .onEnd((e, ok) => {
         if (!ok) return;
+        const ed = props.current.edit;
+        if (ed) {
+          const hit = spotRef.current(e.x, e.y);
+          if (hit) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); ed.onSpot(hit); }
+          return;
+        }
         const id = pickRef.current(e.x, e.y);
         if (id) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); hint.current = id; }
         props.current.onPick(id);
@@ -730,8 +774,8 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
         </View>
       )}
 
-      {!zone && !zoomed && hud.length > 0 && (
-        <Hud W={W} H={H} stats={hud} pulse={pulse} bind={hudSet} onBind={() => { hudLast.current = null; placeHud(); }} />
+      {!zone && !zoomed && (pins.length > 0 || !!edit) && (
+        <Hud W={W} H={H} pins={pins} edit={edit} bind={hudSet} onBind={() => { hudLast.current = null; placeHud(); }} />
       )}
 
       {zoomed && (
@@ -743,99 +787,84 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   );
 }
 
-/** The readouts, with their leader lines. Lines are re-placed by the stage
+/** The readouts in their slots with their leader lines, and in edit mode
+ *  the empty slots and the picked point. Lines are re-placed by the stage
  *  through `bind` as the figure turns, without re-rendering the stage. */
-function Hud({ W, H, stats, pulse, bind, onBind }: {
-  W: number; H: number; stats: HudStat[]; pulse: HudPulse;
-  bind: MutableRefObject<((p: Record<HudId, HudPt>) => void) | null>; onBind: () => void;
+function Hud({ W, H, pins, edit, bind, onBind }: {
+  W: number; H: number; pins: StagePin[]; edit: StageEdit | null;
+  bind: MutableRefObject<((p: Record<string, HudPt>) => void) | null>; onBind: () => void;
 }) {
-  const [pts, setPts] = useState<Record<HudId, HudPt> | null>(null);
-  const beat = useRef(new Animated.Value(0.25)).current;
-  // Batteries charge up from empty when the readouts appear or a goal's
-  // number changes, like a muscle's callout.
-  const [charge, setCharge] = useState(0);
-  const fills = stats.map(st => st.fill?.pct ?? '').join(',');
-  useEffect(() => {
-    const t0 = Date.now();
-    let f: number | null = null;
-    const tick = () => {
-      const u = clamp01((Date.now() - t0) / (FILL[1] - FILL[0]));
-      setCharge(easeOut(u));
-      f = u < 1 ? requestAnimationFrame(tick) : null;
-    };
-    f = requestAnimationFrame(tick);
-    return () => { if (f != null) cancelAnimationFrame(f); };
-  }, [fills]);
+  const [pts, setPts] = useState<Record<string, HudPt> | null>(null);
   useEffect(() => {
     bind.current = setPts;
     onBind();
     return () => { bind.current = null; };
   }, []);
-  // The heart readout's square beats at the measured rate.
-  useEffect(() => {
-    if (!pulse) { beat.setValue(0.25); return; }
-    const ms = 60_000 / pulse;
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(beat, { toValue: 1, duration: ms * 0.15, useNativeDriver: true }),
-      Animated.timing(beat, { toValue: 0.25, duration: ms * 0.85, useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
 
   // Each line leaves from the readout's inner edge, so it needs its width.
-  const [wide, setWide] = useState<Partial<Record<HudId, number>>>({});
-  const edge = (id: HudId) => {
-    const { side, y } = HUD_SLOT[id];
-    const w = (wide[id] ?? HUD_W) + 6;
-    return { x: side === 'l' ? 12 + w : W - 12 - w, y: y * H + 24, dx: side === 'l' ? 10 : -10 };
+  const [wide, setWide] = useState<Record<string, number>>({});
+  const edge = (p: StagePin) => {
+    const left = slotSide(p.slot) === 'l';
+    const w = (wide[p.key] ?? HUD_W) + 2;
+    return { x: left ? SLOT_GAP + w : W - SLOT_GAP - w, y: slotTop(p.slot) * H + 11, dx: left ? 8 : -8 };
   };
+  const maxW = Math.round(W * 0.3);
+  const m = edit?.marker ? pts?.marker : null;
   return (
     <>
       {pts && (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Svg width={W} height={H}>
-            {stats.map(st => {
-              const p = pts[st.id], e = edge(st.id);
-              const line = `${e.x},${e.y} ${e.x + e.dx},${e.y} ${p.x},${p.y}`;
+            {pins.map(p => {
+              const q = pts[p.key];
+              if (!q) return null;
+              const e = edge(p);
+              const line = `${e.x},${e.y} ${e.x + e.dx},${e.y} ${q.x},${q.y}`;
+              const op = (edit && !p.on ? 0.4 : 0.8) * q.a;
               // A dark casing, so the line still reads across the lit figure.
               return [
-                <Polyline key={`${st.id}-c`} points={line} fill="none" stroke={C.bg} strokeWidth={3} strokeOpacity={0.7 * p.a} />,
-                <Polyline key={st.id} points={line} fill="none" stroke={C.hot} strokeWidth={1} strokeOpacity={0.7 * p.a} />,
+                <Polyline key={`${p.key}-c`} points={line} fill="none" stroke={C.bg} strokeWidth={3} strokeOpacity={0.7 * q.a} />,
+                <Polyline key={p.key} points={line} fill="none" stroke={p.tone} strokeWidth={p.on ? 1.5 : 1} strokeOpacity={op} />,
               ];
             })}
-            {stats.map(st => {
-              const p = pts[st.id];
-              return <Rect key={st.id} x={p.x - 2.5} y={p.y - 2.5} width={5} height={5} fill={C.hot} fillOpacity={p.a} />;
+            {pins.map(p => {
+              const q = pts[p.key];
+              return q ? <Rect key={p.key} x={q.x - 2.5} y={q.y - 2.5} width={5} height={5} fill={p.tone} fillOpacity={q.a} /> : null;
             })}
+            {m && [
+              <Rect key="m" x={m.x - 6} y={m.y - 6} width={12} height={12} fill="none" stroke={C.hot} strokeWidth={1.5} />,
+              <Rect key="m2" x={m.x - 1.5} y={m.y - 1.5} width={3} height={3} fill={C.hot} />,
+              <Polyline key="m3" points={`${m.x - 14},${m.y} ${m.x - 8},${m.y}`} stroke={C.hot} strokeWidth={1} />,
+              <Polyline key="m4" points={`${m.x + 8},${m.y} ${m.x + 14},${m.y}`} stroke={C.hot} strokeWidth={1} />,
+              <Polyline key="m5" points={`${m.x},${m.y - 14} ${m.x},${m.y - 8}`} stroke={C.hot} strokeWidth={1} />,
+              <Polyline key="m6" points={`${m.x},${m.y + 8} ${m.x},${m.y + 14}`} stroke={C.hot} strokeWidth={1} />,
+            ]}
           </Svg>
         </View>
       )}
-      {stats.map(st => {
-        const { side, y } = HUD_SLOT[st.id];
-        const right = side === 'r';
+      {edit?.free.map(slot => {
+        const left = slotSide(slot) === 'l';
+        const on = edit.slotOn === slot;
         return (
-          <Pressable key={st.id} onPress={st.onPress} hitSlop={6}
-            onLayout={e => { const w = Math.round(e.nativeEvent.layout.width); setWide(o => (o[st.id] === w ? o : { ...o, [st.id]: w })); }}
-            style={[styles.hud, { top: y * H }, right ? { right: 12, alignItems: 'flex-end' } : { left: 12 }]}>
-            <View style={styles.hudHead}>
-              {st.id === 'hr' && <Animated.View style={[styles.hudBeat, { opacity: beat }]} />}
-              <Text style={styles.hudLabel}>{st.label}</Text>
-            </View>
-            <View style={styles.hudRow}>
-              <Text style={[styles.hudValue, numFace(st.value, 22)]} numberOfLines={1}>{st.value}</Text>
-              {!!st.unit && <Text style={styles.hudUnit}>{st.unit}</Text>}
-            </View>
-            <View style={styles.hudRow}>
-              <Text style={styles.hudSub} numberOfLines={1}>{st.sub}</Text>
-              {st.fill && <Text style={[numFace('%', 8), { color: st.fill.tone }]}>{`${Math.round(st.fill.pct * charge)}%`}</Text>}
-            </View>
-            {st.fill && (
-              <View style={styles.hudFill}>
-                <MaterialCommunityIcons name={st.fill.icon} size={12} color={st.fill.tone} />
-                <Battery pct={Math.round(st.fill.pct * charge)} tone={st.fill.tone} cells={8} cellW={5} cellH={8} showPct={false} />
-              </View>
-            )}
+          <Pressable key={`free${slot}`} onPress={() => edit.onSlot(slot)} hitSlop={4} accessibilityLabel={`Empty slot ${slot + 1}`}
+            style={[styles.ghost, { top: slotTop(slot) * H }, left ? { left: SLOT_GAP } : { right: SLOT_GAP }, on && styles.ghostOn]}>
+            <Text style={[styles.ghostPlus, on && { color: C.onHot }]}>+</Text>
+            <Text style={[styles.ghostText, on && { color: C.onHot }]}>{`SLOT ${String(slot + 1).padStart(2, '0')}`}</Text>
+          </Pressable>
+        );
+      })}
+      {pins.map(p => {
+        const left = slotSide(p.slot) === 'l';
+        return (
+          <Pressable key={p.key} onPress={p.onPress} onLongPress={p.onLongPress} delayLongPress={380} hitSlop={6}
+            onLayout={e => { const w = Math.round(e.nativeEvent.layout.width); setWide(o => (o[p.key] === w ? o : { ...o, [p.key]: w })); }}
+            style={[
+              styles.hud, { top: slotTop(p.slot) * H, maxWidth: maxW },
+              left ? { left: SLOT_GAP } : { right: SLOT_GAP, alignItems: 'flex-end' },
+              edit && { borderColor: p.on ? p.tone : `${p.tone}55`, borderStyle: p.on ? 'solid' : 'dashed' },
+              p.on && { backgroundColor: `${p.tone}1A` },
+            ]}>
+            {p.node}
           </Pressable>
         );
       })}
@@ -875,15 +904,14 @@ const styles = StyleSheet.create({
   batteryBody: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 2, borderWidth: 1, borderColor: C.lineHi, borderRadius: 3 },
   batteryNub: { width: 2, backgroundColor: C.lineHi, marginLeft: 1, borderTopRightRadius: 1, borderBottomRightRadius: 1 },
   batteryPct: { marginLeft: 7 },
-  hud: { position: 'absolute', maxWidth: 124 },
-  hudHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  hudBeat: { width: 5, height: 5, backgroundColor: C.alert },
-  hudLabel: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5 },
-  hudRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 2 },
-  hudValue: { color: C.hot },
-  hudUnit: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1 },
-  hudSub: { fontFamily: F.dot, fontSize: 7, color: C.faint, letterSpacing: 1, marginTop: 2 },
-  hudFill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  hud: { position: 'absolute', padding: 4, borderWidth: 1, borderColor: 'transparent', borderRadius: 8 },
+  ghost: {
+    position: 'absolute', width: 74, height: 46, borderWidth: 1, borderStyle: 'dashed', borderColor: C.lineHi, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center', gap: 2,
+  },
+  ghostOn: { backgroundColor: C.hot, borderColor: C.hot, borderStyle: 'solid' },
+  ghostPlus: { fontFamily: F.dot, fontSize: 14, color: C.dim },
+  ghostText: { fontFamily: F.dot, fontSize: 7, color: C.faint, letterSpacing: 1.5 },
   reset: {
     position: 'absolute', right: 12, bottom: 12, width: 40, height: 40, borderRadius: 20,
     borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center',

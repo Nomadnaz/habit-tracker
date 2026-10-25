@@ -36,7 +36,8 @@ type SearchResult = { id: string; type: ResultType; title: string; subtitle?: st
 
 const PAGES: { title: string; route: string }[] = [
   { title: 'Habits', route: '/(tabs)/habits' },
-  { title: 'Body', route: '/(tabs)/body' },
+  { title: 'Body', route: '/(tabs)' },
+  { title: 'Log', route: '/(tabs)/log' },
   { title: 'Train', route: '/(tabs)/gym' },
   { title: 'Activity', route: '/(tabs)/activity' },
   { title: 'Goals', route: '/modals/goals' },

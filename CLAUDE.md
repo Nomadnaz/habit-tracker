@@ -114,7 +114,7 @@ See `system-model.md` for the full picture (data layer / intelligence layer / su
 
 **Fonts** — loaded in `app/_layout.tsx`. `F.dot` = Puck Dot (`assets/fonts/PuckDot-Heavy.ttf`): London Underground Heavy (SIL OFL, `assets/fonts/LondonUnderground-OFL.txt`) with `. · / % × + !` added in its own dot grid by `scripts/fonts/puck-dot.py` and renamed as the OFL's Reserved Font Name requires. Titles, labels, board rows and every number (72.5 KG, 3/5, 75%) — one face, so values never swap font. Still no `?`, so prose stays mono. Doto was dropped 2026-10-18: its full stop is a plus of dots (84.1 read 84+1). `numFace(value, size)` remains as the value style. `F.mono` = Share Tech Mono for sentences. Do NOT ship Nothing's Ndot (the puck's font): its embedded licence restricts it to Nothing brand materials. Pixeloid is kept only for `components/ReceiptPrinter.tsx`.
 
-**Navigation** — custom tab bar (`components/PuckTabBar.tsx`): TODAY · BODY · [PUCK dot] · TRAIN · LIFE. Tap the dot = chat (`components/assistant/`), hold = voice log/ask (expo-audio → `transcribe` → `ai-chat`, auto actions executed locally). HABITS, ACTIVITY and PROGRESS stay registered as hidden tabs, reached from LIFE and TRAIN.
+**Navigation** — custom tab bar (`components/PuckTabBar.tsx`): LOG · BODY · [PUCK dot] · TRAIN · LIFE; BODY is the `index` route the app opens on. Tap the dot = chat (`components/assistant/`), hold = voice log/ask (expo-audio → `transcribe` → `ai-chat`, auto actions executed locally). HABITS, ACTIVITY and PROGRESS stay registered as hidden tabs, reached from LIFE and TRAIN.
 
 **Path alias** — `@/` resolves to the repo root (configured in `tsconfig.json`).
 

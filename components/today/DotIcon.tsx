@@ -1,46 +1,105 @@
-// Tiny pixel glyphs for the TODAY deck's module headers, drawn in the puck's
-// square dots: a drop, a footprint, a jerry can, a moon, a heart and a bolt.
-// Static and small — a colour-coded mark beside the module's name, not a gauge.
+// Pixel glyphs for BODY's readouts, one per module, drawn in the puck's
+// square dots on a 7×7 grid: a foot, a drop, a flame, a moon, a battery, a
+// dumbbell, a flexed arm, a calendar, a target, a list, a heart, a
+// kettlebell, a bolt, four squares and a face. Static, in the module's
+// colour; `dot` scales them (1.4 ≈ 12 px in a readout, 2.6 in the picker).
 
 import { View } from 'react-native';
+import type { HudModule } from '@/lib/body-hud';
 
-const ART = {
-  drop: [
+const ART: Record<HudModule, readonly string[]> = {
+  steps: [
+    '..#.#.#',
+    '.......',
+    '..####.',
+    '.#####.',
+    '.####..',
+    '..###..',
+    '..##...',
+  ],
+  water: [
     '...#...',
     '..###..',
+    '..###..',
     '.#####.',
-    '##.####',
-    '##.####',
+    '.#.###.',
     '.#####.',
     '..###..',
   ],
-  foot: [
-    '#.#.##.',
+  fuel: [
+    '...#...',
+    '...##..',
+    '..###..',
+    '.#####.',
+    '.##.##.',
+    '.#...#.',
+    '..###..',
+  ],
+  sleep: [
+    '..###..',
+    '.##..#.',
+    '##.....',
+    '##.....',
+    '##....#',
+    '.##..##',
+    '..####.',
+  ],
+  readiness: [
     '.......',
-    '.#####.',
-    '.#####.',
-    '..####.',
-    '..###..',
-    '..###..',
+    '######.',
+    '###..##',
+    '###..##',
+    '###..##',
+    '######.',
+    '.......',
   ],
-  can: [
-    '.##....',
+  train: [
+    '.......',
+    '##...##',
+    '##...##',
     '#######',
-    '##.#.##',
-    '###.###',
-    '##.#.##',
+    '##...##',
+    '##...##',
+    '.......',
+  ],
+  muscles: [
+    '...##..',
+    '..#..#.',
+    '.##..#.',
+    '##...#.',
+    '#....##',
+    '#.....#',
+    '.######',
+  ],
+  week: [
+    '.#...#.',
+    '#######',
+    '#.....#',
+    '#.#.#.#',
+    '#.....#',
+    '#.#.#.#',
     '#######',
   ],
-  moon: [
-    '..####.',
-    '.##....',
-    '##.....',
-    '##.....',
-    '##.....',
-    '.##....',
-    '..####.',
+  goal: [
+    '.#####.',
+    '#.....#',
+    '#.###.#',
+    '#.###.#',
+    '#.###.#',
+    '#.....#',
+    '.#####.',
+  ],
+  log: [
+    '#.#####',
+    '.......',
+    '#.####.',
+    '.......',
+    '#.#####',
+    '.......',
+    '#.###..',
   ],
   heart: [
+    '.......',
     '.##.##.',
     '#######',
     '#######',
@@ -48,20 +107,45 @@ const ART = {
     '..###..',
     '...#...',
   ],
-  bolt: [
-    '...###.',
+  weight: [
     '..###..',
-    '.###...',
+    '.#...#.',
+    '.#...#.',
+    '.#####.',
     '#######',
-    '...###.',
-    '..###..',
+    '#######',
+    '.#####.',
+  ],
+  active: [
+    '....##.',
+    '...##..',
+    '..##...',
+    '.#####.',
+    '...##..',
+    '..##...',
     '.##....',
   ],
-} as const;
+  macros: [
+    '###.###',
+    '###.###',
+    '###.###',
+    '.......',
+    '###.###',
+    '###.###',
+    '###.###',
+  ],
+  mood: [
+    '.#####.',
+    '#.....#',
+    '#.#.#.#',
+    '#.....#',
+    '#.#.#.#',
+    '#..#..#',
+    '.#####.',
+  ],
+};
 
-export type DotIconKind = keyof typeof ART;
-
-export function DotIcon({ kind, tone, dot = 1.4, gap = 0.34 }: { kind: DotIconKind; tone: string; dot?: number; gap?: number }) {
+export function DotIcon({ kind, tone, dot = 1.4, gap = 0.34 }: { kind: HudModule; tone: string; dot?: number; gap?: number }) {
   return (
     <View style={{ gap }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {ART[kind].map((row, r) => (

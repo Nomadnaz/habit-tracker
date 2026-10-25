@@ -11,8 +11,8 @@ import { openFromDot, useAssistant } from '@/lib/assistant';
 import { useHoldToTalk } from '@/components/assistant/useHoldToTalk';
 
 export const TAB_ORDER: { name: string; label: string }[] = [
-  { name: 'index', label: 'TODAY' },
-  { name: 'body',  label: 'BODY'  },
+  { name: 'log',   label: 'LOG'   },
+  { name: 'index', label: 'BODY'  },
   { name: 'gym',   label: 'TRAIN' },
   { name: 'life',  label: 'LIFE'  },
 ];

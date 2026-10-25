@@ -204,7 +204,15 @@ function frame(p: Pick<Part, 'mi' | 'vStart' | 'vCount' | 'iStart' | 'iCount' | 
 /** Nearest part hit by the ray o + t·d (t > 0), or null. Scenery counts —
  *  a hand in front of a thigh hides it — so check `mi` before picking. */
 export function raycast(mesh: BodyMesh, o: V3, d: V3): Part | null {
+  return raycastHit(mesh, o, d)?.part ?? null;
+}
+
+/** The nearest triangle under a ray: its part, the point (cm) and the
+ *  triangle's normal turned to face the ray's origin. */
+export type Hit = { part: Part; at: V3; n: V3 };
+export function raycastHit(mesh: BodyMesh, o: V3, d: V3): Hit | null {
   let best: Part | null = null, bestT = Infinity;
+  let bn: V3 = [0, 0, 1];
   const { pos, idx } = mesh;
   for (const p of [...mesh.parts, ...mesh.decor]) {
     if (!rayBox(o, d, p.lo, p.hi, bestT)) continue;
@@ -224,10 +232,17 @@ export function raycast(mesh: BodyMesh, o: V3, d: V3): Part | null {
       const w = (d[0] * qx + d[1] * qy + d[2] * qz) * inv;
       if (w < 0 || u + w > 1) continue;
       const tt = (e2x * qx + e2y * qy + e2z * qz) * inv;
-      if (tt > 0 && tt < bestT) { bestT = tt; best = p; }
+      if (tt > 0 && tt < bestT) {
+        bestT = tt; best = p;
+        bn = [e1y * e2z - e1z * e2y, e1z * e2x - e1x * e2z, e1x * e2y - e1y * e2x];
+      }
     }
   }
-  return best;
+  if (!best) return null;
+  const len = Math.hypot(bn[0], bn[1], bn[2]) || 1;
+  const toward = bn[0] * d[0] + bn[1] * d[1] + bn[2] * d[2] > 0 ? -1 : 1;
+  const n = bn.map(v => (v / len) * toward) as V3;
+  return { part: best, at: [o[0] + d[0] * bestT, o[1] + d[1] * bestT, o[2] + d[2] * bestT], n };
 }
 
 function rayBox(o: V3, d: V3, lo: V3, hi: V3, maxT: number) {

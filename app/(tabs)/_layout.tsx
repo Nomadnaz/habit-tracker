@@ -1,4 +1,5 @@
-// Bottom tabs: TODAY · BODY · [PUCK] · TRAIN · LIFE, drawn by PuckTabBar.
+// Bottom tabs: LOG · BODY · [PUCK] · TRAIN · LIFE, drawn by PuckTabBar.
+// BODY is `index`, so the app opens on it.
 // habits/activity/progress stay registered (reachable via router.push —
 // habits and progress from LIFE, activity from TRAIN) but have no bar slot:
 // the custom bar only draws TAB_ORDER.
@@ -13,8 +14,8 @@ export default function TabsLayout() {
       backBehavior="history"
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg } }}
     >
+      <Tabs.Screen name="log" />
       <Tabs.Screen name="index" />
-      <Tabs.Screen name="body" />
       <Tabs.Screen name="gym" />
       <Tabs.Screen name="life" />
       <Tabs.Screen name="habits" options={{ href: null }} />

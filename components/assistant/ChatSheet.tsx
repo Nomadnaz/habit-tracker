@@ -132,7 +132,7 @@ function Conversation({ thread, busy }: { thread: Thread | null; busy: boolean }
   );
 }
 
-function Empty() {
+export function Empty() {
   return (
     <View style={styles.empty}>
       <View style={{ marginBottom: 28 }}><PuckMark size={54} lit={4} /></View>
@@ -144,7 +144,7 @@ function Empty() {
   );
 }
 
-function Thinking() {
+export function Thinking() {
   const a = useRef(new Animated.Value(0.2)).current;
   useEffect(() => {
     const l = Animated.loop(Animated.sequence([
@@ -157,7 +157,7 @@ function Thinking() {
   return <Animated.View style={[styles.thinking, { opacity: a }]} />;
 }
 
-function Bubble({ msg, threadId }: { msg: Msg; threadId: string }) {
+export function Bubble({ msg, threadId }: { msg: Msg; threadId: string }) {
   const a = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.spring(a, { toValue: 1, ...SPRING.pop }).start(); }, []);
   const mine = msg.role === 'user';

@@ -40,8 +40,8 @@ export const C = {
   scrim:    'rgba(0,0,0,0.72)',
 };
 
-/** TODAY deck only (components/today/Deck.tsx): each module's own colour —
- *  its header word, glyph, border tint and meter — so the board reads at a
+/** BODY's readouts only (components/body/Readouts.tsx): each module's own
+ *  colour — its word, glyph, line and meter — so the figure reads at a
  *  glance. The macros get one each. */
 export const MOD = {
   steps:     '#74F25B',
@@ -58,6 +58,7 @@ export const MOD = {
   weight:    '#E8C9A0',
   active:    '#FFD23F',
   macros:    '#FF5C9A',
+  mood:      '#F7A8FF',
   protein:   '#74F25B',
   carbs:     '#FFB23F',
   fat:       '#FFE066',
