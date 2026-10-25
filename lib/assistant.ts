@@ -51,6 +51,8 @@ export type Phase = 'idle' | 'rec' | 'transcribe' | 'think' | 'done' | 'fail';
 
 interface State {
   threads: Thread[];
+  /** Saved chats have been read from storage (until then, an empty list isn't "no chats"). */
+  ready: boolean;
   activeId: string | null;
   sheet: 'closed' | 'chat' | 'list';
   phase: Phase;
@@ -60,7 +62,7 @@ interface State {
 }
 
 let state: State = {
-  threads: [], activeId: null, sheet: 'closed',
+  threads: [], ready: false, activeId: null, sheet: 'closed',
   phase: 'idle', transcript: '', reply: null, busy: false,
 };
 const listeners = new Set<() => void>();
@@ -88,6 +90,7 @@ export async function loadThreads() {
     const raw = await AsyncStorage.getItem(THREADS_KEY);
     if (raw) set({ threads: JSON.parse(raw) });
   } catch { /* first run / corrupt → start empty */ }
+  set({ ready: true });
 }
 
 function persist(threads: Thread[]) {

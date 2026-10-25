@@ -13,6 +13,7 @@ import { getRecentActivities, formatDuration, formatPace, formatDistance, type A
 
 import { C, F } from '@/lib/theme';
 import { ScreenHeader } from '@/components/ScreenHeader';
+import { Bone, BoneText, Loading, useLate } from '@/components/Skeleton';
 const BOLD = F.mono;
 const REG = F.mono;
 
@@ -26,7 +27,9 @@ function formatActivityDate(iso: string): string {
 
 export default function ActivityHistoryScreen() {
   const router = useRouter();
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<Activity[] | null>(null); // null until first read
+  // Hundreds of saved routes can take a moment: bones after 300 ms, never a false "no activities".
+  const late = useLate(activities === null);
 
   useFocusEffect(useCallback(() => {
     getRecentActivities(500).then(setActivities); // no practical limit for a history browse
@@ -37,24 +40,39 @@ export default function ActivityHistoryScreen() {
       <ScreenHeader title="HISTORY" />
 
       <ScrollView contentContainerStyle={s.content}>
-        {activities.length === 0 && <Text style={s.empty}>No activities logged yet.</Text>}
-        {activities.map(a => (
-          <TouchableOpacity
-            key={a.id}
-            style={s.row}
-            activeOpacity={0.85}
-            onPress={() => router.push({ pathname: '/activity-summary', params: { id: a.id } })}
-          >
-            <MaterialCommunityIcons name={ICONS[a.type] as any} size={22} color={C.hot} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.rowTitle}>{a.type.toUpperCase()} · {formatDistance(a.distanceM)}</Text>
-              <Text style={s.rowSub}>{formatActivityDate(a.startTime)} · {formatDuration(a.durationSecs)} · {formatPace(a.avgPacePerKm)}</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
-          </TouchableOpacity>
+        {activities === null && late && <Loading style={{ gap: 8 }}>{[0, 1, 2, 3, 4, 5].map(i => <Row key={i} />)}</Loading>}
+        {activities?.length === 0 && <Text style={s.empty}>No activities logged yet.</Text>}
+        {activities?.map(a => (
+          <Row key={a.id} a={a} onPress={() => router.push({ pathname: '/activity-summary', params: { id: a.id } })} />
         ))}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** One activity, or with no `a` its skeleton: the same row with bones for its text. */
+function Row({ a, onPress }: { a?: Activity; onPress?: () => void }) {
+  if (!a) {
+    return (
+      <View style={s.row}>
+        <Bone w={22} h={22} round />
+        <View style={{ flex: 1 }}>
+          <BoneText style={s.rowTitle} w="45%" />
+          <BoneText style={s.rowSub} w="75%" />
+        </View>
+        <Bone w={18} h={18} />
+      </View>
+    );
+  }
+  return (
+    <TouchableOpacity style={s.row} activeOpacity={0.85} onPress={onPress}>
+      <MaterialCommunityIcons name={ICONS[a.type] as any} size={22} color={C.hot} />
+      <View style={{ flex: 1 }}>
+        <Text style={s.rowTitle}>{a.type.toUpperCase()} · {formatDistance(a.distanceM)}</Text>
+        <Text style={s.rowSub}>{formatActivityDate(a.startTime)} · {formatDuration(a.durationSecs)} · {formatPace(a.avgPacePerKm)}</Text>
+      </View>
+      <MaterialCommunityIcons name="chevron-right" size={18} color={C.dim} />
+    </TouchableOpacity>
   );
 }
 

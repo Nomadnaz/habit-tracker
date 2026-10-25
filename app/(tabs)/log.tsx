@@ -29,7 +29,8 @@ import { Bubble, Empty, Thinking } from '@/components/assistant/ChatSheet';
 import { DotIcon } from '@/components/today/DotIcon';
 import { onWrite } from '@/lib/postWrite';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
-import { buildFeed, type FeedDay } from '@/lib/log-feed';
+import { buildFeed, type FeedDay, type FeedItem } from '@/lib/log-feed';
+import { Bone, BoneText, Loading, useLate } from '@/components/Skeleton';
 import { getMealMap } from '@/lib/meals-data';
 import { getTrainingSessions } from '@/lib/workout-data';
 import { loadBodyData } from '@/lib/body-data';
@@ -57,13 +58,13 @@ async function readFeed(): Promise<FeedDay[]> {
 }
 
 export default function LogScreen() {
-  const { threads: all, activeId, busy } = useAssistant();
+  const { threads: all, ready, activeId, busy } = useAssistant();
   // A chat waiting on UNDO is gone everywhere already.
   const gone = usePendingRemovals();
   const threads = all.filter(t => !gone.has(t.id));
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tab, setTab] = useState<View3>('talk');
-  const [feed, setFeed] = useState<FeedDay[]>([]);
+  const [feed, setFeed] = useState<FeedDay[] | null>(null); // null until first read
   const [signals, setSignals] = useState<TodayView['twin']['log']>([]);
   // BODY's TWIN LOG readout opens straight on LOGS.
   useEffect(() => { if (params.tab === 'logs' || params.tab === 'chats' || params.tab === 'talk') setTab(params.tab); }, [params.tab]);
@@ -82,7 +83,7 @@ export default function LogScreen() {
   }, [refreshFeed]));
 
   const n = new Date();
-  const todayCount = feed[0]?.word === 'TODAY' ? feed[0].items.length : 0;
+  const todayCount = feed?.[0]?.word === 'TODAY' ? feed[0].items.length : 0;
   const tabs: { id: View3; word: string; count?: number }[] = [
     { id: 'talk', word: 'TALK' },
     { id: 'chats', word: 'CHATS', count: threads.length },
@@ -117,7 +118,7 @@ export default function LogScreen() {
       </View>
 
       {tab === 'talk' && <Talk thread={thread} busy={busy} />}
-      {tab === 'chats' && <Chats threads={threads} activeId={activeId} onOpen={id => { setActive(id); setTab('talk'); }} />}
+      {tab === 'chats' && <Chats threads={threads} ready={ready} activeId={activeId} onOpen={id => { setActive(id); setTab('talk'); }} />}
       {tab === 'logs' && <Logs feed={feed} signals={signals} />}
     </SafeAreaView>
   );
@@ -178,40 +179,21 @@ function Talk({ thread, busy }: { thread: Thread | null; busy: boolean }) {
 
 // ── saved chats ──────────────────────────────────────────────────────────
 
-function Chats({ threads, activeId, onOpen }: { threads: Thread[]; activeId: string | null; onOpen: (id: string) => void }) {
+function Chats({ threads, ready, activeId, onOpen }: { threads: Thread[]; ready: boolean; activeId: string | null; onOpen: (id: string) => void }) {
+  // Until the chats are read, nothing for 300 ms, then rows of bones, never a false "no chats".
+  const late = useLate(!ready);
+  if (!ready) {
+    return late ? (
+      <Loading>
+        <BoneText style={st.section} w={120} />
+        {[0, 1, 2, 3, 4].map(i => <ChatRow key={i} index={i} />)}
+      </Loading>
+    ) : null;
+  }
   if (!threads.length) return <Text style={st.blank}>NO CHATS YET · HOLD THE SQUARE ON TALK AND SAY SOMETHING</Text>;
   const pinned = threads.filter(t => t.pinned);
   const rest = threads.filter(t => !t.pinned);
-  const row = (t: Thread, i: number) => {
-    const last = t.messages[t.messages.length - 1];
-    const logs = t.messages.filter(m => m.logged).length;
-    const when = new Date(t.updatedAt);
-    return (
-      <Pressable
-        key={t.id}
-        onPress={() => { Haptics.selectionAsync(); onOpen(t.id); }}
-        onLongPress={() => Alert.alert(t.title, undefined, [
-          { text: t.pinned ? 'Unpin' : 'Pin', onPress: () => togglePin(t.id) },
-          { text: 'Delete', style: 'destructive', onPress: () => removeWithUndo({ key: t.id, label: 'CHAT DELETED', commit: () => deleteThread(t.id) }) },
-          { text: 'Cancel', style: 'cancel' },
-        ])}
-        style={({ pressed }) => [st.row, i === 0 && { borderTopWidth: 0 }, pressed && { backgroundColor: C.surface }]}
-      >
-        <Text style={[st.rowIdx, t.id === activeId && { color: C.live }]}>{String(i + 1).padStart(2, '0')}</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={st.rowTitle} numberOfLines={1}>{t.title}</Text>
-          <Text style={st.rowSub} numberOfLines={1}>{last?.text ?? ''}</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <Text style={st.rowStamp}>{`${String(when.getDate()).padStart(2, '0')} ${MONTHS[when.getMonth()]}`}</Text>
-          {logs > 0 && <Text style={st.rowLogs}>{`${logs} LOGGED`}</Text>}
-        </View>
-        <Pressable onPress={() => togglePin(t.id)} hitSlop={10} accessibilityLabel={t.pinned ? 'Unpin' : 'Pin'}>
-          <MaterialCommunityIcons name={t.pinned ? 'pin' : 'pin-outline'} size={16} color={t.pinned ? C.hot : C.faint} />
-        </Pressable>
-      </Pressable>
-    );
-  };
+  const row = (t: Thread, i: number) => <ChatRow key={t.id} t={t} index={i} active={t.id === activeId} onOpen={onOpen} />;
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
       {pinned.length > 0 && <Text style={st.section}>PINNED</Text>}
@@ -222,9 +204,64 @@ function Chats({ threads, activeId, onOpen }: { threads: Thread[]; activeId: str
   );
 }
 
+/** One saved chat, or with no `t` its skeleton: the same row with bones for its text. */
+function ChatRow({ t, index, active, onOpen }: { t?: Thread; index: number; active?: boolean; onOpen?: (id: string) => void }) {
+  if (!t) {
+    return (
+      <View style={[st.row, index === 0 && { borderTopWidth: 0 }]}>
+        <BoneText style={st.rowIdx} w={22} />
+        <View style={{ flex: 1 }}>
+          <BoneText style={st.rowTitle} w="55%" />
+          <BoneText style={st.rowSub} w="85%" />
+        </View>
+        <BoneText style={st.rowStamp} w={44} />
+        <Bone w={16} h={16} />
+      </View>
+    );
+  }
+  const i = index;
+  const last = t.messages[t.messages.length - 1];
+  const logs = t.messages.filter(m => m.logged).length;
+  const when = new Date(t.updatedAt);
+  return (
+    <Pressable
+      onPress={() => { Haptics.selectionAsync(); onOpen?.(t.id); }}
+      onLongPress={() => Alert.alert(t.title, undefined, [
+        { text: t.pinned ? 'Unpin' : 'Pin', onPress: () => togglePin(t.id) },
+        { text: 'Delete', style: 'destructive', onPress: () => removeWithUndo({ key: t.id, label: 'CHAT DELETED', commit: () => deleteThread(t.id) }) },
+        { text: 'Cancel', style: 'cancel' },
+      ])}
+      style={({ pressed }) => [st.row, i === 0 && { borderTopWidth: 0 }, pressed && { backgroundColor: C.surface }]}
+    >
+      <Text style={[st.rowIdx, active && { color: C.live }]}>{String(i + 1).padStart(2, '0')}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={st.rowTitle} numberOfLines={1}>{t.title}</Text>
+        <Text style={st.rowSub} numberOfLines={1}>{last?.text ?? ''}</Text>
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+        <Text style={st.rowStamp}>{`${String(when.getDate()).padStart(2, '0')} ${MONTHS[when.getMonth()]}`}</Text>
+        {logs > 0 && <Text style={st.rowLogs}>{`${logs} LOGGED`}</Text>}
+      </View>
+      <Pressable onPress={() => togglePin(t.id)} hitSlop={10} accessibilityLabel={t.pinned ? 'Unpin' : 'Pin'}>
+        <MaterialCommunityIcons name={t.pinned ? 'pin' : 'pin-outline'} size={16} color={t.pinned ? C.hot : C.faint} />
+      </Pressable>
+    </Pressable>
+  );
+}
+
 // ── logs ─────────────────────────────────────────────────────────────────
 
-function Logs({ feed, signals }: { feed: FeedDay[]; signals: TodayView['twin']['log'] }) {
+function Logs({ feed, signals }: { feed: FeedDay[] | null; signals: TodayView['twin']['log'] }) {
+  // First read: nothing for 300 ms, then a day of bones, never a false "nothing logged".
+  const late = useLate(feed === null);
+  if (feed === null) {
+    return late ? (
+      <Loading>
+        <View style={st.dayHead}><BoneText style={st.section} w={110} /></View>
+        {[0, 1, 2, 3, 4, 5].map(i => <Entry key={i} first={i === 0} />)}
+      </Loading>
+    ) : null;
+  }
   if (!feed.length && !signals.length) return <Text style={st.blank}>NOTHING LOGGED THIS WEEK YET</Text>;
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
@@ -248,20 +285,27 @@ function Logs({ feed, signals }: { feed: FeedDay[]; signals: TodayView['twin']['
             <Text style={st.section}>{day.word}</Text>
             <Text style={st.dayCount}>{`${day.items.length} ${day.items.length === 1 ? 'ENTRY' : 'ENTRIES'}`}</Text>
           </View>
-          {day.items.map((it, i) => (
-            <View key={it.key} style={[st.entry, i === 0 && { borderTopWidth: 0 }]}>
-              <Text style={st.time}>{hhmm(it.at)}</Text>
-              <DotIcon kind={it.kind} tone={MOD[it.kind]} dot={1.8} gap={0.45} />
-              <View style={{ flex: 1 }}>
-                <Text style={st.entryText} numberOfLines={1}>{it.text}</Text>
-                {!!it.via && <Text style={[st.via, { color: MOD[it.kind] }]}>{it.via}</Text>}
-              </View>
-              <Text style={[st.entryValue, numFace(it.value, 13)]} numberOfLines={1}>{it.value}</Text>
-            </View>
-          ))}
+          {day.items.map((it, i) => <Entry key={it.key} it={it} first={i === 0} />)}
         </View>
       ))}
     </ScrollView>
+  );
+}
+
+/** One logged thing, or with no `it` its skeleton: the same row with bones for its text. */
+function Entry({ it, first }: { it?: FeedItem; first: boolean }) {
+  return (
+    <View style={[st.entry, first && { borderTopWidth: 0 }]}>
+      {it ? <Text style={st.time}>{hhmm(it.at)}</Text> : <BoneText style={st.time} w={38} />}
+      {it ? <DotIcon kind={it.kind} tone={MOD[it.kind]} dot={1.8} gap={0.45} /> : <Bone w={15.3} h={15.3} />}
+      <View style={{ flex: 1 }}>
+        {it ? <Text style={st.entryText} numberOfLines={1}>{it.text}</Text> : <BoneText style={st.entryText} w="70%" />}
+        {!!it?.via && <Text style={[st.via, { color: MOD[it.kind] }]}>{it.via}</Text>}
+      </View>
+      {it
+        ? <Text style={[st.entryValue, numFace(it.value, 13)]} numberOfLines={1}>{it.value}</Text>
+        : <BoneText style={[st.entryValue, numFace('0', 13)]} w={34} />}
+    </View>
   );
 }
 
