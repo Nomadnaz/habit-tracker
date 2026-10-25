@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Pressable, Image, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ import {
 } from '@/lib/meals-data';
 
 import { C, F } from '@/lib/theme';
+import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 import { Corners } from '@/components/Corners';
 
@@ -63,6 +64,7 @@ export default function CalorieScreen() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [recent, setRecent] = useState<Meal[]>([]);
+  const gone = usePendingRemovals();
 
   const refresh = useCallback(async () => {
     // Show local first so the screen is instant and works offline, exactly as
@@ -83,7 +85,9 @@ export default function CalorieScreen() {
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
-  const totals = dailyTotals(meals);
+  // A meal waiting on UNDO is already out of the list and the totals.
+  const shown = meals.filter(m => !gone.has(m.id));
+  const totals = dailyTotals(shown);
   const calGoal = targets?.calories ?? 2000;
 
   async function quickAdd(m: Meal) {
@@ -95,11 +99,9 @@ export default function CalorieScreen() {
     refresh();
   }
 
-  function confirmDelete(m: Meal) {
-    Alert.alert('Delete meal?', m.name, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteMeal(dk, m.id); refresh(); } },
-    ]);
+  function remove(m: Meal) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    removeWithUndo({ key: m.id, label: `${m.name.toUpperCase()} DELETED`, commit: () => deleteMeal(dk, m.id), after: refresh });
   }
 
   function openEdit(m: Meal) {
@@ -181,9 +183,9 @@ export default function CalorieScreen() {
         )}
 
         <Text style={styles.sectionLabel}>LOG</Text>
-        {meals.length === 0 && <Text style={styles.empty}>Nothing logged yet today. Scan a barcode, snap a photo or add it by hand.</Text>}
+        {shown.length === 0 && <Text style={styles.empty}>Nothing logged yet today. Scan a barcode, snap a photo or add it by hand.</Text>}
         {MEAL_TYPES.map(type => {
-          const group = meals.filter(m => m.mealType === type);
+          const group = shown.filter(m => m.mealType === type);
           if (group.length === 0) return null;
           const groupKcal = group.reduce((sum, m) => sum + m.calories, 0);
           return (
@@ -206,7 +208,7 @@ export default function CalorieScreen() {
                     </Text>
                   </View>
                   <Text style={styles.mealKcal}>{fmt(m.calories)}</Text>
-                  <TouchableOpacity onPress={() => confirmDelete(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <TouchableOpacity onPress={() => remove(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel={`Delete ${m.name}`}>
                     <MaterialCommunityIcons name="close" size={16} color={C.faint} />
                   </TouchableOpacity>
                 </Pressable>

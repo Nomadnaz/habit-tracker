@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { C, F } from '@/lib/theme';
 import { Board, BoardRow } from '@/components/Board';
 import { toDateKey } from '@/lib/dateKey';
+import { usePendingRemovals } from '@/lib/undo';
 import {
   getActiveHabits, getLogsForHabit, pullRemoteHabitLogs, toggleToday, isDoneOnDate,
   computeStreakWithFreezes, type Habit, type HabitLog,
@@ -40,6 +41,7 @@ export default function LifeScreen() {
   const router = useRouter();
   const [habits, setHabits] = useState<{ habit: Habit; logs: HabitLog[] }[] | null>(null);
   const [meds, setMeds] = useState<{ med: Medication; logs: MedicationLog[] }[]>([]);
+  const gone = usePendingRemovals();
 
   const refresh = useCallback(async () => {
     const hs = await getActiveHabits();
@@ -55,7 +57,10 @@ export default function LifeScreen() {
   }, [refresh]));
 
   const today = toDateKey(new Date());
-  const doneCount = habits?.filter(h => isDoneOnDate(h.logs, today)).length ?? 0;
+  // Removed on HABITS but still inside its UNDO window.
+  const shown = habits?.filter(h => !gone.has(h.habit.id)) ?? null;
+  const shownMeds = meds.filter(m => !gone.has(m.med.id));
+  const doneCount = shown?.filter(h => isDoneOnDate(h.logs, today)).length ?? 0;
 
   async function tick(habit: Habit) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -80,23 +85,23 @@ export default function LifeScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>
-            {habits && habits.length > 0 ? `${doneCount} OF ${habits.length} HABITS DONE` : 'HABITS AND THE REST'}
+            {shown && shown.length > 0 ? `${doneCount} OF ${shown.length} HABITS DONE` : 'HABITS AND THE REST'}
           </Text>
           <Text style={styles.title}>LIFE</Text>
         </View>
 
-        {habits && (
+        {shown && (
           <Board title="HABITS" right={all}>
-            {habits.length === 0 ? (
+            {shown.length === 0 ? (
               <BoardRow index="+" label="ADD YOUR FIRST HABIT" sub="Tap to set one up" last
                 onPress={() => router.push('/(tabs)/habits')} />
-            ) : habits.map(({ habit, logs }, i) => {
+            ) : shown.map(({ habit, logs }, i) => {
               const done = isDoneOnDate(logs, today);
               const streak = computeStreakWithFreezes(habit, logs).current;
               return (
                 <BoardRow key={habit.id} index={i + 1} label={habit.name.toUpperCase()}
                   sub={streak > 0 ? `${streak} day streak` : habit.frequency === 'weekly' ? 'Weekly' : 'Daily'}
-                  last={i === habits.length - 1}
+                  last={i === shown.length - 1}
                   right={<Check on={done} />}
                   onPress={() => tick(habit)} />
               );
@@ -104,12 +109,12 @@ export default function LifeScreen() {
           </Board>
         )}
 
-        {meds.length > 0 && (
+        {shownMeds.length > 0 && (
           <Board title="MEDS">
-            {meds.map(({ med, logs }, i) => (
+            {shownMeds.map(({ med, logs }, i) => (
               <BoardRow key={med.id} index={i + 1} label={med.name.toUpperCase()}
                 sub={med.type === 'supplement' ? 'Supplement' : 'Medication'}
-                last={i === meds.length - 1}
+                last={i === shownMeds.length - 1}
                 right={<Check on={isDoseTakenOnDate(logs, today)} />}
                 onPress={() => dose(med)} />
             ))}

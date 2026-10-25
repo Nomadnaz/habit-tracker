@@ -10,7 +10,7 @@
 import { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  Modal, Pressable, Alert, KeyboardAvoidingView, Platform,
+  Modal, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -29,6 +29,7 @@ import {
   type Medication, type MedicationLog, type MedType,
 } from '@/lib/medications-data';
 import { toDateKey } from '@/lib/dateKey';
+import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import HeatmapCalendar from '@/components/HeatmapCalendar';
 
 import { C, F } from '@/lib/theme';
@@ -56,6 +57,7 @@ export default function HabitsScreen() {
   const [medName, setMedName] = useState('');
   const [medType, setMedType] = useState<MedType>('medication');
   const [medCourseLength, setMedCourseLength] = useState('');
+  const gone = usePendingRemovals();
 
   const refresh = useCallback(async () => {
     // Habits ticked by the voice device are written server-side; this layer is
@@ -78,11 +80,10 @@ export default function HabitsScreen() {
     refresh();
   }
 
+  // Long-press removes at once; the toast's UNDO brings it back (lib/undo.ts).
   function handleDelete(row: HabitRow) {
-    Alert.alert(row.habit.name, 'Remove this habit?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => { await deleteHabit(row.habit.id); refresh(); } },
-    ]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    removeWithUndo({ key: row.habit.id, label: `${row.habit.name.toUpperCase()} REMOVED`, commit: () => deleteHabit(row.habit.id), after: refresh });
   }
 
   async function save() {
@@ -103,10 +104,8 @@ export default function HabitsScreen() {
   }
 
   function handleDeleteMed(row: MedRow) {
-    Alert.alert(row.med.name, 'Remove this medication?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => { await deleteMedication(row.med.id); refresh(); } },
-    ]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    removeWithUndo({ key: row.med.id, label: `${row.med.name.toUpperCase()} REMOVED`, commit: () => deleteMedication(row.med.id), after: refresh });
   }
 
   async function saveMed() {
@@ -123,6 +122,8 @@ export default function HabitsScreen() {
   }
 
   const today = toDateKey(new Date());
+  const shownRows = rows.filter(r => !gone.has(r.habit.id));
+  const shownMeds = medRows.filter(r => !gone.has(r.med.id));
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -148,10 +149,10 @@ export default function HabitsScreen() {
 
       {section === 'habits' ? (
         <ScrollView contentContainerStyle={styles.list}>
-          {rows.length === 0 && (
+          {shownRows.length === 0 && (
             <Text style={styles.empty}>No habits yet. Tap + to add your first one.</Text>
           )}
-          {rows.map(row => {
+          {shownRows.map(row => {
             const streak = computeStreakWithFreezes(row.habit, row.logs);
             const done = isDoneOnDate(row.logs, today);
             const cells = buildHeatmap(row.habit, row.logs);
@@ -196,10 +197,10 @@ export default function HabitsScreen() {
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
-          {medRows.length === 0 && (
+          {shownMeds.length === 0 && (
             <Text style={styles.empty}>No medications or supplements yet. Tap + to add one.</Text>
           )}
-          {medRows.map(row => {
+          {shownMeds.map(row => {
             const streak = computeMedStreak(row.logs);
             const taken = isDoseTakenOnDate(row.logs, today);
             const cells = buildMedHeatmap(row.med, row.logs);

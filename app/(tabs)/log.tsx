@@ -28,6 +28,7 @@ import { useHoldToTalk } from '@/components/assistant/useHoldToTalk';
 import { Bubble, Empty, Thinking } from '@/components/assistant/ChatSheet';
 import { DotIcon } from '@/components/today/DotIcon';
 import { onWrite } from '@/lib/postWrite';
+import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import { buildFeed, type FeedDay } from '@/lib/log-feed';
 import { getMealMap } from '@/lib/meals-data';
 import { getTrainingSessions } from '@/lib/workout-data';
@@ -56,7 +57,10 @@ async function readFeed(): Promise<FeedDay[]> {
 }
 
 export default function LogScreen() {
-  const { threads, activeId, busy } = useAssistant();
+  const { threads: all, activeId, busy } = useAssistant();
+  // A chat waiting on UNDO is gone everywhere already.
+  const gone = usePendingRemovals();
+  const threads = all.filter(t => !gone.has(t.id));
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tab, setTab] = useState<View3>('talk');
   const [feed, setFeed] = useState<FeedDay[]>([]);
@@ -188,7 +192,7 @@ function Chats({ threads, activeId, onOpen }: { threads: Thread[]; activeId: str
         onPress={() => { Haptics.selectionAsync(); onOpen(t.id); }}
         onLongPress={() => Alert.alert(t.title, undefined, [
           { text: t.pinned ? 'Unpin' : 'Pin', onPress: () => togglePin(t.id) },
-          { text: 'Delete', style: 'destructive', onPress: () => deleteThread(t.id) },
+          { text: 'Delete', style: 'destructive', onPress: () => removeWithUndo({ key: t.id, label: 'CHAT DELETED', commit: () => deleteThread(t.id) }) },
           { text: 'Cancel', style: 'cancel' },
         ])}
         style={({ pressed }) => [st.row, i === 0 && { borderTopWidth: 0 }, pressed && { backgroundColor: C.surface }]}

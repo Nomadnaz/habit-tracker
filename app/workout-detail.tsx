@@ -31,6 +31,8 @@ import { C, F } from '@/lib/theme';
 import { bleBridge } from '@/lib/ble-bridge';
 import { toDateKey } from '@/lib/dateKey';
 import { ScreenHeader, HeaderPill } from '@/components/ScreenHeader';
+import { UndoToast } from '@/components/UndoToast';
+import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 const ORANGE = C.hot;
 const INK    = C.ink;
 const GREEN  = C.live;
@@ -303,6 +305,8 @@ export default function WorkoutDetailScreen() {
   const [template,  setTemplate]  = useState<WorkoutTemplate | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [junctions, setJunctions] = useState<WorkoutExercise[]>([]);
+  // Lifts and PBs removed here are gone at once; the toast's UNDO brings them back.
+  const gone = usePendingRemovals();
   const [done,      setDone]      = useState(false);
 
   // ── Exercise edit + PB modal ─────────────────────────────────────────────
@@ -459,9 +463,10 @@ export default function WorkoutDetailScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }
 
-  async function handleDeletePB(id: string) {
-    await deletePB(id);
-    if (editEx) setPbHistory(await getPBHistory(editEx.id));
+  function handleDeletePB(id: string) {
+    const ex = editEx;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    removeWithUndo({ key: id, label: 'PB DELETED', commit: () => deletePB(id), after: async () => { if (ex) setPbHistory(await getPBHistory(ex.id)); } });
   }
 
   async function openEditAfterAdd(ex: Exercise) {
@@ -499,12 +504,14 @@ export default function WorkoutDetailScreen() {
     load();
   }
 
-  async function handleRemove(junctionId: string) {
-    await removeExerciseFromTemplate(junctionId);
-    load();
+  function handleRemove(jct: WorkoutExercise, name: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    removeWithUndo({ key: jct.id, label: `${name.toUpperCase()} REMOVED`, commit: () => removeExerciseFromTemplate(jct.id), after: load });
   }
 
-  const currentPB = pbHistory.length > 0 ? Math.max(...pbHistory.map(e => e.weightKg)) : null;
+  const listed = exercises.map((ex, i) => ({ ex, jct: junctions[i] })).filter(x => !x.jct || !gone.has(x.jct.id));
+  const pbs = pbHistory.filter(e => !gone.has(e.id));
+  const currentPB = pbs.length > 0 ? Math.max(...pbs.map(e => e.weightKg)) : null;
   const inTemplate = new Set(junctions.map(j => j.exerciseId));
   const filteredExs = allExs.filter(e =>
     !inTemplate.has(e.id) &&
@@ -521,14 +528,13 @@ export default function WorkoutDetailScreen() {
       />
 
       <ScrollView contentContainerStyle={s.scroll}>
-        <Text style={s.countLabel}>{exercises.length} EXERCISES · TAP TO EDIT OR LOG PB</Text>
+        <Text style={s.countLabel}>{listed.length} EXERCISES · TAP TO EDIT OR LOG PB</Text>
 
-        {exercises.length === 0 && (
+        {listed.length === 0 && (
           <Text style={s.empty}>No exercises yet — tap + to add some.</Text>
         )}
 
-        {exercises.map((ex, i) => {
-          const jct = junctions[i];
+        {listed.map(({ ex, jct }, i) => {
           return (
             <View key={ex.id} style={s.exRow}>
               <View style={[s.indexBubble, { backgroundColor: template?.colour ?? C.hot }]}>
@@ -542,8 +548,9 @@ export default function WorkoutDetailScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => handleRemove(jct.id)}
+                onPress={() => handleRemove(jct, ex.name)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel={`Remove ${ex.name}`}
               >
                 <MaterialCommunityIcons name="minus-circle-outline" size={20} color={C.faint} />
               </TouchableOpacity>
@@ -631,9 +638,9 @@ export default function WorkoutDetailScreen() {
 
                 {pbOpen && (
                   <>
-                    {pbHistory.length >= 2 && (
+                    {pbs.length >= 2 && (
                       <View style={s.chartWrap}>
-                        <PBChart entries={pbHistory} />
+                        <PBChart entries={pbs} />
                       </View>
                     )}
 
@@ -651,15 +658,15 @@ export default function WorkoutDetailScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    {pbHistory.length > 0 && (
+                    {pbs.length > 0 && (
                       <View style={s.pbList}>
-                        {[...pbHistory].reverse().map(entry => (
+                        {[...pbs].reverse().map(entry => (
                           <View key={entry.id} style={s.pbRow}>
                             <Text style={s.pbDate}>{entry.date}</Text>
                             <Text style={[s.pbWeight, entry.weightKg === currentPB && s.pbWeightBest]}>
                               {formatWeightWithUnit(entry.weightKg, unitSystem)}{entry.weightKg === currentPB ? ' 🏆' : ''}
                             </Text>
-                            <TouchableOpacity onPress={() => handleDeletePB(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <TouchableOpacity onPress={() => handleDeletePB(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={`Delete PB ${entry.date}`}>
                               <MaterialCommunityIcons name="close" size={14} color={C.faint} />
                             </TouchableOpacity>
                           </View>
@@ -673,6 +680,8 @@ export default function WorkoutDetailScreen() {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
+        {/* A modal covers the root toast, so a PB deleted in here gets its own. */}
+        <UndoToast nested />
       </Modal>
 
       {/* ── Add exercise modal (centred, above keyboard) ───────────────────── */}

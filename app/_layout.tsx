@@ -55,6 +55,7 @@ import { useAppleHealthAutoSync } from '@/lib/apple-health';
 
 // Slide-down banner + buzz when a task arrives live from the device.
 import { RemoteTaskBanner } from '@/components/RemoteTaskBanner';
+import { UndoToast } from '@/components/UndoToast';
 
 // One-time migration of date keys from the old "YYYY-M-D" format to the
 // canonical zero-padded "YYYY-MM-DD" format. Self-guarding — safe to call
@@ -295,6 +296,9 @@ export default function RootLayout() {
       <RemoteTaskBanner />
 
       {session && <AssistantHost />}
+
+      {/* UNDO for deletes (lib/undo.ts), above the chat sheet. */}
+      <UndoToast />
     </GestureHandlerRootView>
   );
 }

@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useRef, useState } from 'react';
-import { Alert, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
+import { LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -21,6 +21,8 @@ import { FOCI, focusOfName } from '@/lib/coach';
 import { loadCoach } from '@/lib/routine';
 import { HeaderIcon, ScreenHeader } from '@/components/ScreenHeader';
 import { C, F } from '@/lib/theme';
+import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
+import { reducedMotion } from '@/lib/use-reduced-motion';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
 const animate = () => LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
@@ -32,6 +34,7 @@ export default function WorkoutDays() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [days, setDays] = useState<Day[]>([]);
+  const gone = usePendingRemovals();
   const [next, setNext] = useState<Focus | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -85,12 +88,14 @@ export default function WorkoutDays() {
     router.push({ pathname: '/workouts', params: { templateId: t.id } });
   };
 
+  // Gone at once; the toast's UNDO brings it back. Its lifts and their history stay either way.
   const remove = (d: Day) => {
-    Alert.alert(`Delete ${d.t.name}?`, 'The day goes; its lifts and their history stay.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { animate(); await archiveTemplate(d.t.id); setOpen(null); await load(); } },
-    ]);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!reducedMotion()) animate();
+    setOpen(null);
+    removeWithUndo({ key: d.t.id, label: `${d.t.name.toUpperCase()} DELETED`, commit: () => archiveTemplate(d.t.id), after: load });
   };
+  const shown = days.filter(d => !gone.has(d.t.id));
 
   const openLifts = (d: Day) => router.push({ pathname: '/workouts', params: { templateId: d.t.id } });
 
@@ -102,7 +107,7 @@ export default function WorkoutDays() {
       />
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 + insets.bottom, gap: 10 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text style={st.eyebrow}>{days.length} DAYS  ·  TAP ONE TO EDIT</Text>
+        <Text style={st.eyebrow}>{shown.length} DAYS  ·  TAP ONE TO EDIT</Text>
 
         {creating && (
           <View style={[st.card, st.cardOn]}>
@@ -126,7 +131,7 @@ export default function WorkoutDays() {
           </View>
         )}
 
-        {days.map((d, i) => {
+        {shown.map((d, i) => {
           const isOpen = open === d.t.id;
           const isNext = d.focus != null && d.focus === next;
           return (

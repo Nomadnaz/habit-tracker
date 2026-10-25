@@ -43,6 +43,8 @@ import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
 import { bleBridge } from '@/lib/ble-bridge';
 import { toDateKey } from '@/lib/dateKey';
 import { C, F } from '@/lib/theme';
+import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
+import { reducedMotion } from '@/lib/use-reduced-motion';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { ExerciseCard } from '@/components/ExerciseCard';
 
@@ -71,7 +73,10 @@ export default function LogWorkout() {
   const [sel, setSel] = useState<Sel | null>(null);
   const [template, setTemplate] = useState<WorkoutTemplate | null>(null);
   const [custom, setCustom] = useState<WorkoutTemplate[]>([]);
-  const [rows, setRows] = useState<Row[]>([]);
+  const [allRows, setRows] = useState<Row[]>([]);
+  // A lift taken off the day is gone at once; the toast's UNDO brings it back.
+  const gone = usePendingRemovals();
+  const rows = useMemo(() => allRows.filter(r => !gone.has(r.jid)), [allRows, gone]);
   const [library, setLibrary] = useState<Exercise[]>([]);
   /** Lifts ticked off today. Saved as today's done entry, the rest as its skip list, which is what recovery reads. */
   const [ticked, setTicked] = useState<Set<string>>(new Set());
@@ -218,12 +223,12 @@ export default function LogWorkout() {
     await add({ name, muscleGroups: [], fit: 0, mine: false });
   }
 
-  async function remove(r: Row) {
+  function remove(r: Row) {
     if (!template) return;
+    const id = template.id;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await removeExerciseFromTemplate(r.jid);
-    animate();
-    await loadTemplate(template.id);
+    if (!reducedMotion()) animate();
+    removeWithUndo({ key: r.jid, label: `${r.ex.name.toUpperCase()} REMOVED`, commit: () => removeExerciseFromTemplate(r.jid), after: () => loadTemplate(id) });
   }
 
   async function swap(r: Row, p: Choice) {

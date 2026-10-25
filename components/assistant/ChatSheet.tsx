@@ -16,11 +16,15 @@ import {
 } from '@/lib/assistant';
 import { useHoldToTalk } from './useHoldToTalk';
 import { PuckMark } from '@/components/PuckMark';
+import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 
 const H = Dimensions.get('window').height;
 
 export function ChatSheet() {
-  const { sheet, threads, activeId, busy } = useAssistant();
+  const { sheet, threads: all, activeId, busy } = useAssistant();
+  // A chat waiting on UNDO is gone everywhere already.
+  const gone = usePendingRemovals();
+  const threads = all.filter(t => !gone.has(t.id));
   const open = sheet !== 'closed';
   const y = useRef(new Animated.Value(H)).current;
   const [mounted, setMounted] = useState(open);
@@ -235,7 +239,7 @@ function ThreadRow({ t, index }: { t: Thread; index: number }) {
       onPress={() => openChat(t.id)}
       onLongPress={() => Alert.alert(t.title, undefined, [
         { text: t.pinned ? 'Unpin' : 'Pin', onPress: () => togglePin(t.id) },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteThread(t.id) },
+        { text: 'Delete', style: 'destructive', onPress: () => removeWithUndo({ key: t.id, label: 'CHAT DELETED', commit: () => deleteThread(t.id) }) },
         { text: 'Cancel', style: 'cancel' },
       ])}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: C.surface }]}
