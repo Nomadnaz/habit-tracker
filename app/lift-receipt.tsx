@@ -26,6 +26,7 @@ import {
 import { RepChart } from '@/components/RepChart';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { C, F } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 import {
   getLiftSession, onLiftSession, setOpenReceipt, updateLiftSession, sessionStats, sessionSpan,
   type LiftSession,
@@ -210,8 +211,10 @@ export default function LiftReceiptScreen() {
                   {session.sets.length > 1 && (
                     <View style={s.setTabs}>
                       {session.sets.map((_, i) => (
-                        <Pressable key={i} onPress={() => setSetIdx(i)} hitSlop={4} style={[s.setTab, i === shownIdx && s.setTabOn]}>
-                          <Text style={[s.setTabText, i === shownIdx && s.setTabTextOn]}>{String(i + 1)}</Text>
+                        <Pressable key={i} onPress={() => setSetIdx(i)} style={s.setCell} accessibilityLabel={`Set ${i + 1}`} accessibilityState={{ selected: i === shownIdx }}>
+                          <View style={[s.setTab, i === shownIdx && s.setTabOn]}>
+                            <Text style={[s.setTabText, i === shownIdx && s.setTabTextOn]}>{String(i + 1)}</Text>
+                          </View>
                         </Pressable>
                       ))}
                     </View>
@@ -332,7 +335,9 @@ const s = StyleSheet.create({
 
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   section: { fontFamily: RECEIPT_BOLD, fontSize: 10, color: RECEIPT_INK, letterSpacing: 1.5 },
-  setTabs: { flexDirection: 'row', gap: 4 },
+  // Each 18 pt box sits in a full-size tap cell; the cells touch and overhang the row, so it doesn't grow.
+  setTabs: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', marginRight: -(TAP - 18) / 2 },
+  setCell: { width: TAP, height: TAP, marginVertical: -(TAP - 18) / 2, alignItems: 'center', justifyContent: 'center' },
   setTab: { minWidth: 18, height: 18, paddingHorizontal: 4, borderWidth: 1, borderColor: RECEIPT_INK, alignItems: 'center', justifyContent: 'center' },
   setTabOn: { backgroundColor: RECEIPT_INK },
   setTabText: { fontFamily: RECEIPT_REG, fontSize: 9, color: RECEIPT_INK },
@@ -354,10 +359,10 @@ const s = StyleSheet.create({
   askTitle: { fontFamily: F.dot, fontSize: 14, color: C.ink, letterSpacing: 1.5 },
   askSub: { fontFamily: F.mono, fontSize: 12, color: C.dim, lineHeight: 17 },
   row: { flexDirection: 'row', gap: 10 },
-  primaryBtn: { backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center' },
+  primaryBtn: { backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 14, alignItems: 'center' },
   primaryBtnText: { fontFamily: F.dot, fontSize: 13, color: C.onHot, letterSpacing: 1 },
-  secondaryBtn: { flex: 1, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.lineHi, paddingVertical: 13, alignItems: 'center' },
+  secondaryBtn: { flex: 1, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.lineHi, minHeight: TAP, justifyContent: 'center', paddingVertical: 13, alignItems: 'center' },
   secondaryBtnText: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
-  textBtn: { alignItems: 'center', paddingVertical: 8 },
+  textBtn: { alignItems: 'center', justifyContent: 'center', minHeight: TAP, paddingVertical: 8 },
   textBtnText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 1.5 },
 });

@@ -12,6 +12,7 @@ import { bleBridge, isDeviceProvisioned, type BridgeState } from '@/lib/ble-brid
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 
 import { C, F } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 /**
  * Pair the Companion HUD for standalone Wi-Fi mode, and manage up to two
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
   },
   btn: {
     backgroundColor: C.hot, borderRadius: 4, borderCurve: 'continuous',
-    paddingVertical: 14, alignItems: 'center', marginTop: 4,
+    minHeight: TAP, justifyContent: 'center', paddingVertical: 14, alignItems: 'center', marginTop: 4,
   },
   btnDisabled: { opacity: 0.4 },
   btnText: { color: C.surface, fontFamily: F.dot, fontSize: 12, letterSpacing: 1 },

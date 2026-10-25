@@ -13,6 +13,7 @@ import { toDateKey, addDaysToKey, fromDateKey } from '@/lib/dateKey';
 import { getMealsForDate, dailyTotals, MEAL_TYPES, type Meal } from '@/lib/meals-data';
 
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const CARD   = C.surface;
 const BOLD = F.mono;
@@ -48,14 +49,15 @@ export default function CalorieHistoryScreen() {
       <ScreenHeader title="MEAL HISTORY" />
 
       <View style={s.dateNav}>
-        <TouchableOpacity onPress={() => setDateKey(k => addDaysToKey(k, -1))} hitSlop={10}>
+        <TouchableOpacity onPress={() => setDateKey(k => addDaysToKey(k, -1))} hitSlop={hit(22)} accessibilityLabel="Previous day">
           <MaterialCommunityIcons name="chevron-left" size={22} color={C.ink} />
         </TouchableOpacity>
         <Text style={s.dateLabel}>{formatDateLabel(dateKey)}</Text>
         <TouchableOpacity
           onPress={() => !isToday && setDateKey(k => addDaysToKey(k, 1))}
-          hitSlop={10}
+          hitSlop={hit(22)}
           disabled={isToday}
+          accessibilityLabel="Next day"
         >
           <MaterialCommunityIcons name="chevron-right" size={22} color={isToday ? C.faint : C.ink} />
         </TouchableOpacity>

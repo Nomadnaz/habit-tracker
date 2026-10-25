@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { skipOnboarding } from '@/lib/onboarding-data';
 
 import { C, F } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 import { PuckMark } from '@/components/PuckMark';
 const ORANGE = C.hot;
 const BOLD = F.mono;
@@ -52,6 +53,6 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 24, paddingBottom: 24, gap: 10 },
   primaryBtn: { backgroundColor: ORANGE, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 16, alignItems: 'center' },
   primaryBtnText: { fontFamily: BOLD, fontSize: 13, color: C.onHot },
-  secondaryBtn: { paddingVertical: 10, alignItems: 'center' },
+  secondaryBtn: { minHeight: TAP, justifyContent: 'center', paddingVertical: 10, alignItems: 'center' },
   secondaryBtnText: { fontFamily: REG, fontSize: 12, color: C.dim },
 });

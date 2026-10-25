@@ -13,6 +13,7 @@ import { bleBridge, type BridgeState } from '@/lib/ble-bridge';
 
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const COMPANION_TYPES = [
   { id: 'habitCoach', label: 'Habit Coach' },
@@ -103,6 +104,7 @@ export default function BleBridgeScreen() {
                 <TouchableOpacity
                   key={c.id}
                   style={[styles.chip, companion === c.id && styles.chipActive]}
+                  hitSlop={hit(80, 40)}
                   onPress={() => {
                     setCompanion(c.id);
                     bleBridge.setCompanionType(c.id);

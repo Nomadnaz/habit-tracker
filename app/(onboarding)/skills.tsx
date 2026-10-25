@@ -12,6 +12,7 @@ import OnboardingShell from '@/components/OnboardingShell';
 import { updateAnswers } from '@/lib/onboarding-data';
 
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 const ORANGE = C.hot;
 const REG = F.mono;
 const BOLD = F.mono;
@@ -37,7 +38,7 @@ export default function Skills() {
         {SKILLS.map(s => {
           const active = selected.includes(s);
           return (
-            <TouchableOpacity key={s} style={[styles.chip, active && styles.chipActive]} onPress={() => toggle(s)}>
+            <TouchableOpacity key={s} style={[styles.chip, active && styles.chipActive]} onPress={() => toggle(s)} hitSlop={hit(60, 40)}>
               <Text style={[styles.chipText, active && styles.chipTextActive]}>{s}</Text>
             </TouchableOpacity>
           );
@@ -49,7 +50,7 @@ export default function Skills() {
 
 const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  chip: { minHeight: 40, justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   chipTextActive: { color: C.surface, fontFamily: BOLD },

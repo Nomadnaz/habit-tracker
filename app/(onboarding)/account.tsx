@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { flushOnboardingIfNeeded, skipOnboarding } from '@/lib/onboarding-data';
 import { AUTH_PAGE, authErrorText, holdCredentials, looksLikeEmail, MIN_PASSWORD, passwordProblem } from '@/lib/auth-links';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 
 export default function Account() {
   const router = useRouter();
@@ -61,7 +62,7 @@ export default function Account() {
       nextDisabled={loading}
       footerNote={
         <Pressable
-          hitSlop={8}
+          hitSlop={hit(240, 15, 8)}
           style={{ alignSelf: 'center', marginBottom: 10 }}
           onPress={async () => { await skipOnboarding(); router.replace('/(auth)/login'); }}
         >

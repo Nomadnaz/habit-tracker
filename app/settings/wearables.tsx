@@ -16,6 +16,7 @@ import { checkWearableData } from '@/lib/apple-health';
 import { getWearable, METRIC_LABEL, setWearable, WEARABLES, wearableById, type Metric, type WearableId, type WearableLink } from '@/lib/wearables';
 import type { Seen } from '@/lib/vitals';
 import { C, F } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 
 const METRICS: Metric[] = ['hrv', 'rhr', 'sleep', 'resp'];
@@ -193,7 +194,7 @@ export default function Wearables() {
                     {`Open the ${w.name.toLowerCase()} app once so it syncs to Apple Health, then connect again.`}
                     {r.others.length ? ` Apple Health has data from: ${r.others.slice(0, 4).join(', ')}.` : ''}
                   </Text>
-                  <Pressable onPress={() => Linking.openURL('x-apple-health://')}>
+                  <Pressable onPress={() => Linking.openURL('x-apple-health://')} hitSlop={hit(160, 12)}>
                     <Text style={st.link}>OPEN THE HEALTH APP ›</Text>
                   </Pressable>
                 </View>
@@ -230,7 +231,7 @@ const st = StyleSheet.create({
   metricLabel: { fontFamily: F.dot, fontSize: 7, color: C.ink, letterSpacing: 1 },
   metricAgo: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1 },
   row: { flexDirection: 'row', gap: 8 },
-  btn: { flex: 1, height: 42, borderRadius: 14, borderCurve: 'continuous', borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
+  btn: { flex: 1, height: TAP, borderRadius: 14, borderCurve: 'continuous', borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
   btnHot: { backgroundColor: C.hot, borderColor: C.hot },
   btnText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 1.5 },
 

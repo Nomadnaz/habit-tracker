@@ -43,6 +43,7 @@ import { useUnitPreference, formatWeightWithUnit } from '@/lib/unit-preference';
 import { bleBridge } from '@/lib/ble-bridge';
 import { toDateKey } from '@/lib/dateKey';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import { reducedMotion } from '@/lib/use-reduced-motion';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -332,7 +333,7 @@ export default function LogWorkout() {
             {FOCI.map(f => {
               const on = sel && 'focus' in sel && sel.focus === f;
               return (
-                <Pressable key={f} onPress={() => (on ? setDayOpen(false) : choose({ focus: f }))} style={[st.focusChip, on && st.focusChipOn]}>
+                <Pressable key={f} onPress={() => (on ? setDayOpen(false) : choose({ focus: f }))} hitSlop={hit(60, 40)} style={[st.focusChip, on && st.focusChipOn]}>
                   {today?.focus === f && <View style={[st.pickDot, on && { backgroundColor: C.onHot }]} />}
                   <Text style={[st.focusText, on && st.focusTextOn]}>{SHORT[f]}</Text>
                 </Pressable>
@@ -341,13 +342,13 @@ export default function LogWorkout() {
             {custom.map(t => {
               const on = sel && 'templateId' in sel && sel.templateId === t.id;
               return (
-                <Pressable key={t.id} onPress={() => (on ? setDayOpen(false) : choose({ templateId: t.id }))} style={[st.focusChip, on && st.focusChipOn]}>
+                <Pressable key={t.id} onPress={() => (on ? setDayOpen(false) : choose({ templateId: t.id }))} hitSlop={hit(60, 40)} style={[st.focusChip, on && st.focusChipOn]}>
                   <Text style={[st.focusText, on && st.focusTextOn]}>{t.name}</Text>
                 </Pressable>
               );
             })}
             {Platform.OS === 'ios' && (
-              <Pressable onPress={newTemplate} style={[st.focusChip, st.focusChipNew]} accessibilityLabel="New workout">
+              <Pressable onPress={newTemplate} hitSlop={hit(38, 40)} style={[st.focusChip, st.focusChipNew]} accessibilityLabel="New workout">
                 <MaterialCommunityIcons name="plus" size={14} color={C.dim} />
               </Pressable>
             )}
@@ -361,7 +362,7 @@ export default function LogWorkout() {
           {today && (
             isPick
               ? <Text style={st.coach}>{`${LEVEL[today.readiness.level].word} ${today.readiness.score} · ${today.reasons[0] ?? LEVEL[today.readiness.level].dose}`}</Text>
-              : <Pressable onPress={() => choose({ focus: today.focus })}>
+              : <Pressable onPress={() => choose({ focus: today.focus })} hitSlop={hit(250, 16)}>
                   <Text style={st.coach}>{`Coach picks ${today.title} today — tap to switch`}</Text>
                 </Pressable>
           )}
@@ -433,14 +434,14 @@ export default function LogWorkout() {
           )}
           {tray.map((p, j) => (
             <Reveal key={p.name} delay={dealing.current ? 160 + rows.length * 90 + j * 35 : 0}>
-              <Pressable onPress={() => add(p)} style={({ pressed }) => [st.trayChip, pressed && { backgroundColor: C.raised }]}>
+              <Pressable onPress={() => add(p)} hitSlop={hit(60, 40)} style={({ pressed }) => [st.trayChip, pressed && { backgroundColor: C.raised }]}>
                 <MaterialCommunityIcons name="plus" size={13} color={p.mine ? C.hot : C.dim} />
                 <Text style={[st.trayText, p.mine && { color: C.hot }]}>{p.name}</Text>
               </Pressable>
             </Reveal>
           ))}
           {!!query.trim() && !tray.some(p => p.name === query.trim().toUpperCase()) && (
-            <Pressable onPress={addCustom} style={[st.trayChip, st.trayChipNew]}>
+            <Pressable onPress={addCustom} hitSlop={hit(60, 40)} style={[st.trayChip, st.trayChipNew]}>
               <MaterialCommunityIcons name="plus" size={13} color={C.onHot} />
               <Text style={[st.trayText, { color: C.onHot }]}>{`ADD ${query.trim().toUpperCase()}`}</Text>
             </Pressable>
@@ -536,7 +537,7 @@ function LiftChip({
           <Text style={st.restText} numberOfLines={1}>
             {`RESTING · ${muscleWord(resting.muscle)} ${resting.pct}%${resting.readyAt ? ` · BACK ${dayWord(resting.readyAt, new Date())}` : ''}`}
           </Text>
-          <Pressable onPress={onForce} hitSlop={6}><Text style={st.force}>TRAIN ANYWAY</Text></Pressable>
+          <Pressable onPress={onForce} hitSlop={hit(80, 10, 6)}><Text style={st.force}>TRAIN ANYWAY</Text></Pressable>
         </View>
       )}
 
@@ -560,7 +561,7 @@ function LiftChip({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.alts}>
           {alternatives.length === 0 && <Text style={st.empty}>Nothing close — add one from the tray.</Text>}
           {alternatives.map(p => (
-            <Pressable key={p.name} onPress={() => onSwap(p)} style={({ pressed }) => [st.alt, pressed && { backgroundColor: C.raised }]}>
+            <Pressable key={p.name} onPress={() => onSwap(p)} hitSlop={hit(100, 30)} style={({ pressed }) => [st.alt, pressed && { backgroundColor: C.raised }]}>
               <MaterialCommunityIcons name="swap-horizontal" size={12} color={C.dim} />
               <Text style={st.altText}>{p.name}</Text>
             </Pressable>
@@ -580,22 +581,22 @@ function LiftChip({
             {onRec
               ? <MaterialCommunityIcons name="check-circle" size={16} color={C.live} />
               : (
-                <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onPatch({ sets: guide.sets, reps: recReps, weightKg: recKg }); }} hitSlop={8} style={({ pressed }) => [st.recBtn, pressed && { transform: [{ scale: 0.92 }] }]}>
+                <Pressable onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onPatch({ sets: guide.sets, reps: recReps, weightKg: recKg }); }} hitSlop={hit(56, 26, 8)} style={({ pressed }) => [st.recBtn, pressed && { transform: [{ scale: 0.92 }] }]}>
                   <Text style={st.recBtnText}>USE</Text>
                 </Pressable>
               )}
           </View>
           <Dropdown label="MORE" summary={puckSent ? 'ON PUCK' : 'PUCK · HOW TO · PB'}>
             <View style={st.actions}>
-              <Pressable onPress={onPuck} style={({ pressed }) => [st.action, st.actionHot, pressed && { opacity: 0.8 }]}>
+              <Pressable onPress={onPuck} hitSlop={hit(90, 38)} style={({ pressed }) => [st.action, st.actionHot, pressed && { opacity: 0.8 }]}>
                 <MaterialCommunityIcons name={puckSent ? 'check' : 'send'} size={14} color={C.onHot} />
                 <Text style={[st.actionText, { color: C.onHot }]}>{puckSent ? 'ON PUCK' : 'SEND TO PUCK'}</Text>
               </Pressable>
-              <Pressable onPress={onHowTo} style={({ pressed }) => [st.action, pressed && { backgroundColor: C.raised }]}>
+              <Pressable onPress={onHowTo} hitSlop={hit(90, 38)} style={({ pressed }) => [st.action, pressed && { backgroundColor: C.raised }]}>
                 <MaterialCommunityIcons name="play" size={14} color={C.ink} />
                 <Text style={st.actionText}>HOW TO</Text>
               </Pressable>
-              <Pressable onPress={onHistory} style={({ pressed }) => [st.action, pressed && { backgroundColor: C.raised }]}>
+              <Pressable onPress={onHistory} hitSlop={hit(90, 38)} style={({ pressed }) => [st.action, pressed && { backgroundColor: C.raised }]}>
                 <MaterialCommunityIcons name="chart-line" size={14} color={C.ink} />
                 <Text style={st.actionText}>PB</Text>
               </Pressable>
@@ -631,8 +632,9 @@ function TickBox({ index, done, onPress }: { index: number; done: boolean; onPre
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  focusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  focusChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  // 40 tall, 8 apart: each chip's slop (hit) reaches 44/48 without touching the next row's.
+  focusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  focusChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   focusChipOn: { backgroundColor: C.hot, borderColor: C.hot },
   focusChipNew: { borderStyle: 'dashed', paddingHorizontal: 12 },
   focusText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.2 },
@@ -694,8 +696,8 @@ const st = StyleSheet.create({
   trayHead: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingRight: 16, marginBottom: 10 },
   search: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, height: 34, borderRadius: 17, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, backgroundColor: C.surface },
   searchInput: { flex: 1, fontFamily: F.mono, fontSize: 12, color: C.ink, paddingVertical: 0 },
-  tray: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16 },
-  trayChip: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 17, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  tray: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16 },
+  trayChip: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 40, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   trayChipNew: { backgroundColor: C.hot, borderColor: C.hot },
   trayText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1 },
 

@@ -20,6 +20,7 @@ import { getRecentActivities, computeSplits, formatDuration, formatPace, type Ac
 import { bests, CHECKPOINTS, cpLabel, fmtElapsed, progressOf, recentClimbs, SUMMIT, weekStart, type Best } from '@/lib/climb';
 import { toDateKey } from '@/lib/dateKey';
 import { C, F, MTN, numFace } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 import { Mountain, type Checkpoint } from '@/components/steps/Mountain';
 import { RouteMap } from '@/components/RouteMap';
@@ -161,7 +162,7 @@ export default function StepsScreen() {
           <Text style={st.section}>RUNS</Text>
           <View style={st.tabs}>
             {(['latest', 'fastest'] as const).map(k => (
-              <Pressable key={k} onPress={() => { Haptics.selectionAsync(); setPick(k); }} style={[st.tab, pick === k && st.tabOn]}>
+              <Pressable key={k} onPress={() => { Haptics.selectionAsync(); setPick(k); }} hitSlop={hit(60, 28)} style={[st.tab, pick === k && st.tabOn]}>
                 <Text style={[st.tabText, pick === k && { color: C.onHot }]}>{k.toUpperCase()}</Text>
               </Pressable>
             ))}

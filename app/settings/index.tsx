@@ -22,6 +22,7 @@ import { exportToObsidian } from '@/lib/obsidianExport';
 import { getWearable, wearableById, type Wearable } from '@/lib/wearables';
 
 import { C, F } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Board, BoardRow } from '@/components/Board';
 const ORANGE = C.hot;
@@ -201,6 +202,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontFamily: BOLD, fontSize: 12, color: C.ink, flex: 1 },
   sub: { fontFamily: REG, fontSize: 12, color: C.dim },
   input: { borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 12, fontFamily: REG, fontSize: 12, color: C.ink },
-  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 10, alignItems: 'center' },
+  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 10, alignItems: 'center' },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

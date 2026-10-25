@@ -28,6 +28,7 @@ import { CoachCard } from '@/components/train/CoachCard';
 import { RoutineCard } from '@/components/train/RoutineCard';
 
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { formatWeightWithUnit } from '@/lib/unit-preference';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -189,7 +190,7 @@ export default function TrainScreen() {
         {/* ── PBs and history (strength detail still on /strength) ── */}
         <View style={styles.strengthHeader}>
           <Text style={styles.sectionLabel}>STRENGTH</Text>
-          <TouchableOpacity onPress={() => router.push('/strength')}>
+          <TouchableOpacity onPress={() => router.push('/strength')} hitSlop={hit(90, 14)}>
             <Text style={styles.viewLinkText}>VIEW DETAILS ›</Text>
           </TouchableOpacity>
         </View>

@@ -8,6 +8,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, F, TNUM } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 
 export type Rest = { id: string; ends: number; total: number };
 
@@ -53,11 +54,11 @@ export function RestTimer({ rest, onAdd, onStop }: { rest: Rest; onAdd: (s: numb
       {!over && <Text style={st.time}>{clock(left)}</Text>}
       <View style={{ flex: 1 }} />
       {!over && (
-        <Pressable onPress={() => { void Haptics.selectionAsync(); onAdd(30); }} hitSlop={6} style={st.btn}>
+        <Pressable onPress={() => { void Haptics.selectionAsync(); onAdd(30); }} hitSlop={hit(44, 26, 4)} style={st.btn} accessibilityLabel="Add 30 seconds">
           <Text style={st.btnText}>+30 S</Text>
         </Pressable>
       )}
-      <Pressable onPress={onStop} hitSlop={8} style={st.btn} accessibilityLabel="Stop timer">
+      <Pressable onPress={onStop} hitSlop={hit(44, 26, 4)} style={st.btn} accessibilityLabel="Stop timer">
         <MaterialCommunityIcons name="close" size={14} color={over ? C.onHot : C.dim} />
       </Pressable>
     </View>

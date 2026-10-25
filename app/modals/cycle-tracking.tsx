@@ -16,6 +16,7 @@ import {
 import { toDateKey } from '@/lib/dateKey';
 
 import { C, F } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const CARD   = C.surface;
@@ -114,7 +115,7 @@ export default function CycleTrackingModal() {
           </View>
         ))}
 
-        <TouchableOpacity onPress={() => setOptedIn(false).then(refresh)} style={{ marginTop: 20 }}>
+        <TouchableOpacity onPress={() => setOptedIn(false).then(refresh)} style={{ marginTop: 20 }} hitSlop={hit(200, 15)}>
           <Text style={styles.turnOff}>Turn off cycle tracking</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
   empty: { fontFamily: REG, fontSize: 12, color: C.dim },
   logRow: { backgroundColor: CARD, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 10 },
   logText: { fontFamily: REG, fontSize: 12, color: C.ink, textTransform: 'capitalize' },
-  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 14, paddingHorizontal: 22, alignItems: 'center' },
+  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 22, alignItems: 'center' },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
   turnOff: { fontFamily: REG, fontSize: 12, color: C.dim, textAlign: 'center', textDecorationLine: 'underline' },
 });

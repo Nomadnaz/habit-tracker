@@ -18,6 +18,7 @@ import { shortDate } from '@/lib/history';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Corners } from '@/components/Corners';
 import { C, F } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
 const animate = () => LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'opacity'));
@@ -168,7 +169,7 @@ const st = StyleSheet.create({
   pastDate: { fontFamily: F.mono, fontSize: 9, color: C.dim, marginTop: 2 },
   entry: { flexDirection: 'row', gap: 8 },
   input: { flex: 1, height: 42, borderWidth: 1, borderColor: C.live, paddingHorizontal: 12, fontFamily: F.dot, fontSize: 16, color: C.ink, backgroundColor: C.bg },
-  save: { height: 42, paddingHorizontal: 18, backgroundColor: C.live, alignItems: 'center', justifyContent: 'center' },
+  save: { height: TAP, paddingHorizontal: 18, backgroundColor: C.live, alignItems: 'center', justifyContent: 'center' },
   saveText: { fontFamily: F.dot, fontSize: 11, letterSpacing: 1.5, color: C.onHot },
   empty: { fontFamily: F.mono, fontSize: 12, color: C.dim, paddingVertical: 10 },
 });

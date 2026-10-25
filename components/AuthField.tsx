@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } fro
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MIN_PASSWORD } from '@/lib/auth-links';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 
 type Props = TextInputProps & { label: string; secret?: boolean; problem?: string | null; ok?: boolean };
 
@@ -32,7 +33,7 @@ export const AuthField = forwardRef<TextInput, Props>(function AuthField({ label
           onBlur={e => { setFocus(false); rest.onBlur?.(e); }}
         />
         {secret && (
-          <Pressable onPress={() => setShown(s => !s)} hitSlop={10} accessibilityLabel={shown ? 'Hide password' : 'Show password'}>
+          <Pressable onPress={() => setShown(s => !s)} hitSlop={hit(18)} accessibilityLabel={shown ? 'Hide password' : 'Show password'}>
             <MaterialCommunityIcons name={shown ? 'eye-off-outline' : 'eye-outline'} size={18} color={C.dim} />
           </Pressable>
         )}

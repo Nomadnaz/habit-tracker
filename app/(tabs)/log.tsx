@@ -21,6 +21,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { C, F, MOD, numFace } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import {
   useAssistant, loadThreads, send, setActive, resumeRecent, togglePin, deleteThread, type Thread,
 } from '@/lib/assistant';
@@ -110,7 +111,7 @@ export default function LogScreen() {
         {tabs.map(x => {
           const on = tab === x.id;
           return (
-            <Pressable key={x.id} onPress={() => { if (!on) { Haptics.selectionAsync(); setTab(x.id); } }} style={[st.tab, on && st.tabOn]}>
+            <Pressable key={x.id} onPress={() => { if (!on) { Haptics.selectionAsync(); setTab(x.id); } }} hitSlop={hit(100, 40)} style={[st.tab, on && st.tabOn]}>
               <Text style={[st.tabText, on && { color: C.onHot }]}>{x.word}</Text>
               {!!x.count && <Text style={[st.tabCount, on && { color: C.onHot }]}>{x.count}</Text>}
             </Pressable>
@@ -243,7 +244,7 @@ function ChatRow({ t, index, active, onOpen }: { t?: Thread; index: number; acti
         <Text style={st.rowStamp}>{`${String(when.getDate()).padStart(2, '0')} ${MONTHS[when.getMonth()]}`}</Text>
         {logs > 0 && <Text style={st.rowLogs}>{`${logs} LOGGED`}</Text>}
       </View>
-      <Pressable onPress={() => togglePin(t.id)} hitSlop={10} accessibilityLabel={t.pinned ? 'Unpin' : 'Pin'}>
+      <Pressable onPress={() => togglePin(t.id)} hitSlop={hit(16)} accessibilityLabel={t.pinned ? 'Unpin' : 'Pin'}>
         <MaterialCommunityIcons name={t.pinned ? 'pin' : 'pin-outline'} size={16} color={t.pinned ? C.hot : C.faint} />
       </Pressable>
     </Pressable>

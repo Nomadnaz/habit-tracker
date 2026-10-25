@@ -7,6 +7,7 @@ import OnboardingShell from '@/components/OnboardingShell';
 import { updateAnswers } from '@/lib/onboarding-data';
 
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 const ORANGE = C.hot;
 const REG = F.mono;
 const BOLD = F.mono;
@@ -38,7 +39,7 @@ export default function Basics() {
       <TextInput style={styles.input} placeholder="Age (optional)" placeholderTextColor={C.dim} value={age} onChangeText={setAge} keyboardType="number-pad" />
       <View style={styles.chipRow}>
         {SEXES.map(s => (
-          <TouchableOpacity key={s} style={[styles.chip, sex === s && styles.chipActive]} onPress={() => setSex(s)}>
+          <TouchableOpacity key={s} style={[styles.chip, sex === s && styles.chipActive]} onPress={() => setSex(s)} hitSlop={hit(60, 40)}>
             <Text style={[styles.chipText, sex === s && styles.chipTextActive]}>{s}</Text>
           </TouchableOpacity>
         ))}
@@ -59,7 +60,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 10 },
   half: { flex: 1 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line },
+  chip: { minHeight: 40, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line },
   chipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   chipTextActive: { color: C.surface, fontFamily: BOLD },

@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { fetchProduct, portionOf, type FoodProduct } from '@/lib/barcode-food';
 import { addMeal, guessMealType, todayKey, MEAL_TYPES, type MealType } from '@/lib/meals-data';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Corners } from '@/components/Corners';
 
@@ -221,7 +222,7 @@ function ProductPanel({ product: p, onAgain, onLogged }: { product: FoodProduct;
           {presets.map(x => {
             const on = qty === x.value;
             return (
-              <Pressable key={x.label} onPress={() => setAmount(String(x.value))} style={[st.chip, on && st.chipOn]}>
+              <Pressable key={x.label} hitSlop={hit(60, 40)} onPress={() => setAmount(String(x.value))} style={[st.chip, on && st.chipOn]}>
                 <Text style={[st.chipText, on && st.chipTextOn]}>{`${x.label} · ${g(x.value)}${p.unit.toUpperCase()}`}</Text>
               </Pressable>
             );
@@ -231,7 +232,7 @@ function ProductPanel({ product: p, onAgain, onLogged }: { product: FoodProduct;
         <Text style={st.label}>MEAL</Text>
         <View style={st.chips}>
           {MEAL_TYPES.map(t => (
-            <Pressable key={t} onPress={() => setMealType(t)} style={[st.chip, st.chipFlex, mealType === t && st.chipOn]}>
+            <Pressable key={t} hitSlop={hit(60, 40)} onPress={() => setMealType(t)} style={[st.chip, st.chipFlex, mealType === t && st.chipOn]}>
               <Text style={[st.chipText, mealType === t && st.chipTextOn]}>{t.toUpperCase()}</Text>
             </Pressable>
           ))}
@@ -285,8 +286,9 @@ const st = StyleSheet.create({
   amountInput: { fontFamily: F.dot, fontSize: 28, color: C.ink, minWidth: 60, textAlign: 'center', padding: 0 },
   amountUnit: { fontFamily: F.dot, fontSize: 13, color: C.dim, letterSpacing: 1 },
 
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  chip: { paddingHorizontal: 12, height: 36, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  // 40 tall, 8 apart, grown to the full target by hit() without the rows' areas overlapping.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  chip: { paddingHorizontal: 12, height: 40, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   chipFlex: { flexGrow: 1 },
   chipOn: { backgroundColor: C.hot, borderColor: C.hot },
   chipText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 1 },

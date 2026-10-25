@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, F, SPRING, numFace } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import {
   useAssistant, closeSheet, openList, openChat, newChat, send, confirmPending,
   togglePin, deleteThread, type Msg, type Thread,
@@ -293,7 +294,7 @@ function ThreadRow({ t, index }: { t: Thread; index: number }) {
         <Text style={styles.rowStamp}>{stamp}</Text>
         {logs > 0 && <Text style={styles.rowLogs}>{logs} LOGGED</Text>}
       </View>
-      <Pressable onPress={() => togglePin(t.id)} hitSlop={10}>
+      <Pressable onPress={() => togglePin(t.id)} hitSlop={hit(16)} accessibilityLabel={t.pinned ? 'Unpin' : 'Pin'}>
         <MaterialCommunityIcons name={t.pinned ? 'pin' : 'pin-outline'} size={16} color={t.pinned ? C.hot : C.faint} />
       </Pressable>
     </Pressable>
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', gap: 20, marginTop: 12 },
   statVal: { fontFamily: F.dot, fontSize: 22, color: C.hot },
   statUnit: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 2 },
-  pending: { marginTop: 10, borderWidth: 1, borderColor: C.hot, borderRadius: 14, borderCurve: 'continuous', padding: 12, gap: 4 },
+  pending: { marginTop: 10, minHeight: TAP, borderWidth: 1, borderColor: C.hot, borderRadius: 14, borderCurve: 'continuous', padding: 12, gap: 4 },
   pendingType: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2 },
   pendingBody: { fontFamily: F.mono, fontSize: 14, color: C.ink },
   pendingCta: { fontFamily: F.dot, fontSize: 11, color: C.hot, letterSpacing: 2, marginTop: 4 },

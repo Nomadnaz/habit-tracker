@@ -12,6 +12,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 
 export type GaugeMode = 'worn' | 'ready';
 
@@ -76,7 +77,7 @@ export function RecoveryThermo({ mode, worn, play, onToggle, style }: {
       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onToggle(); }}
       onPressIn={() => Animated.spring(press, { toValue: 0.9, useNativeDriver: true }).start()}
       onPressOut={() => Animated.spring(press, { toValue: 1, friction: 4, useNativeDriver: true }).start()}
-      hitSlop={10}
+      hitSlop={hit(38, 104, 10)}
       style={style}
       accessibilityRole="switch" accessibilityState={{ checked: ready }} accessibilityLabel={ready ? 'Showing ready muscles' : 'Showing worn muscles'}
     >

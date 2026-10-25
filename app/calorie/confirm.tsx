@@ -23,6 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { addMeal, updateMeal, todayKey, guessMealType, MEAL_TYPES, type Meal, type MealType } from '@/lib/meals-data';
 import { estimateMealFromText } from '@/lib/foodVision';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Corners } from '@/components/Corners';
 
@@ -166,7 +167,7 @@ export default function ConfirmScreen() {
             {!prompt && (
               <View style={st.chips}>
                 {EXAMPLES.map(e => (
-                  <Pressable key={e} style={st.chip} onPress={() => setPrompt(e)}>
+                  <Pressable key={e} hitSlop={hit(60, 40)} style={st.chip} onPress={() => setPrompt(e)}>
                     <Text style={st.chipText}>{e.toUpperCase()}</Text>
                   </Pressable>
                 ))}
@@ -194,7 +195,7 @@ export default function ConfirmScreen() {
                   <MaterialCommunityIcons name="auto-fix" size={14} color={C.food} />
                   <Text style={st.bannerText}>AI ESTIMATE · TAP ANY NUMBER TO ADJUST</Text>
                   {aiFromText && (
-                    <Pressable onPress={() => switchTo('ai')} hitSlop={8}>
+                    <Pressable onPress={() => switchTo('ai')} hitSlop={hit(40, 12, 8)}>
                       <Text style={st.bannerLink}>REDO</Text>
                     </Pressable>
                   )}
@@ -242,7 +243,7 @@ export default function ConfirmScreen() {
               <Text style={st.label}>MEAL</Text>
               <View style={st.chips}>
                 {MEAL_TYPES.map(t => (
-                  <Pressable key={t} onPress={() => setMealType(t)} style={[st.chip, st.chipFlex, mealType === t && st.chipOn]}>
+                  <Pressable key={t} hitSlop={hit(60, 40)} onPress={() => setMealType(t)} style={[st.chip, st.chipFlex, mealType === t && st.chipOn]}>
                     <Text style={[st.chipText, mealType === t && st.chipTextOn]}>{t.toUpperCase()}</Text>
                   </Pressable>
                 ))}
@@ -301,8 +302,9 @@ const st = StyleSheet.create({
   cellInput: { fontFamily: F.dot, fontSize: 34, color: C.ink, padding: 0, marginTop: 6 },
 
   label: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2, marginTop: 20, marginBottom: 0 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  chip: { paddingHorizontal: 12, height: 36, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  // 40 tall, 8 apart, grown to the full target by hit() without the rows' areas overlapping.
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  chip: { paddingHorizontal: 12, height: 40, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   chipFlex: { flexGrow: 1 },
   chipOn: { backgroundColor: C.hot, borderColor: C.hot },
   chipText: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 1 },

@@ -35,6 +35,7 @@ import {
 } from '@/lib/activity-data';
 
 import { C, F } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -447,9 +448,9 @@ const s = StyleSheet.create({
   footText: { fontFamily: RECEIPT_REG, fontSize: 8, color: RECEIPT_FADED, letterSpacing: 1 },
 
   actions: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
-  primaryBtn: { flex: 1.4, backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 13, alignItems: 'center' },
+  primaryBtn: { flex: 1.4, backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 13, alignItems: 'center' },
   primaryBtnText: { fontFamily: F.dot, fontSize: 13, color: C.onHot, letterSpacing: 1 },
-  secondaryBtn: { flex: 1, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, paddingVertical: 13, alignItems: 'center' },
+  secondaryBtn: { flex: 1, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, minHeight: TAP, justifyContent: 'center', paddingVertical: 13, alignItems: 'center' },
   secondaryBtnText: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1 },
   off: { opacity: 0.4 },
   pressed: { transform: [{ scale: 0.97 }], opacity: 0.85 },

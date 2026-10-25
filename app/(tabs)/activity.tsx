@@ -38,6 +38,7 @@ import {
 } from '@/lib/activity-data';
 
 import { C, F, TNUM, numFace } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { RouteMap } from '@/components/RouteMap';
 import { Corners } from '@/components/Corners';
 import { Pixel, Segs } from '@/components/today/bits';
@@ -248,7 +249,7 @@ export default function ActivityScreen() {
           <View style={st.titleRow}>
             <Animated.Text style={[st.title, { opacity: wordIn, transform: [{ translateY: wordIn.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}>{word}</Animated.Text>
             {!recording && !armed && TYPES.filter(t => t.key !== type).map(t => (
-              <Pressable key={t.key} onPress={() => pickType(t.key)} hitSlop={6} style={st.alt} accessibilityLabel={`Switch to ${t.word}`}>
+              <Pressable key={t.key} onPress={() => pickType(t.key)} hitSlop={hit(56, 26, 4)} style={st.alt} accessibilityLabel={`Switch to ${t.word}`}>
                 <Text style={st.altText}>{t.word}</Text>
               </Pressable>
             ))}

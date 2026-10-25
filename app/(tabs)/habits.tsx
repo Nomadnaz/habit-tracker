@@ -33,6 +33,7 @@ import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import HeatmapCalendar from '@/components/HeatmapCalendar';
 
 import { C, F } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 import { Sheet } from '@/components/today/bits';
 import { BALANCE } from '@/lib/text-wrap';
@@ -155,6 +156,7 @@ export default function HabitsScreen() {
             key={s}
             style={[styles.segment, section === s && styles.segmentActive]}
             onPress={() => setSection(s)}
+            hitSlop={hit(100, 40)}
           >
             <Text style={[styles.segmentText, section === s && styles.segmentTextActive]}>
               {s === 'habits' ? 'HABITS' : 'MEDS & SUPPLEMENTS'}
@@ -175,7 +177,7 @@ export default function HabitsScreen() {
             return (
               <View key={row.habit.id} style={styles.card}>
                 <View style={styles.cardTop}>
-                  <TouchableOpacity style={styles.nameWrap} onLongPress={() => handleDelete(row)}>
+                  <TouchableOpacity style={styles.nameWrap} onLongPress={() => handleDelete(row)} hitSlop={hit(200, 34)}>
                     <Text style={styles.habitName}>{row.habit.name}</Text>
                     <Text style={styles.streakText}>
                       {streak.current > 0 ? `${streak.current} day streak` : 'No active streak'}
@@ -185,6 +187,8 @@ export default function HabitsScreen() {
                   <TouchableOpacity
                     style={[styles.completeBtn, done && styles.completeBtnDone]}
                     onPress={() => handleToggle(row)}
+                    hitSlop={hit(40)}
+                    accessibilityLabel={done ? `Untick ${row.habit.name}` : `Tick ${row.habit.name}`}
                   >
                     <MaterialCommunityIcons
                       name={done ? 'check-circle' : 'circle-outline'}
@@ -197,6 +201,7 @@ export default function HabitsScreen() {
                 <TouchableOpacity
                   style={styles.freezeRow}
                   onPress={() => toggleFreeze(row)}
+                  hitSlop={hit(160, 16)}
                 >
                   <MaterialCommunityIcons
                     name={row.habit.autoFreezeEnabled ? 'snowflake' : 'snowflake-off'}
@@ -225,7 +230,7 @@ export default function HabitsScreen() {
             return (
               <View key={row.med.id} style={styles.card}>
                 <View style={styles.cardTop}>
-                  <TouchableOpacity style={styles.nameWrap} onLongPress={() => handleDeleteMed(row)}>
+                  <TouchableOpacity style={styles.nameWrap} onLongPress={() => handleDeleteMed(row)} hitSlop={hit(200, 34)}>
                     <Text style={styles.habitName}>{row.med.name}</Text>
                     <Text style={styles.streakText}>
                       {streak.current > 0 ? `${streak.current} day streak` : 'No active streak'}
@@ -236,6 +241,8 @@ export default function HabitsScreen() {
                   <TouchableOpacity
                     style={[styles.completeBtn, taken && styles.completeBtnDone]}
                     onPress={() => handleToggleDose(row)}
+                    hitSlop={hit(40)}
+                    accessibilityLabel={taken ? `Untick ${row.med.name}` : `Tick ${row.med.name}`}
                   >
                     <MaterialCommunityIcons
                       name={taken ? 'check-circle' : 'circle-outline'}
@@ -268,6 +275,7 @@ export default function HabitsScreen() {
                 key={f}
                 style={[styles.freqChip, frequency === f && styles.freqChipActive]}
                 onPress={() => setFrequency(f)}
+                hitSlop={hit(70, 40)}
               >
                 <Text style={[styles.freqChipText, frequency === f && styles.freqChipTextActive]}>
                   {f.toUpperCase()}
@@ -298,6 +306,7 @@ export default function HabitsScreen() {
                 key={t}
                 style={[styles.freqChip, medType === t && styles.freqChipActive]}
                 onPress={() => setMedType(t)}
+                hitSlop={hit(70, 40)}
               >
                 <Text style={[styles.freqChipText, medType === t && styles.freqChipTextActive]}>
                   {t.toUpperCase()}
@@ -354,13 +363,13 @@ const styles = StyleSheet.create({
   },
   freqRow: { flexDirection: 'row', gap: 8 },
   freqChip: {
-    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line,
+    minHeight: 40, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line,
   },
   freqChipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   freqChipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   freqChipTextActive: { color: C.surface },
   saveBtn: {
-    backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center',
+    backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 14, alignItems: 'center',
   },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

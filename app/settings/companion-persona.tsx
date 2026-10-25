@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { companions, type CompanionType } from '@/lib/companions';
 
 import { C, F } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const BOLD = F.mono;
 const REG = F.mono;
@@ -132,6 +133,6 @@ const styles = StyleSheet.create({
     width: '100%', borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 14,
     fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
-  saveBtn: { width: '100%', backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center' },
+  saveBtn: { width: '100%', backgroundColor: C.hot, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 14, alignItems: 'center' },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
 });

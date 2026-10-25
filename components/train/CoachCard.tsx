@@ -7,6 +7,7 @@ import { Animated, LayoutAnimation, Pressable, StyleSheet, Text, View } from 're
 import Svg, { Circle } from 'react-native-svg';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { LEVEL, type Factor, type Today } from '@/lib/coach';
 
 const tone = (score: number) => (score >= 70 ? C.live : score >= 45 ? C.ink : C.alert);
@@ -104,7 +105,7 @@ export function CoachCard({ today, lifts, resting, onStart, onConnect }: {
       {r.flags.filter(x => !/wearable/.test(x)).map((x, i) => <Text key={i} style={st.flag}>{x}</Text>)}
 
       {onlyLoad && (
-        <Pressable onPress={onConnect} style={({ pressed }) => [st.connect, pressed && { opacity: 0.7 }]}>
+        <Pressable onPress={onConnect} hitSlop={hit(200, 32)} style={({ pressed }) => [st.connect, pressed && { opacity: 0.7 }]}>
           <MaterialCommunityIcons name="watch-variant" size={15} color={C.ink} />
           <Text style={st.connectText}>CONNECT A WEARABLE FOR HRV + SLEEP</Text>
           <MaterialCommunityIcons name="chevron-right" size={16} color={C.dim} />

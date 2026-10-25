@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Linking, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F, SPRING, numFace } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { PulleyChart, PULLEY_CHART_W } from '@/components/PulleyChart';
 import { cableSide } from '@/lib/exercise-demo';
@@ -50,7 +51,7 @@ export function ExerciseCard({ name, role, guide, bodyKg, onClose }: {
               <Text style={st.eyebrow}>{role}</Text>
               <Text style={st.title} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{name.toUpperCase()}</Text>
             </View>
-            <Pressable onPress={close} hitSlop={10}><MaterialCommunityIcons name="close" size={20} color={C.dim} /></Pressable>
+            <Pressable onPress={close} hitSlop={hit(20)} accessibilityLabel="Close"><MaterialCommunityIcons name="close" size={20} color={C.dim} /></Pressable>
           </View>
 
           <View style={[st.demo, pulley != null && st.demoCable, side === 'left' && { flexDirection: 'row-reverse' }]}>
@@ -104,7 +105,7 @@ const st = StyleSheet.create({
   rest: { fontFamily: F.mono, fontSize: 11, color: C.dim, marginTop: 10 },
   note: { fontFamily: F.mono, fontSize: 11, color: C.faint, marginTop: 4, lineHeight: 15 },
   video: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, minHeight: TAP,
     backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 13,
   },
   videoText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 1.5 },

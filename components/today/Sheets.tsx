@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { C, F, numFace } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 import { PRETTY } from '@/lib/text-wrap';
 import { buildTwin, GOALS, goalWord, hm, PACES, paceWord, type Line, type TwinGoal, type TwinInput } from '@/lib/twin';
 import { LEVEL } from '@/lib/coach';
@@ -319,12 +320,12 @@ const st = StyleSheet.create({
   weekNum: { flex: 1, fontFamily: F.mono, fontSize: 10, color: C.ink },
 
   goals: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  goalKey: { width: '48.5%', borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, borderCurve: 'continuous', padding: 12, gap: 3, backgroundColor: C.raised },
+  goalKey: { width: '48.5%', minHeight: TAP, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, borderCurve: 'continuous', padding: 12, gap: 3, backgroundColor: C.raised },
   goalKeyOn: { backgroundColor: C.hot, borderColor: C.hot },
   goalWord: { fontFamily: F.dot, fontSize: 14, color: C.hot, letterSpacing: 1.4 },
   goalLine: { fontFamily: F.mono, fontSize: 10, color: C.dim },
   paces: { flexDirection: 'row', gap: 8 },
-  paceKey: { flex: 1, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, borderCurve: 'continuous', padding: 10, gap: 3, backgroundColor: C.raised },
+  paceKey: { flex: 1, minHeight: TAP, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, borderCurve: 'continuous', padding: 10, gap: 3, backgroundColor: C.raised },
   preview: { marginTop: 14, borderWidth: 1, borderColor: C.line, borderStyle: 'dashed', borderRadius: 14, borderCurve: 'continuous', padding: 12, gap: 5 },
   previewWord: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 2 },
   previewHead: { fontFamily: F.dot, fontSize: 16, color: C.live },
@@ -333,7 +334,7 @@ const st = StyleSheet.create({
   field: { flex: 1, borderWidth: 1, borderColor: C.lineHi, borderRadius: 12, borderCurve: 'continuous', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4, backgroundColor: C.raised },
   fieldWord: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1.2 },
   fieldInput: { fontFamily: F.dot, fontSize: 17, color: C.hot, paddingVertical: 2 },
-  sexKey: { flex: 1, height: 34, borderWidth: 1, borderColor: C.lineHi, borderRadius: 12, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', backgroundColor: C.raised },
+  sexKey: { flex: 1, height: TAP, borderWidth: 1, borderColor: C.lineHi, borderRadius: 12, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', backgroundColor: C.raised },
   setKey: { height: 50, borderRadius: 16, borderCurve: 'continuous', backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
   setText: { fontFamily: F.dot, fontSize: 14, color: C.onHot, letterSpacing: 3 },
 });

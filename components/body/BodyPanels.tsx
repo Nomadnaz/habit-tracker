@@ -10,6 +10,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, F, SPRING, numFace } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { REGION_BY_ID, type BodyMap, type Category, type Tone } from '@/lib/body-map';
 import { Battery, TONE, batteryTone } from '@/components/body/BodyStage';
 import { ZONE_BY_ID, type Zone } from '@/lib/body-mesh';
@@ -70,7 +71,7 @@ export function AssignPanel({ map, zone, regionId, status, battery, batteryOf, o
               <Text style={styles.panelEyebrow}>{region.side ? `${region.group}  ${region.side === 'l' ? 'LEFT' : 'RIGHT'}` : region.group}</Text>
               <Text style={styles.panelTitle}>{region.name}</Text>
             </View>
-            <Pressable onPress={onClose} hitSlop={10} style={{ marginLeft: 10 }}>
+            <Pressable onPress={onClose} hitSlop={hit(20)} style={{ marginLeft: 10 }} accessibilityLabel="Close">
               <MaterialCommunityIcons name="close" size={20} color={C.dim} />
             </Pressable>
           </View>
@@ -145,7 +146,7 @@ function ZoneStrip({ zone, batteryOf, onPick, onClose }: {
           <Text style={styles.panelEyebrow}>{`${zone.muscles.length} MUSCLES · TAP ONE`}</Text>
           <Text style={styles.panelTitle}>{zone.name}</Text>
         </View>
-        <Pressable onPress={onClose} hitSlop={10} style={{ marginLeft: 10 }}>
+        <Pressable onPress={onClose} hitSlop={hit(20)} style={{ marginLeft: 10 }} accessibilityLabel="Close">
           <MaterialCommunityIcons name="close" size={20} color={C.dim} />
         </Pressable>
       </View>
@@ -266,7 +267,7 @@ export function GoSheet({ visible, regionId, status, library, guide, bodyKg, onC
             <Text style={styles.panelEyebrow}>GO</Text>
             <Text style={styles.editorTitle} numberOfLines={1} adjustsFontSizeToFit>{region ? (region.side ? region.name.slice(2) : region.name) : ''}</Text>
           </View>
-          <Pressable onPress={onClose} style={styles.doneBtn}><Text style={styles.doneText}>DONE</Text></Pressable>
+          <Pressable onPress={onClose} style={styles.doneBtn} hitSlop={hit(70, 30)}><Text style={styles.doneText}>DONE</Text></Pressable>
         </View>
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
           <Text style={styles.panelLabel}>{`DONE RECENTLY · ${recent.length}`}</Text>
@@ -324,28 +325,33 @@ export function CategoryEditor({ visible, categories, onChange, onClose }: {
       <View style={styles.editor}>
         <View style={styles.editorHead}>
           <Text style={styles.editorTitle}>CATEGORIES</Text>
-          <Pressable onPress={save} style={styles.doneBtn}><Text style={styles.doneText}>DONE</Text></Pressable>
+          <Pressable onPress={save} style={styles.doneBtn} hitSlop={hit(70, 30)}><Text style={styles.doneText}>DONE</Text></Pressable>
         </View>
         <Text style={styles.editorSub}>Name what you're aiming at. Deleting one clears the regions tagged with it.</Text>
         <ScrollView contentContainerStyle={{ gap: 10, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           {draft.map((c, i) => (
             <View key={c.id} style={styles.editRow}>
-              <TextInput
-                style={styles.editName}
-                value={c.name}
-                autoCapitalize="characters"
-                maxLength={14}
-                onChangeText={name => setDraft(d => d.map((x, j) => (j === i ? { ...x, name } : x)))}
-              />
+              <View style={styles.editTop}>
+                <TextInput
+                  style={styles.editName}
+                  value={c.name}
+                  autoCapitalize="characters"
+                  maxLength={14}
+                  onChangeText={name => setDraft(d => d.map((x, j) => (j === i ? { ...x, name } : x)))}
+                />
+                <Pressable onPress={() => setDraft(d => d.filter((_, j) => j !== i))} hitSlop={hit(18)} accessibilityLabel={`Delete ${c.name}`}>
+                  <MaterialCommunityIcons name="trash-can-outline" size={18} color={C.dim} />
+                </Pressable>
+              </View>
+              {/* Each swatch sits in a full-size tap cell; the cells touch, so none overlaps the next. */}
               <View style={styles.tones}>
                 {TONES.map(t => (
                   <Pressable key={t} onPress={() => setDraft(d => d.map((x, j) => (j === i ? { ...x, tone: t } : x)))}
-                    style={[styles.tone, { backgroundColor: TONE[t] }, c.tone === t && styles.toneOn]} />
+                    style={styles.toneCell} accessibilityLabel={`${t} colour`} accessibilityState={{ selected: c.tone === t }}>
+                    <View style={[styles.tone, { backgroundColor: TONE[t] }, c.tone === t && styles.toneOn]} />
+                  </Pressable>
                 ))}
               </View>
-              <Pressable onPress={() => setDraft(d => d.filter((_, j) => j !== i))} hitSlop={8}>
-                <MaterialCommunityIcons name="trash-can-outline" size={18} color={C.dim} />
-              </Pressable>
             </View>
           ))}
           <Pressable
@@ -410,7 +416,7 @@ const styles = StyleSheet.create({
   actionValue: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actionValueText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.5, flexShrink: 1 },
   dropdown: { marginTop: 8, borderWidth: 1, borderColor: C.lineHi, borderRadius: 14, borderCurve: 'continuous', overflow: 'hidden' },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, minHeight: 42 },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, minHeight: TAP },
   optionRule: { borderTopWidth: 1, borderTopColor: C.line },
   optionText: { flex: 1, fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1.5 },
   goRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line },
@@ -422,9 +428,11 @@ const styles = StyleSheet.create({
   editorSub: { fontFamily: F.mono, fontSize: 12, color: C.dim, marginTop: 8, marginBottom: 18, lineHeight: 18 },
   doneBtn: { backgroundColor: C.hot, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   doneText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
-  editRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.line, borderRadius: 14, borderCurve: 'continuous', padding: 12, backgroundColor: C.surface },
+  editRow: { gap: 4, borderWidth: 1, borderColor: C.line, borderRadius: 14, borderCurve: 'continuous', padding: 12, backgroundColor: C.surface },
   editName: { flex: 1, fontFamily: F.dot, fontSize: 15, color: C.ink, letterSpacing: 1, paddingVertical: 4 },
-  tones: { flexDirection: 'row', gap: 7 },
+  editTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tones: { flexDirection: 'row', marginLeft: -13 },
+  toneCell: { width: TAP, height: TAP, alignItems: 'center', justifyContent: 'center' },
   tone: { width: 18, height: 18, borderRadius: 4, borderCurve: 'continuous', opacity: 0.45 },
   toneOn: { opacity: 1, borderWidth: 2, borderColor: C.ink },
   addCat: { borderWidth: 1, borderStyle: 'dashed', borderColor: C.lineHi, borderRadius: 14, borderCurve: 'continuous', paddingVertical: 16, alignItems: 'center' },

@@ -9,6 +9,7 @@ import { LayoutAnimation, Pressable, ScrollView, StyleSheet, Text, View } from '
 import * as Haptics from 'expo-haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { Corners } from '@/components/Corners';
 import { autoSplit, defaultDays, rotation, SPLIT_NAME, splitOf, WEEK, weekPlan, type Routine, type SplitId } from '@/lib/coach';
 import type { Focus } from '@/lib/workout-data';
@@ -41,7 +42,7 @@ export function RoutineCard({ routine, todayIdx, doneIdx, onChange }: {
       </View>
       <View style={st.counts}>
         {[1, 2, 3, 4, 5, 6, 7].map(k => (
-          <Pressable key={k} onPress={() => { const days = defaultDays(k); set({ ...r, days, cheat: (r.cheat ?? []).filter(d => !days.includes(d)) }); }} style={[st.count, n === k && st.countOn]}>
+          <Pressable key={k} hitSlop={hit(48, 36)} onPress={() => { const days = defaultDays(k); set({ ...r, days, cheat: (r.cheat ?? []).filter(d => !days.includes(d)) }); }} style={[st.count, n === k && st.countOn]}>
             {n === k && <Corners color={C.hot} size={7} />}
             <Text style={[st.countText, n === k && st.countTextOn]}>{k}</Text>
           </Pressable>
@@ -82,7 +83,7 @@ export function RoutineCard({ routine, todayIdx, doneIdx, onChange }: {
           const on = r.split === s;
           const label = s === 'auto' ? `AUTO${n ? ` · ${SPLIT_NAME[autoSplit(n)]}` : ''}` : SPLIT_NAME[s];
           return (
-            <Pressable key={s} onPress={() => set({ ...r, split: s })} style={[st.split, on && st.splitOn]}>
+            <Pressable key={s} onPress={() => set({ ...r, split: s })} hitSlop={hit(80, 34)} style={[st.split, on && st.splitOn]}>
               <Text style={[st.splitText, on && st.splitTextOn]}>{label}</Text>
             </Pressable>
           );

@@ -15,6 +15,7 @@ import { FUEL_GOALS, monthDays, streak, tally, type DayStatus, type FuelKey, typ
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { Corners } from '@/components/Corners';
 import { C, F } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 
 const TONE: Record<DayStatus, string> = { hit: C.live, half: C.food, miss: C.alert, none: C.ghost };
 const WORD: Record<DayStatus, string> = { hit: 'HIT', half: 'HALFWAY', miss: 'MISSED', none: 'NOT LOGGED' };
@@ -114,7 +115,7 @@ export default function FuelGoal() {
               {!editing && <Text style={st.goalVal}>{fmt(goal)}<Text style={st.goalUnit}>{` ${g.unit}`}</Text></Text>}
             </View>
             {!editing && (
-              <Pressable onPress={startEdit} style={({ pressed }) => [st.edit, pressed && { opacity: 0.7 }]} hitSlop={6}>
+              <Pressable onPress={startEdit} style={({ pressed }) => [st.edit, pressed && { opacity: 0.7 }]} hitSlop={hit(100, 34, 6)}>
                 <MaterialCommunityIcons name="pencil" size={14} color={C.onHot} />
                 <Text style={st.editText}>EDIT</Text>
               </Pressable>
@@ -143,9 +144,9 @@ export default function FuelGoal() {
         {/* The month. */}
         <View style={st.card}>
           <View style={st.monthRow}>
-            <Pressable onPress={() => shiftMonth(-1)} hitSlop={10}><MaterialCommunityIcons name="chevron-left" size={22} color={C.ink} /></Pressable>
+            <Pressable onPress={() => shiftMonth(-1)} hitSlop={hit(22)} accessibilityLabel="Previous month"><MaterialCommunityIcons name="chevron-left" size={22} color={C.ink} /></Pressable>
             <Text style={st.month}>{`${MONTHS[month.getMonth()]} ${month.getFullYear()}`}</Text>
-            <Pressable onPress={() => !isThisMonth && shiftMonth(1)} hitSlop={10} disabled={isThisMonth}>
+            <Pressable onPress={() => !isThisMonth && shiftMonth(1)} hitSlop={hit(22)} disabled={isThisMonth} accessibilityLabel="Next month">
               <MaterialCommunityIcons name="chevron-right" size={22} color={isThisMonth ? C.faint : C.ink} />
             </Pressable>
           </View>
@@ -235,7 +236,7 @@ const st = StyleSheet.create({
   input: { flex: 1, minWidth: 0, height: 56, borderRadius: 12, borderCurve: 'continuous', backgroundColor: C.bg, borderWidth: 1, borderColor: C.lineHi, textAlign: 'center', fontFamily: F.dot, fontSize: 32, color: C.hot },
   hint: { fontFamily: F.mono, fontSize: 11, color: C.dim, textAlign: 'center' },
   editRow: { flexDirection: 'row', gap: 8 },
-  btn: { flex: 1, backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', paddingVertical: 14, alignItems: 'center' },
+  btn: { flex: 1, backgroundColor: C.hot, borderRadius: 12, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 14, alignItems: 'center' },
   btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: C.lineHi },
   btnText: { fontFamily: F.dot, fontSize: 12, color: C.onHot, letterSpacing: 2 },
   rule: { fontFamily: F.mono, fontSize: 11, color: C.faint, lineHeight: 16 },

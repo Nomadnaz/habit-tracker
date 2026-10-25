@@ -21,6 +21,7 @@ import { FOCI, focusOfName } from '@/lib/coach';
 import { loadCoach } from '@/lib/routine';
 import { HeaderIcon, ScreenHeader } from '@/components/ScreenHeader';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import { reducedMotion } from '@/lib/use-reduced-motion';
 
@@ -189,7 +190,7 @@ function Action({ label, onPress, hot, danger }: { label: string; onPress: () =>
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={4}
+      hitSlop={hit(60, 40)}
       style={({ pressed }) => [st.action, hot && st.actionHot, danger && { borderColor: C.alert }, pressed && { opacity: 0.7 }]}
     >
       <Text style={[st.actionText, hot && { color: C.onHot }, danger && { color: C.alert }]}>{label}</Text>
@@ -212,7 +213,8 @@ const st = StyleSheet.create({
   input: { fontFamily: F.dot, fontSize: 22, letterSpacing: 1, color: C.ink, paddingVertical: 4, borderBottomWidth: 1, borderColor: C.live },
   lifts: { fontFamily: F.mono, fontSize: 11, letterSpacing: 1, color: C.dim, lineHeight: 17 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  action: { height: 34, paddingHorizontal: 14, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
+  // 40 tall, 8 apart in their wrapping row, grown to the full target by hit().
+  action: { height: 40, paddingHorizontal: 14, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
   actionHot: { backgroundColor: C.live, borderColor: C.live },
   actionText: { fontFamily: F.dot, fontSize: 11, letterSpacing: 1.5, color: C.ink },
 });

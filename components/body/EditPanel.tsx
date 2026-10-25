@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { C, F, MOD } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { MODULES, type HudModule, type Spot } from '@/lib/body-hud';
 import { DotIcon } from '@/components/today/DotIcon';
 import { Revolver, type RevolverItem } from './Revolver';
@@ -42,8 +43,8 @@ export function EditPanel({ draft, pinOn, items, swapItems, onPick, onSwap, onUs
       <View style={st.headRow}>
         <Text style={st.title}>{pinOn ? 'EDIT READOUT' : 'ADD A READOUT'}</Text>
         <View style={{ flex: 1 }} />
-        <Pressable onPress={onReset} hitSlop={8}><Text style={st.link}>RESET</Text></Pressable>
-        <Pressable onPress={onDone} hitSlop={8} style={st.done}><Text style={st.doneText}>DONE</Text></Pressable>
+        <Pressable onPress={onReset} hitSlop={hit(40, 12, 8)}><Text style={st.link}>RESET</Text></Pressable>
+        <Pressable onPress={onDone} hitSlop={hit(56, 26, 8)} style={st.done}><Text style={st.doneText}>DONE</Text></Pressable>
       </View>
     </Pressable>
   );
@@ -59,7 +60,7 @@ export function EditPanel({ draft, pinOn, items, swapItems, onPick, onSwap, onUs
               <DotIcon kind={pinOn} tone={tone} dot={2.4} gap={0.6} />
               <Text style={[st.pickedWord, { color: tone }]}>{MODULES[pinOn].word}</Text>
               <View style={{ flex: 1 }} />
-              <Pressable onPress={onDeselect} hitSlop={8}><Text style={st.link}>CANCEL</Text></Pressable>
+              <Pressable onPress={onDeselect} hitSlop={hit(46, 12, 8)}><Text style={st.link}>CANCEL</Text></Pressable>
             </View>
             <Text style={st.hint}>Tap the body to move its line. Tap an empty slot to move it there, or another readout to swap the two.</Text>
             {changing && (
@@ -108,7 +109,7 @@ export function EditPanel({ draft, pinOn, items, swapItems, onPick, onSwap, onUs
           <View style={st.nextRow}>
             <Text style={[st.hint, { flex: 1 }]}>{next}</Text>
             {draft.id && !draft.spot && (
-              <Pressable onPress={onUseHome} hitSlop={6} style={st.home}><Text style={st.homeText}>USUAL SPOT</Text></Pressable>
+              <Pressable onPress={onUseHome} hitSlop={hit(80, 22, 6)} style={st.home}><Text style={st.homeText}>USUAL SPOT</Text></Pressable>
             )}
           </View>
           {items.length > 0
@@ -146,7 +147,7 @@ const st = StyleSheet.create({
   picked: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 4 },
   pickedWord: { fontFamily: F.dot, fontSize: 18, letterSpacing: 1.5 },
   buttons: { flexDirection: 'row', gap: 8 },
-  btn: { flex: 1, borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, minHeight: 42, alignItems: 'center', justifyContent: 'center' },
+  btn: { flex: 1, borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, minHeight: TAP, alignItems: 'center', justifyContent: 'center' },
   btnOn: { backgroundColor: C.hot, borderColor: C.hot },
   btnAlert: { borderColor: C.alert },
   btnText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 2 },

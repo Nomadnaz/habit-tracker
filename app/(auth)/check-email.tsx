@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { AUTH_PAGE, authErrorText, dropCredentials, heldCredentials } from '@/lib/auth-links';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 
 const COOLDOWN = 60;
 
@@ -113,7 +114,7 @@ export default function CheckEmail() {
         </View>
         <Pressable
           onPress={() => { dropCredentials(); router.replace({ pathname: '/(auth)/login', params: { mode: signup ? 'signup' : 'forgot' } }); }}
-          hitSlop={8}
+          hitSlop={hit(200, 14, 8)}
         >
           <Text style={st.fine}>Wrong email? Start again</Text>
         </Pressable>

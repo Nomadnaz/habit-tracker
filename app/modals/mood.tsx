@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { getRecentMoodLogs, getTodayMood, logMood, pullRemoteMood, TRIGGERS, type MoodLog } from '@/lib/mood-data';
 
 import { C, F } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const CARD   = C.surface;
@@ -70,7 +71,7 @@ export default function MoodModal() {
           <Text style={styles.label}>TRIGGERS</Text>
           <View style={styles.chipRow}>
             {TRIGGERS.map(t => (
-              <TouchableOpacity key={t} style={[styles.chip, triggers.includes(t) && styles.chipActive]} onPress={() => toggleTrigger(t)}>
+              <TouchableOpacity key={t} style={[styles.chip, triggers.includes(t) && styles.chipActive]} onPress={() => toggleTrigger(t)} hitSlop={hit(80, 40)}>
                 <Text style={[styles.chipText, triggers.includes(t) && styles.chipTextActive]}>{t}</Text>
               </TouchableOpacity>
             ))}
@@ -101,7 +102,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: CARD, borderRadius: 16, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 },
   label: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 2, marginTop: 4 },
   scaleRow: { flexDirection: 'row', gap: 4 },
-  scaleDot: { flex: 1, height: 40, borderRadius: 8, borderCurve: 'continuous', backgroundColor: C.line },
+  // Ten across can't each be 44 wide on a phone; they're full height and only 4 apart.
+  scaleDot: { flex: 1, height: TAP, borderRadius: 8, borderCurve: 'continuous', backgroundColor: C.line },
   scaleDotActive: { backgroundColor: ORANGE },
   scaleDotStress: { backgroundColor: C.alert },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

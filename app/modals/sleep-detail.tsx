@@ -21,6 +21,7 @@ import { toDateKey } from '@/lib/dateKey';
 import { loadBodyData } from '@/lib/body-data';
 
 import { C, F } from '@/lib/theme';
+import { TAP } from '@/lib/hit';
 import { ScreenHeader } from '@/components/ScreenHeader';
 const ORANGE = C.hot;
 const GREEN  = C.live;
@@ -214,15 +215,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', padding: 10,
     fontFamily: REG, fontSize: 12, color: C.ink,
   },
-  smallBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', paddingHorizontal: 14, paddingVertical: 10 },
+  smallBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   smallBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
-  smallBtnOutline: { borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', paddingHorizontal: 14, paddingVertical: 10 },
+  smallBtnOutline: { borderWidth: 1, borderColor: C.line, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   smallBtnOutlineText: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   resultPill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderCurve: 'continuous' },
   resultPillText: { fontFamily: BOLD, fontSize: 11, color: C.onHot },
   qualityRow: { flexDirection: 'row', gap: 2 },
   star: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 12, alignItems: 'center' },
+  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 12, alignItems: 'center' },
   saveBtnText: { fontFamily: BOLD, fontSize: 12, color: C.onHot },
   empty: { fontFamily: REG, fontSize: 12, color: C.dim },
   barsRow: { flexDirection: 'row', gap: 8, height: 90, alignItems: 'flex-end' },

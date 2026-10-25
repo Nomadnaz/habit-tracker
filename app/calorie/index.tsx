@@ -22,6 +22,7 @@ import {
 } from '@/lib/meals-data';
 
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 import { Corners } from '@/components/Corners';
@@ -173,7 +174,7 @@ export default function CalorieScreen() {
             <Text style={styles.sectionLabel}>AGAIN</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
               {recent.map(m => (
-                <TouchableOpacity key={m.id} style={styles.chip} onPress={() => quickAdd(m)} activeOpacity={0.8}>
+                <TouchableOpacity key={m.id} style={styles.chip} onPress={() => quickAdd(m)} activeOpacity={0.8} hitSlop={hit(100, 36)}>
                   <Text style={styles.chipName} numberOfLines={1}>{m.name}</Text>
                   <Text style={styles.chipKcal}>{`+ ${fmt(m.calories)} KCAL`}</Text>
                 </TouchableOpacity>
@@ -208,7 +209,7 @@ export default function CalorieScreen() {
                     </Text>
                   </View>
                   <Text style={styles.mealKcal}>{fmt(m.calories)}</Text>
-                  <TouchableOpacity onPress={() => remove(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel={`Delete ${m.name}`}>
+                  <TouchableOpacity onPress={() => remove(m)} hitSlop={hit(16)} accessibilityLabel={`Delete ${m.name}`}>
                     <MaterialCommunityIcons name="close" size={16} color={C.faint} />
                   </TouchableOpacity>
                 </Pressable>

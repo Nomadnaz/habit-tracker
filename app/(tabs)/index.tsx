@@ -26,6 +26,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { onWrite } from '@/lib/postWrite';
 import { C, F, numFace } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { REGIONS, loadBodyMap, saveBodyMap, type BodyMap } from '@/lib/body-map';
 import { BodyStage, LINE_MS, TONE, type Box, type Facing, type Paint, type StageEdit, type StagePin } from '@/components/body/BodyStage';
 import { ZONE_BY_ID, ZONE_OF, MUSCLES } from '@/lib/body-mesh';
@@ -472,7 +473,7 @@ export default function BodyScreen() {
               <>
                 <View style={st.section}>
                   <Text style={st.sectionTitle}>OFF THE BODY</Text>
-                  <Pressable onPress={() => startArranging()} hitSlop={8}><Text style={st.sectionLink}>PIN ONE</Text></Pressable>
+                  <Pressable onPress={() => startArranging()} hitSlop={hit(56, 12, 8)}><Text style={st.sectionLink}>PIN ONE</Text></Pressable>
                 </View>
                 {spare.map((id, i) => <ReadoutRow key={id} r={readoutOf(id, data, act)} index={i} />)}
               </>
@@ -480,7 +481,7 @@ export default function BodyScreen() {
 
             <View style={st.section}>
               <Text style={st.sectionTitle}>{`TARGETS · ${targets.length}`}</Text>
-              <Pressable onPress={() => setCatEditing(true)} hitSlop={8}><Text style={st.sectionLink}>EDIT GOALS</Text></Pressable>
+              <Pressable onPress={() => setCatEditing(true)} hitSlop={hit(72, 12, 8)}><Text style={st.sectionLink}>EDIT GOALS</Text></Pressable>
             </View>
             {targets.length === 0 && <Text style={st.empty} {...BALANCE}>Tap a muscle on the figure and give it a GOAL.</Text>}
             {targets.map((r, i) => {
@@ -645,7 +646,7 @@ const st = StyleSheet.create({
   sectionTitle: { fontFamily: F.dot, fontSize: 11, color: C.dim, letterSpacing: 3 },
   sectionLink: { fontFamily: F.dot, fontSize: 9, color: C.ink, letterSpacing: 2 },
   empty: { fontFamily: F.mono, fontSize: 12, color: C.faint, marginHorizontal: 20, marginTop: 6 },
-  rule: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: C.line },
+  rule: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: TAP, paddingVertical: 12, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: C.line },
   ruleIdx: { fontFamily: F.dot, fontSize: 11, color: C.faint, width: 20 },
   ruleLabel: { fontFamily: F.dot, fontSize: 12, color: C.ink, letterSpacing: 1.5 },
   ruleSub: { fontFamily: F.mono, fontSize: 11, color: C.dim, marginTop: 3 },

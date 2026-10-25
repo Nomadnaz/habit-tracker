@@ -8,6 +8,7 @@ import { updateAnswers } from '@/lib/onboarding-data';
 import type { Frequency } from '@/lib/habits-data';
 
 import { C, F } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 const ORANGE = C.hot;
 const REG = F.mono;
 const BOLD = F.mono;
@@ -35,7 +36,7 @@ export default function FirstHabit() {
       <TextInput style={styles.input} placeholder="e.g. Read 10 pages" placeholderTextColor={C.dim} value={name} onChangeText={setName} autoFocus />
       <View style={styles.chipRow}>
         {SUGGESTIONS.map(s => (
-          <TouchableOpacity key={s} style={styles.chip} onPress={() => setName(s)}>
+          <TouchableOpacity key={s} style={styles.chip} onPress={() => setName(s)} hitSlop={hit(60, 40)}>
             <Text style={styles.chipText}>{s}</Text>
           </TouchableOpacity>
         ))}
@@ -57,10 +58,10 @@ const styles = StyleSheet.create({
     fontFamily: REG, fontSize: 13, color: C.ink, backgroundColor: C.surface,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line },
+  chip: { minHeight: 40, justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line },
   chipText: { fontFamily: REG, fontSize: 12, color: C.dim },
   freqRow: { flexDirection: 'row', gap: 8 },
-  freqChip: { flex: 1, paddingVertical: 10, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, alignItems: 'center' },
+  freqChip: { flex: 1, minHeight: TAP, justifyContent: 'center', paddingVertical: 10, borderRadius: 8, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, alignItems: 'center' },
   freqChipActive: { backgroundColor: ORANGE, borderColor: C.hot },
   freqChipText: { fontFamily: BOLD, fontSize: 12, color: C.ink },
   freqChipTextActive: { color: C.surface },

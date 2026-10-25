@@ -14,6 +14,7 @@ import { AUTH_PAGE, authErrorText, holdCredentials, looksLikeEmail, MIN_PASSWORD
 import { AuthField, PasswordRules } from '@/components/AuthField';
 import { PuckMark } from '@/components/PuckMark';
 import { C, F } from '@/lib/theme';
+import { hit } from '@/lib/hit';
 
 type Mode = 'signin' | 'signup' | 'forgot';
 
@@ -101,13 +102,13 @@ export default function LoginScreen() {
 
         {/* Sign in / Create account tabs; forgot password replaces them with a back link. */}
         {mode === 'forgot' ? (
-          <Pressable onPress={() => switchTo('signin')} hitSlop={8} style={{ marginBottom: 14 }}>
+          <Pressable onPress={() => switchTo('signin')} hitSlop={hit(150, 12, 8)} style={{ marginBottom: 14 }}>
             <Text style={st.back}>‹ BACK TO SIGN IN</Text>
           </Pressable>
         ) : (
           <View style={st.tabs}>
             {(['signin', 'signup'] as const).map(m => (
-              <Pressable key={m} onPress={() => switchTo(m)} style={[st.tab, mode === m && st.tabOn]}>
+              <Pressable key={m} onPress={() => switchTo(m)} hitSlop={hit(100, 40)} style={[st.tab, mode === m && st.tabOn]}>
                 <Text style={[st.tabText, mode === m && st.tabTextOn]}>{m === 'signin' ? 'SIGN IN' : 'CREATE ACCOUNT'}</Text>
               </Pressable>
             ))}
@@ -150,14 +151,14 @@ export default function LoginScreen() {
           )}
 
           {mode === 'signin' && (
-            <Pressable onPress={() => switchTo('forgot')} hitSlop={8} style={{ alignSelf: 'flex-end' }}>
+            <Pressable onPress={() => switchTo('forgot')} hitSlop={hit(120, 12, 8)} style={{ alignSelf: 'flex-end' }}>
               <Text style={st.link}>FORGOT PASSWORD?</Text>
             </Pressable>
           )}
 
           {!!error && <Text style={st.error}>{error}</Text>}
           {unconfirmed && (
-            <Pressable onPress={resendConfirm} hitSlop={8}>
+            <Pressable onPress={resendConfirm} hitSlop={hit(200, 12, 8)}>
               <Text style={st.link}>RESEND CONFIRMATION EMAIL ›</Text>
             </Pressable>
           )}
@@ -181,7 +182,7 @@ const st = StyleSheet.create({
   tagline: { fontFamily: F.mono, fontSize: 11, color: C.dim, letterSpacing: 2, marginBottom: 32 },
 
   tabs: { flexDirection: 'row', gap: 6, marginBottom: 14, padding: 4, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 8, borderCurve: 'continuous', alignItems: 'center' },
+  tab: { flex: 1, minHeight: 40, justifyContent: 'center', paddingVertical: 10, borderRadius: 8, borderCurve: 'continuous', alignItems: 'center' },
   tabOn: { backgroundColor: C.hot },
   tabText: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 1.6 },
   tabTextOn: { color: C.onHot },

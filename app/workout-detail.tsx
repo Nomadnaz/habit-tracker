@@ -28,6 +28,7 @@ import {
 } from '@/lib/unit-preference';
 
 import { C, F } from '@/lib/theme';
+import { TAP, hit } from '@/lib/hit';
 import { bleBridge } from '@/lib/ble-bridge';
 import { toDateKey } from '@/lib/dateKey';
 import { ScreenHeader, HeaderPill } from '@/components/ScreenHeader';
@@ -114,6 +115,7 @@ function UnitToggle({
     <View style={s.unitToggle}>
       <TouchableOpacity
         style={[s.unitPill, s.unitPillLeft, unitSystem === 'metric' && s.unitPillActive]}
+        hitSlop={hit(48, 22)}
         onPress={() => setUnitSystem('metric')}
         activeOpacity={0.85}
       >
@@ -121,6 +123,7 @@ function UnitToggle({
       </TouchableOpacity>
       <TouchableOpacity
         style={[s.unitPill, s.unitPillRight, unitSystem === 'imperial' && s.unitPillActive]}
+        hitSlop={hit(48, 22)}
         onPress={() => setUnitSystem('imperial')}
         activeOpacity={0.85}
       >
@@ -549,7 +552,7 @@ export default function WorkoutDetailScreen() {
                 <Text style={s.indexText}>{i + 1}</Text>
               </View>
               {/* Tap name → edit + PB modal */}
-              <TouchableOpacity style={s.exBody} onPress={() => openEdit(ex)} activeOpacity={0.75}>
+              <TouchableOpacity style={s.exBody} onPress={() => openEdit(ex)} activeOpacity={0.75} hitSlop={hit(200, 34)}>
                 <Text style={s.exName}>{ex.name}</Text>
                 <Text style={s.exMeta}>
                   {(ex.muscleGroups ?? []).join(', ').toUpperCase()}  ·  {ex.sets} × {ex.reps}  ·  {formatWeightWithUnit(ex.weightKg ?? 0, unitSystem)}
@@ -557,7 +560,7 @@ export default function WorkoutDetailScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => handleRemove(jct, ex.name)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={hit(20)}
                 accessibilityLabel={`Remove ${ex.name}`}
               >
                 <MaterialCommunityIcons name="minus-circle-outline" size={20} color={C.faint} />
@@ -674,7 +677,7 @@ export default function WorkoutDetailScreen() {
                             <Text style={[s.pbWeight, entry.weightKg === currentPB && s.pbWeightBest]}>
                               {formatWeightWithUnit(entry.weightKg, unitSystem)}{entry.weightKg === currentPB ? ' 🏆' : ''}
                             </Text>
-                            <TouchableOpacity onPress={() => handleDeletePB(entry.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={`Delete PB ${entry.date}`}>
+                            <TouchableOpacity onPress={() => handleDeletePB(entry.id)} hitSlop={hit(14)} accessibilityLabel={`Delete PB ${entry.date}`}>
                               <MaterialCommunityIcons name="close" size={14} color={C.faint} />
                             </TouchableOpacity>
                           </View>
@@ -706,7 +709,7 @@ export default function WorkoutDetailScreen() {
 
                 <View style={[s.tabRow, addTab === 'new' && s.tabRowBelowToggle]}>
                   {(['existing','new'] as const).map(tab => (
-                    <TouchableOpacity key={tab} style={[s.tab, addTab === tab && s.tabActive]} onPress={() => setAddTab(tab)}>
+                    <TouchableOpacity key={tab} style={[s.tab, addTab === tab && s.tabActive]} onPress={() => setAddTab(tab)} hitSlop={hit(100, 30)}>
                       <Text style={[s.tabText, addTab === tab && s.tabTextActive]}>
                         {tab === 'existing' ? 'FROM LIBRARY' : 'CREATE NEW'}
                       </Text>
@@ -796,7 +799,7 @@ const s = StyleSheet.create({
   exName: { fontFamily: F.mono, fontSize: 12, color: C.ink, letterSpacing: 1 },
   exMeta: { fontFamily: F.mono, fontSize: 9, color: C.dim, marginTop: 4, letterSpacing: 1 },
 
-  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dashed', borderRadius: 10, borderCurve: 'continuous', paddingVertical: 14, marginTop: 6 },
+  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: TAP, borderWidth: 1.5, borderColor: C.hot, borderStyle: 'dashed', borderRadius: 10, borderCurve: 'continuous', paddingVertical: 14, marginTop: 6 },
   addText: { fontFamily: F.mono, fontSize: 11, color: C.hot, letterSpacing: 1 },
 
   // ── Shared modal shell ─────────────────────────────────────────────────
@@ -824,7 +827,7 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: C.surface,
   },
-  unitPill: { paddingHorizontal: 10, paddingVertical: 5, backgroundColor: C.surface },
+  unitPill: { paddingHorizontal: 15, paddingVertical: 5, backgroundColor: C.surface },
   unitPillLeft: { borderTopLeftRadius: 999, borderBottomLeftRadius: 999 },
   unitPillRight: { borderTopRightRadius: 999, borderBottomRightRadius: 999 },
   unitPillActive: { backgroundColor: ORANGE },
@@ -927,6 +930,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    minHeight: TAP,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
@@ -961,7 +965,7 @@ const s = StyleSheet.create({
     ...(Platform.OS === 'android' ? { includeFontPadding: false, textAlignVertical: 'center' as const } : {}),
   },
   setChipTextActive: { color: C.surface },
-  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', paddingVertical: 13, alignItems: 'center', marginBottom: 2 },
+  saveBtn: { backgroundColor: ORANGE, borderRadius: 10, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingVertical: 13, alignItems: 'center', marginBottom: 2 },
   saveBtnText: { fontFamily: F.mono, fontSize: 12, color: C.onHot, letterSpacing: 1 },
 
   // ── PB section ─────────────────────────────────────────────────────────
@@ -979,7 +983,7 @@ const s = StyleSheet.create({
   chartWrap: { alignItems: 'center', marginBottom: 12 },
   pbInputRow: { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'center' },
   pbWeightInput: { flex: 1, fontFamily: F.dot, fontSize: 15, color: C.ink, borderBottomWidth: 2, borderBottomColor: C.line, paddingVertical: 8, textAlign: 'center' },
-  pbLogBtn: { backgroundColor: ORANGE, borderRadius: 20, borderCurve: 'continuous', paddingHorizontal: 20, paddingVertical: 10 },
+  pbLogBtn: { backgroundColor: ORANGE, borderRadius: 20, borderCurve: 'continuous', minHeight: TAP, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 10 },
   pbLogBtnText: { fontFamily: F.mono, fontSize: 11, color: C.onHot, letterSpacing: 1 },
   pbList: { borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10 },
   pbRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line },
