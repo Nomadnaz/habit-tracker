@@ -1,10 +1,12 @@
 // Chat window + saved chats. Springs up from the PUCK dot; the list view is
 // the "saved chats" drawer (pinned first, then most recent). Holding the
 // square in the composer records exactly like holding the tab-bar dot.
-import { useEffect, useRef, useState } from 'react';
+// Drag the header down to close it (the × still works); under Reduce
+// Motion it fades instead of sliding.
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, Pressable, Animated, ScrollView, TextInput,
-  KeyboardAvoidingView, Platform, Dimensions, Alert,
+  KeyboardAvoidingView, Platform, Dimensions, Alert, PanResponder, type GestureResponderHandlers,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,8 +19,11 @@ import {
 import { useHoldToTalk } from './useHoldToTalk';
 import { PuckMark } from '@/components/PuckMark';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
+import { useReducedMotion } from '@/lib/use-reduced-motion';
 
 const H = Dimensions.get('window').height;
+/** The header is the sheet's handle: ChatSheet hands it these to drag the whole sheet. */
+const Drag = createContext<GestureResponderHandlers | null>(null);
 
 export function ChatSheet() {
   const { sheet, threads: all, activeId, busy } = useAssistant();
@@ -26,10 +31,18 @@ export function ChatSheet() {
   const gone = usePendingRemovals();
   const threads = all.filter(t => !gone.has(t.id));
   const open = sheet !== 'closed';
+  const reduce = useReducedMotion();
   const y = useRef(new Animated.Value(H)).current;
+  const fade = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
+    if (reduce) {
+      if (open) { setMounted(true); y.setValue(0); }
+      Animated.timing(fade, { toValue: open ? 1 : 0, duration: 160, useNativeDriver: true }).start(() => { if (!open) setMounted(false); });
+      return;
+    }
+    fade.setValue(1);
     if (open) {
       setMounted(true);
       Animated.spring(y, { toValue: 0, ...SPRING.settle }).start();
@@ -38,12 +51,26 @@ export function ChatSheet() {
     }
   }, [open]);
 
+  // The sheet follows the finger down; past 120 pt or a flick, it closes.
+  const drag = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderMove: (_, g) => y.setValue(Math.max(0, g.dy)),
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > 120 || g.vy > 0.8) closeSheet();
+      else Animated.spring(y, { toValue: 0, ...SPRING.settle }).start();
+    },
+    onPanResponderTerminate: () => Animated.spring(y, { toValue: 0, ...SPRING.settle }).start(),
+  }).panHandlers, []);
+
   if (!mounted) return null;
   const thread = threads.find(t => t.id === activeId) ?? null;
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.sheet, { transform: [{ translateY: y }] }]}>
-      {sheet === 'list' ? <ThreadList threads={threads} /> : <Conversation thread={thread} busy={busy} />}
+    <Animated.View style={[StyleSheet.absoluteFill, styles.sheet, { opacity: fade, transform: [{ translateY: y }] }]}>
+      <Drag.Provider value={drag}>
+        {sheet === 'list' ? <ThreadList threads={threads} /> : <Conversation thread={thread} busy={busy} />}
+      </Drag.Provider>
     </Animated.View>
   );
 }
@@ -52,8 +79,9 @@ export function ChatSheet() {
 // dot face lacks — those render in MONO.
 function Header({ title, left, right, mono }: { title: string; left: React.ReactNode; right: React.ReactNode; mono?: boolean }) {
   const insets = useSafeAreaInsets();
+  const drag = useContext(Drag);
   return (
-    <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+    <View {...drag} style={[styles.header, { paddingTop: insets.top + 8 }]}>
       <View style={styles.headerSide}>{left}</View>
       <Text style={[styles.headerTitle, mono && { fontFamily: F.mono }]} numberOfLines={1}>{title}</Text>
       <View style={[styles.headerSide, { alignItems: 'flex-end' }]}>{right}</View>

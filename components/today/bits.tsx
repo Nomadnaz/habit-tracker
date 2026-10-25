@@ -7,7 +7,9 @@ import {
   type StyleProp, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { C } from '@/lib/theme';
+import { useReducedMotion } from '@/lib/use-reduced-motion';
 
 /** A row of segments filled to `pct` (0–1), sweeping in when it changes. */
 export function Segs({ pct, tone, n = 16, h = 6, style }: { pct: number; tone: string; n?: number; h?: number; style?: StyleProp<ViewStyle> }) {
@@ -62,16 +64,24 @@ export function Pixel({ tone, blink, size = 6 }: { tone: string; blink?: boolean
   return <Animated.View style={{ width: size, height: size, backgroundColor: tone, opacity: o }} />;
 }
 
-/** Springs up from the bottom; drag it down, tap outside or call onClose to dismiss.
- *  `spot` floats above the dimmed screen (BODY's tapped readout, still lit). */
+/** Springs up from the bottom. It follows your finger down from the handle
+ *  and closes past 110 pt or on a flick; the × and a tap outside close it too.
+ *  `spot` floats above the dimmed screen (BODY's tapped readout, still lit).
+ *  Reduced motion: it fades in and out instead of sliding. */
 export function Sheet({ visible, onClose, children, spot }: { visible: boolean; onClose: () => void; children: React.ReactNode; spot?: React.ReactNode }) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const reduce = useReducedMotion();
   const y = useRef(new Animated.Value(height)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(visible);
 
   useEffect(() => {
+    if (reduce) {
+      if (visible) { setMounted(true); y.setValue(0); }
+      if (visible || mounted) Animated.timing(fade, { toValue: visible ? 1 : 0, duration: 160, useNativeDriver: true }).start(() => { if (!visible) setMounted(false); });
+      return;
+    }
     if (visible) {
       setMounted(true);
       y.setValue(height);
@@ -89,6 +99,8 @@ export function Sheet({ visible, onClose, children, spot }: { visible: boolean; 
 
   const pan = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+    // Once the handle has the finger, it keeps it until release.
+    onPanResponderTerminationRequest: () => false,
     onPanResponderMove: (_, g) => y.setValue(Math.max(0, g.dy)),
     onPanResponderRelease: (_, g) => {
       if (g.dy > 110 || g.vy > 0.8) onClose();
@@ -105,8 +117,13 @@ export function Sheet({ visible, onClose, children, spot }: { visible: boolean; 
           <Pressable style={{ flex: 1 }} onPress={onClose} />
         </Animated.View>
         {!!spot && <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade }]} pointerEvents="none">{spot}</Animated.View>}
-        <Animated.View style={[s.sheet, { maxHeight: height * 0.88, paddingBottom: Math.max(18, insets.bottom + 10), transform: [{ translateY: y }] }]}>
-          <View {...pan.panHandlers} style={s.grab}><View style={s.grabBar} /></View>
+        <Animated.View style={[s.sheet, { maxHeight: height * 0.88, paddingBottom: Math.max(18, insets.bottom + 10), transform: [{ translateY: y }] }, reduce && { opacity: fade }]}>
+          <View {...pan.panHandlers} style={s.grab}>
+            <View style={s.grabBar} />
+            <Pressable onPress={onClose} hitSlop={6} style={({ pressed }) => [s.close, pressed && { backgroundColor: C.raised }]} role="button" accessibilityLabel="Close">
+              <MaterialCommunityIcons name="close" size={18} color={C.dim} />
+            </Pressable>
+          </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false}>{children}</ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -119,6 +136,7 @@ const s = StyleSheet.create({
   seg: { flex: 1, borderRadius: 1 },
   wrap: { flex: 1, justifyContent: 'flex-end' },
   sheet: { backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderBottomWidth: 0, borderColor: C.lineHi, paddingHorizontal: 18 },
-  grab: { paddingTop: 10, paddingBottom: 12, alignItems: 'center' },
+  grab: { height: 46, alignItems: 'center', justifyContent: 'center' },
+  close: { position: 'absolute', right: -6, top: 5, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   grabBar: { width: 38, height: 4, borderRadius: 2, backgroundColor: C.lineHi },
 });

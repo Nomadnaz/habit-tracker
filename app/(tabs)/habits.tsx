@@ -10,7 +10,7 @@
 import { useCallback, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  Modal, Pressable, KeyboardAvoidingView, Platform, Alert,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -34,9 +34,9 @@ import HeatmapCalendar from '@/components/HeatmapCalendar';
 
 import { C, F } from '@/lib/theme';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
+import { Sheet } from '@/components/today/bits';
 // ── Design tokens (identical to BODY / CALORIE pages) ───────────────────────
 const ORANGE = C.hot;
-const CARD   = C.surface;
 const BOLD = F.mono;
 const REG = F.mono;
 
@@ -250,79 +250,73 @@ export default function HabitsScreen() {
         </ScrollView>
       )}
 
-      <Modal visible={addVisible} transparent animationType="fade" onRequestClose={() => setAddVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalWrap}>
-          <Pressable style={styles.backdrop} onPress={() => setAddVisible(false)} />
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>NEW HABIT</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Read 10 pages"
-              placeholderTextColor={C.dim}
-              value={name}
-              onChangeText={setName}
-              autoFocus
-            />
-            <View style={styles.freqRow}>
-              {(['daily', 'weekly'] as Frequency[]).map(f => (
-                <TouchableOpacity
-                  key={f}
-                  style={[styles.freqChip, frequency === f && styles.freqChipActive]}
-                  onPress={() => setFrequency(f)}
-                >
-                  <Text style={[styles.freqChipText, frequency === f && styles.freqChipTextActive]}>
-                    {f.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity style={styles.saveBtn} onPress={save}>
-              <Text style={styles.saveBtnText}>ADD HABIT</Text>
-            </TouchableOpacity>
+      <Sheet visible={addVisible} onClose={() => setAddVisible(false)}>
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>NEW HABIT</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Read 10 pages"
+            placeholderTextColor={C.dim}
+            value={name}
+            onChangeText={setName}
+            autoFocus
+          />
+          <View style={styles.freqRow}>
+            {(['daily', 'weekly'] as Frequency[]).map(f => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.freqChip, frequency === f && styles.freqChipActive]}
+                onPress={() => setFrequency(f)}
+              >
+                <Text style={[styles.freqChipText, frequency === f && styles.freqChipTextActive]}>
+                  {f.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <TouchableOpacity style={styles.saveBtn} onPress={save}>
+            <Text style={styles.saveBtnText}>ADD HABIT</Text>
+          </TouchableOpacity>
+        </View>
+      </Sheet>
 
-      <Modal visible={addMedVisible} transparent animationType="fade" onRequestClose={() => setAddMedVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalWrap}>
-          <Pressable style={styles.backdrop} onPress={() => setAddMedVisible(false)} />
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>NEW MEDICATION / SUPPLEMENT</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Vitamin D, Antibiotic course"
-              placeholderTextColor={C.dim}
-              value={medName}
-              onChangeText={setMedName}
-              autoFocus
-            />
-            <View style={styles.freqRow}>
-              {(['medication', 'supplement'] as MedType[]).map(t => (
-                <TouchableOpacity
-                  key={t}
-                  style={[styles.freqChip, medType === t && styles.freqChipActive]}
-                  onPress={() => setMedType(t)}
-                >
-                  <Text style={[styles.freqChipText, medType === t && styles.freqChipTextActive]}>
-                    {t.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder="Course length in days (optional, e.g. 7)"
-              placeholderTextColor={C.dim}
-              value={medCourseLength}
-              onChangeText={setMedCourseLength}
-              keyboardType="number-pad"
-            />
-            <TouchableOpacity style={styles.saveBtn} onPress={saveMed}>
-              <Text style={styles.saveBtnText}>ADD</Text>
-            </TouchableOpacity>
+      <Sheet visible={addMedVisible} onClose={() => setAddMedVisible(false)}>
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>NEW MEDICATION / SUPPLEMENT</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Vitamin D, Antibiotic course"
+            placeholderTextColor={C.dim}
+            value={medName}
+            onChangeText={setMedName}
+            autoFocus
+          />
+          <View style={styles.freqRow}>
+            {(['medication', 'supplement'] as MedType[]).map(t => (
+              <TouchableOpacity
+                key={t}
+                style={[styles.freqChip, medType === t && styles.freqChipActive]}
+                onPress={() => setMedType(t)}
+              >
+                <Text style={[styles.freqChipText, medType === t && styles.freqChipTextActive]}>
+                  {t.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <TextInput
+            style={styles.input}
+            placeholder="Course length in days (optional, e.g. 7)"
+            placeholderTextColor={C.dim}
+            value={medCourseLength}
+            onChangeText={setMedCourseLength}
+            keyboardType="number-pad"
+          />
+          <TouchableOpacity style={styles.saveBtn} onPress={saveMed}>
+            <Text style={styles.saveBtnText}>ADD</Text>
+          </TouchableOpacity>
+        </View>
+      </Sheet>
     </SafeAreaView>
   );
 }
@@ -351,9 +345,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginLeft: 12,
   },
   completeBtnDone: { backgroundColor: ORANGE, borderColor: C.hot },
-  modalWrap: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)' },
-  sheet: { backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 14 },
+  sheet: { gap: 14, paddingBottom: 4 },
   sheetTitle: { fontFamily: BOLD, fontSize: 14, color: C.ink },
   input: {
     borderWidth: 1, borderColor: C.line, borderRadius: 10, padding: 12,
