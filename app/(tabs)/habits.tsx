@@ -30,6 +30,7 @@ import {
 } from '@/lib/medications-data';
 import { toDateKey } from '@/lib/dateKey';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
+import { useRevalidate } from '@/lib/revalidate';
 import HeatmapCalendar from '@/components/HeatmapCalendar';
 
 import { C, F } from '@/lib/theme';
@@ -77,6 +78,7 @@ export default function HabitsScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+  useRevalidate(() => { void refresh(); }); // back from the background or back online: pull again
 
   // Ticks show the moment you tap; refresh() pulls from the server first, so
   // waiting on it made every tap lag. A failed write re-reads and says so.

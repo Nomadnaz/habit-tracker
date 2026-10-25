@@ -36,6 +36,7 @@ import {
 import { sortActiveTasks, type Task, type TaskMap } from '@/lib/tasks-core';
 import { findTaskDateKey } from '@/lib/task-schedule';
 import { withTaskSyncLock } from '@/lib/task-sync-lock';
+import { emitOnline } from '@/lib/revalidate';
 
 export const TASKS_CHANGED_EVENT = 'tasks:changed';
 // Fired only for genuinely-new tasks arriving LIVE from outside the app (e.g.
@@ -379,6 +380,7 @@ export function useRemoteTaskSync(userId: string | null): void {
   useEffect(() => {
     if (!userId) return;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let dropped = false;
 
     (async () => {
       // Reliable catch-up first (covers anything created while the app was shut).
@@ -406,7 +408,14 @@ export function useRemoteTaskSync(userId: string | null): void {
             }
           },
         )
-        .subscribe();
+        // realtime-js re-joins on its own after the socket drops; SUBSCRIBED
+        // again after an error means the network is back, so catch up and
+        // let the screens in view re-pull (lib/revalidate.ts).
+        .subscribe(status => {
+          if (status === 'SUBSCRIBED') {
+            if (dropped) { dropped = false; void reconcile(userId); emitOnline(); }
+          } else dropped = true;
+        });
     })();
 
     const appStateSub = AppState.addEventListener('change', state => {

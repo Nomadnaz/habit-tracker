@@ -24,6 +24,7 @@ import {
 import { C, F } from '@/lib/theme';
 import { hit } from '@/lib/hit';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
+import { useRevalidate } from '@/lib/revalidate';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
 import { Corners } from '@/components/Corners';
 
@@ -85,6 +86,7 @@ export default function CalorieScreen() {
   }, [dk]);
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+  useRevalidate(() => { void refresh(); }); // back from the background or back online: pull again
 
   // A meal waiting on UNDO is already out of the list and the totals.
   const shown = meals.filter(m => !gone.has(m.id));

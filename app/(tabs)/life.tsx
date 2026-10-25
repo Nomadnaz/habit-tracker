@@ -15,6 +15,7 @@ import { C, F } from '@/lib/theme';
 import { Board, BoardRow } from '@/components/Board';
 import { toDateKey } from '@/lib/dateKey';
 import { usePendingRemovals } from '@/lib/undo';
+import { useRevalidate } from '@/lib/revalidate';
 import {
   getActiveHabits, getLogsForHabit, pullRemoteHabitLogs, toggleToday, isDoneOnDate, flipHabitDay,
   computeStreakWithFreezes, type Habit, type HabitLog,
@@ -55,6 +56,8 @@ export default function LifeScreen() {
     // Ticks from the puck are written server-side; pull, then re-read.
     void pullRemoteHabitLogs().then(found => { if (found) void refresh(); });
   }, [refresh]));
+  // Back from the background or back online: ticks from the puck may have landed.
+  useRevalidate(() => { void pullRemoteHabitLogs().then(found => { if (found) void refresh(); }); });
 
   const today = toDateKey(new Date());
   // Removed on HABITS but still inside its UNDO window.

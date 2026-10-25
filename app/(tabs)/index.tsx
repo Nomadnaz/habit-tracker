@@ -25,6 +25,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { onWrite } from '@/lib/postWrite';
+import { useRevalidate } from '@/lib/revalidate';
 import { C, F, numFace } from '@/lib/theme';
 import { TAP, hit } from '@/lib/hit';
 import { REGIONS, loadBodyMap, saveBodyMap, type BodyMap } from '@/lib/body-map';
@@ -160,6 +161,15 @@ export default function BodyScreen() {
     setFocused(true);
     return () => { off(); offWrite(); setFocused(false); };
   }, [loadTwin]));
+
+  // Back from the background or back online with BODY showing: pull what the
+  // puck logged meanwhile, re-read and re-plan (Health re-syncs on its own).
+  useRevalidate(() => {
+    void pullRemoteBody().then(found => { if (found) loadBodyData().then(setBody); });
+    void getTodayMood().then(m => setMood(m?.moodScore ?? null));
+    void getTrainingSessions().then(setSessions).catch(() => {});
+    void loadTwin();
+  });
 
   async function refresh() {
     setRefreshing(true);

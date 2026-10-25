@@ -30,6 +30,7 @@ import { Bubble, Empty, Thinking } from '@/components/assistant/ChatSheet';
 import { DotIcon } from '@/components/today/DotIcon';
 import { onWrite } from '@/lib/postWrite';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
+import { useRevalidate } from '@/lib/revalidate';
 import { buildFeed, type FeedDay, type FeedItem } from '@/lib/log-feed';
 import { Bone, BoneText, Loading, useLate } from '@/components/Skeleton';
 import { BALANCE } from '@/lib/text-wrap';
@@ -83,6 +84,7 @@ export default function LogScreen() {
     refreshFeed();
     return onWrite(() => refreshFeed());
   }, [refreshFeed]));
+  useRevalidate(refreshFeed);
 
   const n = new Date();
   const todayCount = feed?.[0]?.word === 'TODAY' ? feed[0].items.length : 0;
