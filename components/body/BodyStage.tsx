@@ -121,7 +121,8 @@ export type StagePin = Spot & {
   slot: number;
   tone: string;
   node: ReactNode;
-  onPress?: () => void;
+  /** With where the readout sits on screen, so a sheet can spotlight it. */
+  onPress?: (box: Box | null) => void;
   onLongPress?: () => void;
   /** Picked in edit mode. */
   on?: boolean;
@@ -137,12 +138,12 @@ export type StageEdit = {
   onSpot: (s: Spot & { muscle: string | null }) => void;
 };
 type HudPt = { x: number; y: number; a: number };
+/** A readout's rectangle in window coordinates. */
+export type Box = { x: number; y: number; w: number; h: number };
 
 const HUD_W = 70; // until a readout has measured itself
-const LINE_MS = 380;    // a tapped readout's line drawing out to the body
-const PULSE_MS = 1900;  // then the ripple from its point
-const PULSE_R = 30;     // how far the ripple runs, cm
-const LIT_MS = 4500;    // how long the line stays before it fades
+export const LINE_MS = 240; // a tapped readout's line drawing out to the body
+const LIT_MS = 2600;    // how long the line stays before it fades
 const FADE_MS = 500;
 const SLOT_GAP = 12;
 /** A slot's top edge, as a fraction of the stage. */
@@ -237,10 +238,6 @@ uniform vec2 uPhase;   // per-muscle shift of the dot grid, in cells
 uniform vec3 uLight;
 uniform float uGlow;   // 0–1, worn muscles under RECOVERY
 uniform float uTime;   // seconds, for the glow's slow breathe
-uniform vec3 uPulseC;  // a tapped readout's point, cm
-uniform float uPulseR; // its ripple's radius, cm
-uniform float uPulseA; // and strength, 0 = none
-uniform vec3 uPulseCol;
 void main() {
   vec3 n = normalize(vN);
   if (!gl_FrontFacing) n = -n;
@@ -265,19 +262,6 @@ void main() {
       col = mix(col, solid, lit);
     }
     col += vec3(1.0 - smoothstep(0.0, 1.4, abs(d - uWave))) * step(uWave, 500.0);
-  }
-  if (uPulseA > 0.0) {
-    // The ripple: a ring running out from the point with a faint wake
-    // behind it, drawn on the halftone dots plus a scatter of pixels
-    // between them, so it reads as dithered light rather than paint.
-    float pd = distance(vW, uPulseC);
-    float ring = 1.0 - smoothstep(0.0, 5.5, abs(pd - uPulseR));
-    float wake = (1.0 - smoothstep(0.0, uPulseR + 1.0, pd)) * 0.35;
-    float g = (ring + wake) * uPulseA;
-    vec2 px = floor(gl_FragCoord.xy / (uCell * 0.5));
-    float hash = fract(sin(dot(px, vec2(12.9898, 78.233))) * 43758.5453);
-    float lit = max(dots, step(hash, g * 0.5));
-    col = mix(col, uPulseCol * (0.45 + 0.55 * dots), clamp(g * lit * 0.85, 0.0, 0.85));
   }
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -319,7 +303,7 @@ function setupGL(gl: ExpoWebGLRenderingContext): GLState {
   gl.enableVertexAttribArray(aPos);
   gl.enableVertexAttribArray(aNrm);
   const u: GLState['u'] = {};
-  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uMode', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight', 'uGlow', 'uTime', 'uPulseC', 'uPulseR', 'uPulseA', 'uPulseCol']) u[name] = gl.getUniformLocation(prog, name);
+  for (const name of ['uMVP', 'uRot', 'uCol', 'uAmt', 'uMode', 'uSelC', 'uWave', 'uCell', 'uPhase', 'uLight', 'uGlow', 'uTime']) u[name] = gl.getUniformLocation(prog, name);
   gl.enable(gl.DEPTH_TEST);
   gl.clearColor(0, 0, 0, 1);
   return { gl, aPos, aNrm, u };
@@ -344,7 +328,6 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
   const zoomedRef = useRef(false);
   const hudSet = useRef<((p: Record<string, HudPt>) => void) | null>(null);
   const hudLast = useRef<Record<string, HudPt> | null>(null);
-  const pulse = useRef<{ c: V3; t0: number } | null>(null);
 
   // Latest props for the gesture callbacks (they're built once).
   const props = useRef({ onPick, onFacing, onZoomed, pins, edit });
@@ -419,15 +402,6 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     const wave = from ? (st >= WAVE[1] ? 1e4 : from.r * 1.05 * easeOut(phase(st, WAVE))) : 0;
     if (from) gl.uniform3f(u.uSelC, from.c[0], from.c[1], from.c[2]);
     gl.uniform1f(u.uWave, wave);
-    const pl = pulse.current;
-    const pu = pl ? (Date.now() - pl.t0) / PULSE_MS : -1;
-    if (pl && pu >= 0 && pu < 1) {
-      gl.uniform3f(u.uPulseC, pl.c[0], pl.c[1], pl.c[2]);
-      gl.uniform1f(u.uPulseR, PULSE_R * easeOut(pu));
-      gl.uniform1f(u.uPulseA, Math.pow(1 - pu, 1.1));
-      const g = rgb(C.live);
-      gl.uniform3f(u.uPulseCol, g[0], g[1], g[2]);
-    } else gl.uniform1f(u.uPulseA, 0);
     for (const p of MESH.parts) {
       const l = lk[p.mi];
       gl.uniform3f(u.uCol, l.col[0], l.col[1], l.col[2]);
@@ -503,7 +477,6 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     }
     if ((L.selPart || L.zv) && now - selT0.current < FILL[1] + 40) more = true; // ring / fill / callout still playing
     if (L.active && L.glowing) more = true; // the worn-muscle glow breathes
-    if (pulse.current && now - pulse.current.t0 < PULSE_MS + 50) more = true; // a ripple is running (or about to)
     settle();
     draw();
     if (live.current.selPart || live.current.zv) setFrame(f => f + 1); // the callout follows the muscle / zone
@@ -566,13 +539,6 @@ export function BodyStage({ width: W, height: H, map, facing, zone, selected, fi
     const z = c.zoom > 1.02;
     if (z !== zoomedRef.current) { zoomedRef.current = z; setZoomed(z); props.current.onZoomed(z); }
   };
-
-  // A readout tapped: once its line reaches the body, ripple from its point.
-  useEffect(() => {
-    const p = lit ? props.current.pins.find(x => x.key === lit.key) : null;
-    pulse.current = p && lit ? { c: p.at, t0: lit.t0 + LINE_MS } : null;
-    if (pulse.current) kick();
-  }, [lit?.t0]);
 
   // Arranging the readouts: face front at the whole figure, so points are easy to tap.
   useEffect(() => { if (edit) fly({ ...HOME }, 600); }, [!!edit]);
@@ -861,6 +827,12 @@ function Hud({ W, H, pins, edit, lit, bind, onBind }: {
     return () => { bind.current = null; };
   }, []);
 
+  const boxes = useRef<Record<string, View | null>>({});
+  const press = (p: StagePin) => {
+    const v = boxes.current[p.key];
+    if (!v) { p.onPress?.(null); return; }
+    v.measureInWindow((x, y, w, h) => p.onPress?.(w ? { x, y, w, h } : null));
+  };
   // Each line leaves from the readout's inner edge, so it needs its width.
   const [wide, setWide] = useState<Record<string, number>>({});
   const edge = (p: StagePin) => {
@@ -917,7 +889,7 @@ function Hud({ W, H, pins, edit, lit, bind, onBind }: {
       {pins.map(p => {
         const left = slotSide(p.slot) === 'l';
         return (
-          <Pressable key={p.key} onPress={p.onPress} onLongPress={p.onLongPress} delayLongPress={380} hitSlop={6}
+          <Pressable key={p.key} ref={v => { boxes.current[p.key] = v; }} onPress={() => press(p)} onLongPress={p.onLongPress} delayLongPress={380} hitSlop={6}
             onLayout={e => { const w = Math.round(e.nativeEvent.layout.width); setWide(o => (o[p.key] === w ? o : { ...o, [p.key]: w })); }}
             style={[
               styles.hud, { top: slotTop(p.slot) * H, maxWidth: maxW },

@@ -62,8 +62,9 @@ export function Pixel({ tone, blink, size = 6 }: { tone: string; blink?: boolean
   return <Animated.View style={{ width: size, height: size, backgroundColor: tone, opacity: o }} />;
 }
 
-/** Springs up from the bottom; drag it down, tap outside or call onClose to dismiss. */
-export function Sheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
+/** Springs up from the bottom; drag it down, tap outside or call onClose to dismiss.
+ *  `spot` floats above the dimmed screen (BODY's tapped readout, still lit). */
+export function Sheet({ visible, onClose, children, spot }: { visible: boolean; onClose: () => void; children: React.ReactNode; spot?: React.ReactNode }) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const y = useRef(new Animated.Value(height)).current;
@@ -103,6 +104,7 @@ export function Sheet({ visible, onClose, children }: { visible: boolean; onClos
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: C.scrim, opacity: fade }]}>
           <Pressable style={{ flex: 1 }} onPress={onClose} />
         </Animated.View>
+        {!!spot && <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade }]} pointerEvents="none">{spot}</Animated.View>}
         <Animated.View style={[s.sheet, { maxHeight: height * 0.88, paddingBottom: Math.max(18, insets.bottom + 10), transform: [{ translateY: y }] }]}>
           <View {...pan.panHandlers} style={s.grab}><View style={s.grabBar} /></View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false}>{children}</ScrollView>

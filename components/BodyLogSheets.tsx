@@ -1,7 +1,7 @@
 // Water + weight quick-log sheets. They live on BODY's vitals grid (they used
 // to sit at the bottom of TRAIN). Each writes through lib/body-data.ts and
 // hands the updated store back so the caller can re-render its numbers.
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, TextInput,
   KeyboardAvoidingView, Platform,
@@ -10,8 +10,9 @@ import * as Haptics from 'expo-haptics';
 import { addWater, logWeight, todayWaterMl, latestWeight, type BodyData } from '@/lib/body-data';
 import { C, F } from '@/lib/theme';
 
-export function WaterSheet({ visible, data, onData, onClose }: {
-  visible: boolean; data: BodyData; onData: (d: BodyData) => void; onClose: () => void;
+/** `spot` floats above the dimmed screen (BODY's tapped readout, still lit). */
+export function WaterSheet({ visible, data, onData, onClose, spot }: {
+  visible: boolean; data: BodyData; onData: (d: BodyData) => void; onClose: () => void; spot?: ReactNode;
 }) {
   const waterMl = todayWaterMl(data);
 
@@ -22,7 +23,7 @@ export function WaterSheet({ visible, data, onData, onClose }: {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
           <Text style={styles.sheetLabel}>ADD WATER</Text>
@@ -40,12 +41,13 @@ export function WaterSheet({ visible, data, onData, onClose }: {
           </TouchableOpacity>
         </Pressable>
       </Pressable>
+      {spot}
     </Modal>
   );
 }
 
-export function WeightSheet({ visible, data, onData, onClose }: {
-  visible: boolean; data: BodyData; onData: (d: BodyData) => void; onClose: () => void;
+export function WeightSheet({ visible, data, onData, onClose, spot }: {
+  visible: boolean; data: BodyData; onData: (d: BodyData) => void; onClose: () => void; spot?: ReactNode;
 }) {
   const [input, setInput] = useState('');
   const weight = latestWeight(data);
@@ -61,7 +63,7 @@ export function WeightSheet({ visible, data, onData, onClose }: {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <Pressable style={styles.backdrop} onPress={onClose}>
           <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
@@ -82,6 +84,7 @@ export function WeightSheet({ visible, data, onData, onClose }: {
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>
+      {spot}
     </Modal>
   );
 }

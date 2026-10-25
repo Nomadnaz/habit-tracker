@@ -6,8 +6,8 @@
 // them: tap the body for the point, turn the revolver for the module, tap a
 // slot for where it hangs. Everything comes from the twin (lib/twin.ts),
 // which also writes today's targets back for every other screen. The lines
-// stay hidden: tap a readout and its line draws out to the body with a
-// green ripple; tap it again to open it.
+// stay hidden: tap a readout and its line draws out to the body, then it
+// opens; a sheet dims the screen with the readout still lit above it.
 //
 // The figure is always coloured by the gauge (bottom right): RECOVERY reds
 // the worn muscles, READY lights the fresh ones green. Under it: the
@@ -16,7 +16,7 @@
 // GOAL and GO (lifts that work it).
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, useWindowDimensions, Platform, Alert, ActivityIndicator,
 } from 'react-native';
@@ -27,7 +27,7 @@ import * as Haptics from 'expo-haptics';
 import { onWrite } from '@/lib/postWrite';
 import { C, F, numFace } from '@/lib/theme';
 import { REGIONS, loadBodyMap, saveBodyMap, type BodyMap } from '@/lib/body-map';
-import { BodyStage, TONE, type Facing, type Paint, type StageEdit, type StagePin } from '@/components/body/BodyStage';
+import { BodyStage, LINE_MS, TONE, type Box, type Facing, type Paint, type StageEdit, type StagePin } from '@/components/body/BodyStage';
 import { ZONE_BY_ID, ZONE_OF, MUSCLES } from '@/lib/body-mesh';
 import { getExercises, getTrainingSessions, type Exercise } from '@/lib/workout-data';
 import {
@@ -59,8 +59,6 @@ import {
 import { TodaySheet, type SheetKind, type You } from '@/components/today/Sheets';
 import { Pixel } from '@/components/today/bits';
 
-const SIDES: Facing[] = ['front', 'back'];
-const LIT_MS = 4500; // a tapped readout stays lit this long; a second tap inside it opens it
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -94,6 +92,9 @@ export default function BodyScreen() {
   const play = `${visits}-${gauge}`;
   useRecoveryMix(play, setMix);
   const [lit, setLit] = useState<{ key: string; t0: number } | null>(null);
+  // The tapped readout, drawn again above a sheet's dimmed backdrop.
+  const [spot, setSpot] = useState<{ id: HudModule; box: Box } | null>(null);
+  const tapped = useRef<{ id: HudModule; box: Box } | null>(null);
   // The day.
   const [body, setBody] = useState<BodyData | null>(null);
   const [profile, setProfile] = useState<BodyProfile>({ heightCm: null, sex: null, weightKg: null });
@@ -333,11 +334,13 @@ export default function BodyScreen() {
   const zoneBattery = zonePcts.length ? Math.round(zonePcts.reduce((a, b) => a + b, 0) / zonePcts.length) : null;
 
   // ── readouts ───────────────────────────────────────────────────────────
+  // A sheet opened by a readout on the figure spotlights it; from anywhere else, nothing.
+  const sheetFrom = () => { setSpot(tapped.current); tapped.current = null; };
   const act: ReadoutActs = {
-    open: setSheet,
+    open: k => { sheetFrom(); setSheet(k); },
     go: (pathname, params) => router.push((params ? { pathname, params } : pathname) as never),
-    water: () => (view ? setSheet('water') : setLogSheet('water')),
-    weight: () => setLogSheet('weight'),
+    water: () => { sheetFrom(); if (view) setSheet('water'); else setLogSheet('water'); },
+    weight: () => { sheetFrom(); setLogSheet('weight'); },
     heart: () => void checkHeart(),
     recovery: () => setGauge(g => (g === 'worn' ? 'ready' : 'worn')),
   };
@@ -347,11 +350,12 @@ export default function BodyScreen() {
     return {
       key: p.id, slot: p.slot, at: p.at, n: p.n, tone: r.tone, on: arranging && pinOn === p.id,
       node: <ReadoutNode r={r} right={slotSide(p.slot) === 'r'} />,
-      // First tap shows where it lives on the body; a second, while it's lit, opens it.
-      onPress: arranging ? () => tapPin(p) : () => {
-        if (lit?.key === p.id && Date.now() - lit.t0 < LIT_MS) { r.onPress(); return; }
+      // Its line draws out to the body, then it opens.
+      onPress: arranging ? () => tapPin(p) : box => {
         void Haptics.selectionAsync();
         setLit({ key: p.id, t0: Date.now() });
+        tapped.current = box ? { id: p.id, box } : null;
+        setTimeout(() => { r.onPress(); tapped.current = null; }, LINE_MS + 40);
       },
       onLongPress: () => startArranging(p.id),
     };
@@ -364,6 +368,13 @@ export default function BodyScreen() {
     return { key: id, word: r.word, tone: r.tone, meta: MODULES[id].blurb, value: r.value.length <= 8 ? `${r.value}${r.unit && r.value ? ` ${r.unit}` : ''}` : '' };
   };
   const spare = offBody(pins);
+  const spotR = spot ? readoutOf(spot.id, data, act) : null;
+  const spotNode = spot && spotR ? (
+    <View pointerEvents="none" style={[st.spot, { left: spot.box.x, top: spot.box.y, width: spot.box.w, minHeight: spot.box.h, borderColor: spotR.tone, shadowColor: spotR.tone }]}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: spotR.tone, opacity: 0.1, borderRadius: 7 }]} />
+      <ReadoutNode r={spotR} right={slotSide(pins.find(p => p.id === spot.id)?.slot ?? 0) === 'r'} />
+    </View>
+  ) : null;
 
   const stageH = Math.min(580, Math.round(width * 1.36));
   const targets = REGIONS.filter(r => map.marks[r.id]).sort((a, b) =>
@@ -386,20 +397,13 @@ export default function BodyScreen() {
             <Text style={st.title}>BODY</Text>
           </View>
           <View style={st.headerRight}>
-            <View style={st.views}>
-              {SIDES.map(v => (
-                <Pressable key={v} onPress={() => { if (v !== side) { Haptics.selectionAsync(); setSide(v); } }} style={[st.view, side === v && st.viewOn]} hitSlop={4}>
-                  <Text style={[st.viewText, side === v && st.viewTextOn]}>{v.toUpperCase()}</Text>
-                </Pressable>
-              ))}
-            </View>
             <Pressable onPress={() => (arranging ? stopArranging() : startArranging())} hitSlop={8} style={[st.key, arranging && st.keyOn]}
               accessibilityLabel={arranging ? 'Done arranging' : 'Arrange readouts'}>
               <Text style={[st.keyText, arranging && { color: C.onHot }]}>{arranging ? 'DONE' : 'EDIT'}</Text>
             </Pressable>
             {!arranging && (
               <Pressable onPress={() => router.push('/settings')} hitSlop={8} style={st.iconBtn} accessibilityLabel="Settings">
-                <MaterialCommunityIcons name="cog-outline" size={17} color={C.dim} />
+                <MaterialCommunityIcons name="cog-outline" size={17} color={C.ink} />
               </Pressable>
             )}
           </View>
@@ -407,7 +411,7 @@ export default function BodyScreen() {
 
         {/* ── the twin: goal + the day in a line ── */}
         {!arranging && (view && t ? (
-          <Pressable onPress={() => setSheet('goal')} style={({ pressed }) => [st.twin, pressed && { opacity: 0.7 }]}>
+          <Pressable onPress={() => act.open('goal')} style={({ pressed }) => [st.twin, pressed && { opacity: 0.7 }]}>
             <View style={st.twinHead}>
               <Pixel tone={C.live} blink />
               <Text style={st.twinWord}>TWIN</Text>
@@ -459,7 +463,7 @@ export default function BodyScreen() {
           )}
         </View>
 
-        <Text style={st.hint}>{arranging ? 'TAP THE BODY TO SET A LINE · DRAG TO TURN' : 'TAP A READOUT TO FIND IT · AGAIN TO OPEN · HOLD TO MOVE'}</Text>
+        <Text style={st.hint}>{arranging ? 'TAP THE BODY TO SET A LINE · DRAG TO TURN' : 'TAP A READOUT TO OPEN IT · HOLD TO MOVE'}</Text>
 
         {!arranging && (
           <>
@@ -586,13 +590,13 @@ export default function BodyScreen() {
 
       {body && (
         <>
-          <WaterSheet visible={logSheet === 'water'} data={body} onData={d => { setBody(d); void loadTwin(); }} onClose={() => setLogSheet(null)} />
-          <WeightSheet visible={logSheet === 'weight'} data={body} onData={d => { setBody(d); void loadTwin(); }} onClose={() => setLogSheet(null)} />
+          <WaterSheet visible={logSheet === 'water'} spot={spotNode} data={body} onData={d => { setBody(d); void loadTwin(); }} onClose={() => setLogSheet(null)} />
+          <WeightSheet visible={logSheet === 'weight'} spot={spotNode} data={body} onData={d => { setBody(d); void loadTwin(); }} onClose={() => setLogSheet(null)} />
         </>
       )}
       {view && (
         <TodaySheet
-          kind={sheet} view={view} input={input}
+          kind={sheet} view={view} input={input} spot={spotNode}
           act={{
             open: setSheet,
             go: act.go,
@@ -616,15 +620,12 @@ const st = StyleSheet.create({
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   eyebrow: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 3 },
   title: { fontFamily: F.dot, fontSize: 40, color: C.ink, letterSpacing: 2, marginTop: 4 },
-  views: { flexDirection: 'row', borderWidth: 1, borderColor: C.lineHi, borderRadius: 999, padding: 3 },
-  view: { alignItems: 'center', justifyContent: 'center', minHeight: 32, paddingHorizontal: 10, borderRadius: 999 },
-  viewOn: { backgroundColor: C.hot },
-  viewText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.5 },
-  viewTextOn: { color: C.onHot },
   key: { height: 38, paddingHorizontal: 12, borderRadius: 19, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
   keyOn: { backgroundColor: C.hot, borderColor: C.hot },
   keyText: { fontFamily: F.dot, fontSize: 10, color: C.ink, letterSpacing: 2 },
   iconBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
+  // The tapped readout over a sheet's backdrop: solid, ringed in its colour.
+  spot: { position: 'absolute', padding: 4, borderWidth: 1, borderRadius: 8, backgroundColor: C.bg, shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
 
   twin: { marginHorizontal: 20, gap: 6, paddingBottom: 4 },
   twinHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },

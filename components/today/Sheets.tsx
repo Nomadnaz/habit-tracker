@@ -21,8 +21,9 @@ export type DeckActions = {
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 const signed = (n: number, unit = '') => `${n >= 0 ? '+' : '-'}${fmt(Math.abs(n))}${unit}`;
 
-export function TodaySheet({ kind, view, input, act, onClose, onGoal }: {
+export function TodaySheet({ kind, view, input, act, onClose, onGoal, spot }: {
   kind: SheetKind | null;
+  spot?: React.ReactNode;
   view: TodayView;
   input: TwinInput | null;
   act: DeckActions;
@@ -33,7 +34,7 @@ export function TodaySheet({ kind, view, input, act, onClose, onGoal }: {
   const [shown, setShown] = useState<SheetKind | null>(kind);
   useEffect(() => { if (kind) setShown(kind); }, [kind]);
   return (
-    <Sheet visible={!!kind} onClose={onClose}>
+    <Sheet visible={!!kind} onClose={onClose} spot={spot}>
       {shown && <Body kind={shown} view={view} input={input} act={act} onClose={onClose} onGoal={onGoal} />}
     </Sheet>
   );

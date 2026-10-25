@@ -147,7 +147,7 @@ const Grid = memo(function Grid({ w, h }: { w: number; h: number }) {
 
 const SCALES = [50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];
 
-export function RouteMap({ waypoints, width, height, playing = true, durationMs, live, hud, legend, onDrawn, onKm }: {
+export function RouteMap({ waypoints, width, height, playing = true, durationMs, live, hud, legend, onDrawn, onKm, onHead }: {
   waypoints: Waypoint[];
   width: number;
   height: number;
@@ -164,6 +164,8 @@ export function RouteMap({ waypoints, width, height, playing = true, durationMs,
   onDrawn?: () => void;
   /** Called as the head passes each whole km (1, 2, …). */
   onKm?: (km: number) => void;
+  /** Live: where the head is on the map, as it moves. */
+  onHead?: (x: number, y: number) => void;
 }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const [feats, setFeats] = useState<Feature[]>([]);
@@ -218,6 +220,9 @@ export function RouteMap({ waypoints, width, height, playing = true, durationMs,
     }
     return { glow, dash, col };
   }, [pts]);
+
+  const tip = live && N >= 2 ? pts[N - 1] : null;
+  useEffect(() => { if (tip) onHead?.(tip[0], tip[1]); }, [tip?.[0], tip?.[1]]);
 
   const [n, setN] = useState(live ? Math.max(0, N - 1) : 0);
   // Set by the animation's end, not by n: unmounting the head early would
