@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { parseAuthFragment } from '@/lib/auth-links';
 import { C, F } from '@/lib/theme';
@@ -35,7 +36,7 @@ export default function AuthCallback() {
   }, [url]);
 
   return (
-    <View style={st.wrap}>
+    <SafeAreaView style={st.wrap}>
       {error ? (
         <>
           <Text style={st.title}>LINK DIDN'T WORK</Text>
@@ -51,7 +52,7 @@ export default function AuthCallback() {
           <Text style={[st.sub, { textAlign: 'center' }]}>Signing you in…</Text>
         </>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 

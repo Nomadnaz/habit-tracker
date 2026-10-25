@@ -8,6 +8,7 @@
 
 import { useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { AUTH_PAGE, authErrorText, holdCredentials, looksLikeEmail, MIN_PASSWORD, passwordProblem } from '@/lib/auth-links';
@@ -92,7 +93,8 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={st.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <SafeAreaView style={st.container} edges={['top', 'bottom']}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={st.inner} keyboardShouldPersistTaps="handled">
         <View style={st.headerRow}>
           <PuckMark size={44} />
@@ -171,6 +173,7 @@ export default function LoginScreen() {
         {mode === 'signup' && <Text style={st.fine}>We'll email you a link to confirm it's you.</Text>}
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

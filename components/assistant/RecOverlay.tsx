@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F, SPRING, TNUM, numFace } from '@/lib/theme';
 import { useAssistant, recDismiss, openChat } from '@/lib/assistant';
 
@@ -26,6 +27,7 @@ export function useTypewriter(text: string, run: boolean, ms = TYPE_MS) {
 
 export function RecOverlay() {
   const { phase, transcript, reply } = useAssistant();
+  const insets = useSafeAreaInsets();
   const visible = phase !== 'idle';
 
   const fade = useRef(new Animated.Value(0)).current;
@@ -146,11 +148,11 @@ export function RecOverlay() {
           )}
         </View>
 
-        {phase === 'rec' && <Text style={styles.hint}>RELEASE TO SEND</Text>}
+        {phase === 'rec' && <Text style={[styles.hint, { marginBottom: 56 + insets.bottom }]}>RELEASE TO SEND</Text>}
         {settled && (
           <View style={styles.footer}>
-            <Text style={styles.hint}>TAP TO DISMISS</Text>
-            <Pressable onPress={() => { recDismiss(); openChat(); }} hitSlop={12} style={styles.openBtn}>
+            <Text style={[styles.hint, { marginBottom: 56 + insets.bottom }]}>TAP TO DISMISS</Text>
+            <Pressable onPress={() => { recDismiss(); openChat(); }} hitSlop={12} style={[styles.openBtn, { bottom: 18 + insets.bottom }]}>
               <Text style={styles.openText}>OPEN CHAT</Text>
             </Pressable>
           </View>
