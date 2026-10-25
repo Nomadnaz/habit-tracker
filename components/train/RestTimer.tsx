@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { C, F } from '@/lib/theme';
+import { C, F, TNUM } from '@/lib/theme';
 
 export type Rest = { id: string; ends: number; total: number };
 
@@ -69,7 +69,7 @@ const st = StyleSheet.create({
   wrapOver: { backgroundColor: C.live },
   bar: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(116,242,91,0.16)', transformOrigin: 'left' },
   label: { fontFamily: F.dot, fontSize: 9, color: C.live, letterSpacing: 1.5 },
-  time: { fontFamily: F.dot, fontSize: 15, color: C.ink, letterSpacing: 0.5 },
+  time: { fontFamily: F.dot, fontSize: 15, color: C.ink, letterSpacing: 0.5, ...TNUM },
   btn: { height: 26, minWidth: 26, paddingHorizontal: 8, borderRadius: 13, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
   btnText: { fontFamily: F.dot, fontSize: 8, color: C.ink, letterSpacing: 1 },
 });

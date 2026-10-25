@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { C, F } from '@/lib/theme';
+import { C, F, TNUM } from '@/lib/theme';
 
 const HOLD_MS = 1100;
 
@@ -129,7 +129,7 @@ const st = StyleSheet.create({
   battery: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3, padding: 3, borderWidth: 1, borderColor: C.lineHi, borderRadius: 4 },
   cell: { flex: 1, height: 12 },
   nub: { width: 3, height: 8, backgroundColor: C.lineHi, marginLeft: 1, borderTopRightRadius: 1, borderBottomRightRadius: 1 },
-  count: { fontFamily: F.dot, fontSize: 13, color: C.ink, marginLeft: 10, minWidth: 34, textAlign: 'right' },
+  count: { fontFamily: F.dot, fontSize: 13, color: C.ink, marginLeft: 10, minWidth: 34, textAlign: 'right', ...TNUM },
   hint: { fontFamily: F.mono, fontSize: 10, letterSpacing: 1.5, color: C.dim, textAlign: 'center' },
   button: { height: 54, borderRadius: 16, borderWidth: 1, borderColor: C.live, backgroundColor: C.surface, overflow: 'hidden', justifyContent: 'center' },
   fill: { ...StyleSheet.absoluteFillObject, backgroundColor: C.live, transformOrigin: 'left' },

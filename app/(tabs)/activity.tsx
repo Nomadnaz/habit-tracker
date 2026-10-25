@@ -37,7 +37,7 @@ import {
   type Activity, type ActivityType, type Waypoint,
 } from '@/lib/activity-data';
 
-import { C, F, numFace } from '@/lib/theme';
+import { C, F, TNUM, numFace } from '@/lib/theme';
 import { RouteMap } from '@/components/RouteMap';
 import { Corners } from '@/components/Corners';
 import { Pixel, Segs } from '@/components/today/bits';
@@ -468,18 +468,18 @@ const st = StyleSheet.create({
   readHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   readWord: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5 },
   readRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  readValue: { color: C.hot },
+  readValue: { color: C.hot, ...TNUM },
   readUnit: { fontFamily: F.dot, fontSize: 7, color: C.dim, letterSpacing: 1 },
-  readSub: { fontFamily: F.dot, fontSize: 7, color: C.faint, letterSpacing: 1 },
+  readSub: { fontFamily: F.dot, fontSize: 7, color: C.faint, letterSpacing: 1, ...TNUM },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 1.5 },
   bar: { width: 3 },
   count: { alignItems: 'center', justifyContent: 'center', backgroundColor: C.scrim },
   countText: { fontFamily: F.dot, fontSize: 120, color: C.hot, letterSpacing: 4 },
 
   clockBlock: { paddingHorizontal: 20, marginTop: 10 },
-  clock: { fontFamily: F.dot, fontSize: 64, color: C.hot, letterSpacing: 2, textAlign: 'center' },
+  clock: { fontFamily: F.dot, fontSize: 64, color: C.hot, letterSpacing: 2, textAlign: 'center', ...TNUM },
   kmRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 },
-  kmWord: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5, minWidth: 44 },
+  kmWord: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5, minWidth: 44, ...TNUM },
   stats: { flexDirection: 'row', marginHorizontal: 20, marginTop: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: C.line },
   stat: { flex: 1, paddingVertical: 10, paddingHorizontal: 10, gap: 3 },
   statRule: { borderLeftWidth: 1, borderLeftColor: C.line },

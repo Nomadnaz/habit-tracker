@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { C, F, SPRING, numFace } from '@/lib/theme';
+import { C, F, SPRING, TNUM, numFace } from '@/lib/theme';
 import { useAssistant, recDismiss, openChat } from '@/lib/assistant';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   square: { width: 40, height: 40, backgroundColor: C.hot },
   label: { fontFamily: F.dot, fontSize: 18, color: C.hot, letterSpacing: 3, marginTop: 22 },
-  timer: { fontFamily: F.dot, fontSize: 16, color: C.dim, marginTop: 6 },
+  timer: { fontFamily: F.dot, fontSize: 16, color: C.dim, marginTop: 6, ...TNUM },
   transcript: { fontFamily: F.mono, fontSize: 20, color: C.ink, textAlign: 'center', lineHeight: 28, marginTop: -40 },
   transcriptDone: { color: C.dim, fontSize: 15, lineHeight: 22 },
   replyWrap: { alignItems: 'center', marginTop: 22 },

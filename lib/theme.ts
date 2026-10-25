@@ -18,6 +18,8 @@
 // Nothing brand materials.
 // ─────────────────────────────────────────────────────────────────────────
 
+import type { TextStyle } from 'react-native';
+
 export const C = {
   bg:       '#000000',
   surface:  '#0C0C0C', // cards
@@ -99,6 +101,12 @@ export const F = {
 export function numFace(_value: string | number, size: number) {
   return { fontFamily: F.dot, fontSize: size };
 }
+
+/** Tabular figures, for numbers that change while you watch (timers, live
+ *  stats, counters): every digit the same width, so the value doesn't
+ *  shuffle sideways as it ticks. Puck Dot carries them under 'tnum'
+ *  (scripts/fonts/puck-dot.py); its default digits stay proportional. */
+export const TNUM: TextStyle = { fontVariant: ['tabular-nums'] };
 
 // Type scale. Dot sizes are for numerals/headings; anything a user has to
 // read as a sentence stays MONO.

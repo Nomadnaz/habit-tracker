@@ -1,7 +1,12 @@
 # Rebuild: uv run --with fonttools python scripts/fonts/puck-dot.py assets/fonts/LondonUnderground-Heavy.ttf assets/fonts/PuckDot-Heavy.ttf
 # Adds . · / % × + ! to London Underground Heavy in its own dot grid (100-unit
 # dots, two-dot strokes) and renames it per the OFL's Reserved Font Name clause.
-import sys
+# Also adds tabular figures under the OpenType 'tnum' feature: every digit at
+# the widest digit's advance, centred, so a timer or counter styled with
+# fontVariant: ['tabular-nums'] doesn't shuffle sideways as its digits change.
+# The default digits stay proportional.
+import copy, sys
+from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._g_l_y_f import Glyph, GlyphCoordinates
 src, dst = sys.argv[1], sys.argv[2]
@@ -48,13 +53,22 @@ for name, (cp, cells, adv) in new.items():
     if order[-1] != name: order.append(name)
     for t in f['cmap'].tables:
         if t.isUnicode(): t.cmap[cp] = name
+digits = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+tab = max(hmtx[d][0] for d in digits)
+for d in digits:
+    g = copy.deepcopy(glyf[d]); g.expand(glyf)
+    g.coordinates.translate(((tab - hmtx[d][0]) // 2, 0)); g.recalcBounds(glyf)
+    glyf[d + '.tnum'] = g; hmtx[d + '.tnum'] = (tab, g.xMin)
+    if order[-1] != d + '.tnum': order.append(d + '.tnum')
 f.setGlyphOrder(order)
+addOpenTypeFeaturesFromString(f, 'languagesystem DFLT dflt;\nlanguagesystem latn dflt;\nfeature tnum {\n'
+    + ''.join(f'  sub {d} by {d}.tnum;\n' for d in digits) + '} tnum;\n')
 for n in f['name'].names:
     v = n.toUnicode()
     if n.nameID == 1: n.string = 'Puck Dot'
     elif n.nameID == 3: n.string = 'Puck Dot Heavy 1.0'
     elif n.nameID == 4: n.string = 'Puck Dot Heavy'
     elif n.nameID == 6: n.string = 'PuckDot-Heavy'
-    elif n.nameID == 0: n.string = v + ' Modified 2026: adds period, middle dot, slash, percent, multiply, plus and exclam; renamed Puck Dot under the OFL.'
+    elif n.nameID == 0: n.string = v + ' Modified 2026: adds period, middle dot, slash, percent, multiply, plus, exclam and tabular figures; renamed Puck Dot under the OFL.'
 f.save(dst)
 t = TTFont(dst); print('ok', t['maxp'].numGlyphs, ''.join(sorted(chr(c) for c in t.getBestCmap() if c < 0x2500)))
