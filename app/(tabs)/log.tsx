@@ -1,13 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────
 // LOG — where you talk to it and see what's gone in. Three views:
-//   TALK   the conversation, inline: hold the square to say it, or type
-//          ("two eggs on toast", "bench 60 for 8"). Same chat as the PUCK
-//          dot's sheet (lib/assistant.ts), so a thread carries across.
+//   TALK   the conversation, inline: type it ("two eggs on toast", "bench
+//          60 for 8") or, with the box empty, hold the button on the right
+//          and say it; once there's text the same button sends. Same
+//          threads as the chat sheet (lib/assistant.ts).
 //   CHATS  saved conversations, pinned first — tap one to carry on.
 //   LOGS   what the twin picked up today (its signals), then everything
 //          logged this week, newest first (lib/log-feed.ts): meals, lifts,
 //          water, weigh-ins, sleep, mood — typed, scanned, or said to the
-//          puck or the chat.
+//          puck or the chat. Tap a meal or water to open FUEL on its day.
 // The day's numbers themselves live on BODY.
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -16,7 +17,7 @@ import {
   Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -131,6 +132,7 @@ export default function LogScreen() {
 // ── talk ─────────────────────────────────────────────────────────────────
 
 function Talk({ thread, busy }: { thread: Thread | null; busy: boolean }) {
+  const { phase } = useAssistant();
   const [text, setText] = useState('');
   const scroll = useRef<ScrollView>(null);
   const talk = useHoldToTalk();
@@ -159,23 +161,34 @@ function Talk({ thread, busy }: { thread: Thread | null; busy: boolean }) {
         {busy && <Thinking />}
       </ScrollView>
       <View style={st.composer}>
-        <Pressable onPressIn={talk.start} onPressOut={talk.stop} style={({ pressed }) => [st.hold, pressed && { backgroundColor: C.raised }]} hitSlop={6} accessibilityLabel="Hold to talk">
-          <View style={st.holdSquare} />
-        </Pressable>
         <TextInput
           style={st.input}
           value={text}
           onChangeText={setText}
-          placeholder="Log something, or ask…"
+          placeholder="Type, or hold to talk"
           placeholderTextColor={C.faint}
           onSubmitEditing={submit}
           returnKeyType="send"
           multiline
           blurOnSubmit
         />
-        <Pressable onPress={submit} disabled={!text.trim() || busy} style={[st.sendBtn, (!text.trim() || busy) && { opacity: 0.25 }]} accessibilityLabel="Send">
-          <MaterialCommunityIcons name="arrow-up" size={20} color={C.onHot} />
-        </Pressable>
+        {/* One button: with text it sends; with the box empty, hold it to talk. */}
+        {text.trim()
+          ? (
+            <Pressable onPress={submit} disabled={busy} style={[st.sendBtn, busy && { opacity: 0.25 }]} accessibilityLabel="Send">
+              <MaterialCommunityIcons name="arrow-up" size={20} color={C.onHot} />
+            </Pressable>
+          ) : (
+            <Pressable
+              onPressIn={talk.start}
+              onPressOut={talk.stop}
+              style={({ pressed }) => [st.hold, (pressed || phase === 'rec') && st.holdOn]}
+              accessibilityLabel="Hold to talk"
+              accessibilityHint="Hold, say it, then let go to send"
+            >
+              {({ pressed }) => <View style={[st.holdSquare, (pressed || phase === 'rec') && { backgroundColor: C.onHot }]} />}
+            </Pressable>
+          )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -256,6 +269,7 @@ function ChatRow({ t, index, active, onOpen }: { t?: Thread; index: number; acti
 // ── logs ─────────────────────────────────────────────────────────────────
 
 function Logs({ feed, signals }: { feed: FeedDay[] | null; signals: TodayView['twin']['log'] }) {
+  const router = useRouter();
   // First read: nothing for 300 ms, then a day of bones, never a false "nothing logged".
   const late = useLate(feed === null);
   if (feed === null) {
@@ -267,6 +281,8 @@ function Logs({ feed, signals }: { feed: FeedDay[] | null; signals: TodayView['t
     ) : null;
   }
   if (!feed.length && !signals.length) return <Text style={st.blank} {...BALANCE}>NOTHING LOGGED THIS WEEK YET</Text>;
+  // Food and water open FUEL on their day, to see the rest of it or change it.
+  const fuelOn = (date: string) => () => { Haptics.selectionAsync(); router.push({ pathname: '/calorie', params: { date } }); };
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
       {signals.length > 0 && (
@@ -289,7 +305,9 @@ function Logs({ feed, signals }: { feed: FeedDay[] | null; signals: TodayView['t
             <Text style={st.section}>{day.word}</Text>
             <Text style={st.dayCount}>{`${day.items.length} ${day.items.length === 1 ? 'ENTRY' : 'ENTRIES'}`}</Text>
           </View>
-          {day.items.map((it, i) => <Entry key={it.key} it={it} first={i === 0} />)}
+          {day.items.map((it, i) => (
+            <Entry key={it.key} it={it} first={i === 0} onPress={it.kind === 'fuel' || it.kind === 'water' ? fuelOn(day.date) : undefined} />
+          ))}
         </View>
       ))}
     </ScrollView>
@@ -297,9 +315,9 @@ function Logs({ feed, signals }: { feed: FeedDay[] | null; signals: TodayView['t
 }
 
 /** One logged thing, or with no `it` its skeleton: the same row with bones for its text. */
-function Entry({ it, first }: { it?: FeedItem; first: boolean }) {
+function Entry({ it, first, onPress }: { it?: FeedItem; first: boolean; onPress?: () => void }) {
   return (
-    <View style={[st.entry, first && { borderTopWidth: 0 }]}>
+    <Pressable disabled={!onPress} onPress={onPress} style={({ pressed }) => [st.entry, first && { borderTopWidth: 0 }, pressed && { backgroundColor: C.surface }]}>
       {it ? <Text style={st.time}>{hhmm(it.at)}</Text> : <BoneText style={st.time} w={38} />}
       {it ? <DotIcon kind={it.kind} tone={MOD[it.kind]} dot={1.8} gap={0.45} /> : <Bone w={15.3} h={15.3} />}
       <View style={{ flex: 1 }}>
@@ -309,7 +327,8 @@ function Entry({ it, first }: { it?: FeedItem; first: boolean }) {
       {it
         ? <Text style={[st.entryValue, numFace(it.value, 13)]} numberOfLines={1}>{it.value}</Text>
         : <BoneText style={[st.entryValue, numFace('0', 13)]} w={34} />}
-    </View>
+      {!!onPress && <MaterialCommunityIcons name="chevron-right" size={14} color={C.faint} />}
+    </Pressable>
   );
 }
 
@@ -331,6 +350,7 @@ const st = StyleSheet.create({
   msgs: { padding: 16, paddingBottom: 24, gap: 14 },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12, borderTopWidth: 1, borderTopColor: C.line },
   hold: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
+  holdOn: { backgroundColor: C.hot, borderColor: C.hot },
   holdSquare: { width: 12, height: 12, backgroundColor: C.hot },
   input: { flex: 1, minHeight: 44, maxHeight: 120, backgroundColor: C.surface, borderRadius: 22, borderWidth: 1, borderColor: C.line, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontFamily: F.mono, fontSize: 15, color: C.ink },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.hot, alignItems: 'center', justifyContent: 'center' },

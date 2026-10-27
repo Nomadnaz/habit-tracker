@@ -1,4 +1,4 @@
-// Bottom tabs: LOG · BODY · [PUCK] · TRAIN · LIFE, drawn by PuckTabBar.
+// Bottom tabs: LOG · BODY · TRAIN · LIFE, drawn by PuckTabBar.
 // BODY is `index`, so the app opens on it.
 // habits/activity/progress stay registered (reachable via router.push —
 // habits and progress from LIFE, activity from TRAIN) but have no bar slot:

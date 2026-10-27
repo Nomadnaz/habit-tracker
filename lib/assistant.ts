@@ -133,12 +133,6 @@ function patchMsg(threadId: string, msgId: string, patch: Partial<Msg>) {
 
 export const openChat = (id?: string | null) => set({ sheet: 'chat', activeId: id === undefined ? state.activeId : id });
 export const openList = () => set({ sheet: 'list' });
-/** The PUCK dot: carry on the conversation you just had, else start fresh. */
-export const openFromDot = () => {
-  const recent = [...state.threads].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-  const fresh = recent && Date.now() - recent.updatedAt < 30 * 60 * 1000;
-  set({ sheet: 'chat', activeId: fresh ? recent!.id : null });
-};
 export const closeSheet = () => set({ sheet: 'closed' });
 /** LOG's inline chat: which thread it shows, without opening the sheet. */
 export const setActive = (id: string | null) => set({ activeId: id });
