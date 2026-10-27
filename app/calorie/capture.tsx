@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,6 +24,7 @@ const REG = F.mono;
 
 export default function CaptureScreen() {
   const router = useRouter();
+  const date = String(useLocalSearchParams<{ date?: string }>().date ?? ''); // the day FUEL was showing
   const [busy, setBusy] = useState(false);
 
   async function pickImage(from: 'camera' | 'library') {
@@ -58,7 +59,7 @@ export default function CaptureScreen() {
       if (!estimate) {
         // Vision call failed/unreachable — no fabricated numbers; blank
         // editable confirm screen with the photo attached.
-        router.replace({ pathname: '/calorie/confirm', params: { photoUri: compressed.uri } });
+        router.replace({ pathname: '/calorie/confirm', params: { photoUri: compressed.uri, date } });
         return;
       }
       router.replace({
@@ -66,12 +67,12 @@ export default function CaptureScreen() {
         params: {
           name: estimate.name, mealType: guessMealType(), calories: String(estimate.calories),
           proteinG: String(estimate.proteinG), carbsG: String(estimate.carbsG), fatG: String(estimate.fatG), sugarG: String(estimate.sugarG),
-          photoUri: compressed.uri, source: 'ai',
+          photoUri: compressed.uri, source: 'ai', date,
         },
       });
     } catch {
       // Manipulation failed — fall back to a manual entry with the photo attached.
-      router.replace({ pathname: '/calorie/confirm', params: { photoUri: uri } });
+      router.replace({ pathname: '/calorie/confirm', params: { photoUri: uri, date } });
     } finally {
       setBusy(false);
     }

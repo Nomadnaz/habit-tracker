@@ -22,6 +22,15 @@ describe('log feed', () => {
     expect(feed[2].items[0].value).toBe('72.5 KG');
   });
 
+  it('puts a meal on the day it was eaten, not the day it was typed in', () => {
+    const feed = buildFeed({
+      ...empty,
+      meals: [{ id: 'c', name: 'CURRY', calories: 800, createdAt: at(25, 9).toISOString(), loggedVia: 'manual', date: '2026-10-24' }],
+    }, now);
+    expect(feed.map(d => d.word)).toEqual(['YESTERDAY']);
+    expect(new Date(feed[0].items[0].at).getHours()).toBe(9);
+  });
+
   it('drops anything older than the window or in the future', () => {
     const feed = buildFeed({
       ...empty,

@@ -20,7 +20,7 @@ import { postWrite } from './postWrite';
 import { withStorageLock } from './storageLock';
 import type { AppleHealthSyncResult } from './apple-health';
 import { mergeRemote } from './syncMerge';
-import { toDateKey as dateKey, addDaysToKey } from './dateKey';
+import { toDateKey as dateKey, addDaysToKey, fromDateKey } from './dateKey';
 export { dateKey };
 import {
   getExercises, getPBLog, getDoneLog, getGymPlan, getTemplateExercises,
@@ -403,10 +403,16 @@ export async function pullRemoteBody(days = 14): Promise<boolean> {
 
 // ── Mutations (the interactive trackers) ────────────────────────────────────
 
-export async function addWater(amountMl: number): Promise<BodyData> {
+/** Logs water today, or on an earlier day (`date`, a date key) at the time of
+ *  day it is now, so each entry keeps its own timestamp, its handle. */
+export async function addWater(amountMl: number, date?: string): Promise<BodyData> {
   const data = await loadBodyData();
-  const entry = { amountMl, at: new Date().toISOString() };
+  const at = new Date();
+  const day = date ? fromDateKey(date) : null;
+  if (day) at.setFullYear(day.getFullYear(), day.getMonth(), day.getDate());
+  const entry = { amountMl, at: at.toISOString() };
   data.waterLogs.push(entry);
+  data.waterLogs.sort((a, b) => epoch(a.at) - epoch(b.at)); // a past day's entry goes back in order
   await save(data);
   bg(async () => {
     const userId = await getUid();
@@ -583,10 +589,12 @@ export function trainingDayType(d: BodyData, day: Date | null): DayType | 'empty
 }
 
 export function todayWaterMl(d: BodyData): number {
-  const todayKey = dateKey(startOfToday());
-  return d.waterLogs
-    .filter(l => dateKey(new Date(l.at)) === todayKey)
-    .reduce((sum, l) => sum + l.amountMl, 0);
+  return waterOn(d, dateKey(startOfToday())).reduce((sum, l) => sum + l.amountMl, 0);
+}
+
+/** One day's water entries (`key`, a date key), oldest first. */
+export function waterOn(d: BodyData, key: string): WaterLog[] {
+  return d.waterLogs.filter(l => dateKey(new Date(l.at)) === key);
 }
 
 export function latestWeight(d: BodyData): number {

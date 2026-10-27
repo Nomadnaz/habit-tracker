@@ -1,17 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────
 // CALORIE DASHBOARD — "FUEL"
 // Cal AI-style split: this is the slim dashboard only (summary, quick-add,
-// today's meal list). Capture and the confirm/edit form are their own
-// dedicated screens (calorie/capture.tsx, calorie/confirm.tsx), and past
-// days live in calorie/history.tsx — matching Cal AI's dedicated-page
-// structure instead of one screen with a camera flow and a bottom sheet
-// bolted on.
+// the day's meal list). Capture and the confirm/edit form are their own
+// dedicated screens (calorie/capture.tsx, calorie/confirm.tsx) — matching
+// Cal AI's dedicated-page structure instead of one screen with a camera flow
+// and a bottom sheet bolted on. ‹ › under the header steps back through
+// past days (or open it on one with a `date` param): that day's meals and
+// water can be added, edited and removed, and SCAN / SNAP / ADD / AGAIN log
+// to it.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
@@ -20,9 +22,11 @@ import {
   getTargets, dailyTotals, todayKey, MEAL_TYPES,
   type Meal, type NutritionTargets,
 } from '@/lib/meals-data';
+import { addWater, deleteWaterEntry, loadBodyData, pullRemoteBody, waterOn, type BodyData } from '@/lib/body-data';
+import { addDaysToKey, fromDateKey } from '@/lib/dateKey';
 
-import { C, F } from '@/lib/theme';
-import { hit } from '@/lib/hit';
+import { C, F, MOD, TNUM } from '@/lib/theme';
+import { hit, TAP } from '@/lib/hit';
 import { removeWithUndo, usePendingRemovals } from '@/lib/undo';
 import { useRevalidate } from '@/lib/revalidate';
 import { ScreenHeader, HeaderIcon } from '@/components/ScreenHeader';
@@ -59,11 +63,29 @@ function DotBar({ value, goal, color, cells = 24 }: { value: number; goal: numbe
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
+const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+/** TODAY, YESTERDAY, else e.g. MON 26 OCT. */
+function dayWord(key: string): string {
+  const today = todayKey();
+  if (key === today) return 'TODAY';
+  if (key === addDaysToKey(today, -1)) return 'YESTERDAY';
+  const d = fromDateKey(key);
+  return d ? `${DOW[d.getDay()]} ${String(d.getDate()).padStart(2, '0')} ${MON[d.getMonth()]}` : key;
+}
+
 export default function CalorieScreen() {
   const router = useRouter();
-  const dk = todayKey();
+  const params = useLocalSearchParams<{ date?: string }>();
+  const [dk, setDk] = useState(() => (params.date && fromDateKey(params.date) ? params.date : todayKey()));
+  useEffect(() => { if (params.date && fromDateKey(params.date)) setDk(params.date); }, [params.date]);
+  const isToday = dk === todayKey();
+  const word = dayWord(dk);
+  const shownDay = useRef(dk); // a slow read for a day you've stepped away from doesn't land
+  shownDay.current = dk;
 
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [body, setBody] = useState<BodyData | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [recent, setRecent] = useState<Meal[]>([]);
   const gone = usePendingRemovals();
@@ -73,17 +95,28 @@ export default function CalorieScreen() {
     // before. Then pull anything the SERVER has for this day that we don't --
     // meals logged by the voice device land straight in Supabase and would
     // otherwise never appear here (this layer used to be push-only).
-    const [m, t, r] = await Promise.all([getMealsForDate(dk), getTargets(), getRecentMeals()]);
+    const [m, t, r, b] = await Promise.all([getMealsForDate(dk), getTargets(), getRecentMeals(), loadBodyData()]);
+    if (shownDay.current !== dk) return;
     setMeals(m);
     setTargets(t);
     setRecent(r);
+    setBody(b);
 
+    void pullRemoteBody().then(async got => { if (got && shownDay.current === dk) setBody(await loadBodyData()); });
     if (await pullRemoteMeals(dk)) {
       const [m2, r2] = await Promise.all([getMealsForDate(dk), getRecentMeals()]);
+      if (shownDay.current !== dk) return;
       setMeals(m2);
       setRecent(r2);
     }
   }, [dk]);
+
+  function step(delta: number) {
+    if (delta > 0 && isToday) return;
+    void Haptics.selectionAsync();
+    setMeals([]);
+    setDk(k => addDaysToKey(k, delta));
+  }
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
   useRevalidate(() => { void refresh(); }); // back from the background or back online: pull again
@@ -92,6 +125,22 @@ export default function CalorieScreen() {
   const shown = meals.filter(m => !gone.has(m.id));
   const totals = dailyTotals(shown);
   const calGoal = targets?.calories ?? 2000;
+  // The day's water; an entry waiting on UNDO is already out.
+  const water = body ? waterOn(body, dk).filter(w => !gone.has(`water:${w.at}`)) : [];
+  const waterMl = water.reduce((a, w) => a + w.amountMl, 0);
+  const waterGoal = body?.waterGoalMl ?? 3000;
+
+  async function drink(ml: number) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setBody({ ...(await addWater(ml, dk)) });
+  }
+
+  function undrink() {
+    const last = water[water.length - 1];
+    if (!last) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    removeWithUndo({ key: `water:${last.at}`, label: `${last.amountMl} ML REMOVED`, commit: () => deleteWaterEntry(last.at), after: refresh });
+  }
 
   async function quickAdd(m: Meal) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -114,7 +163,7 @@ export default function CalorieScreen() {
         editingId: m.id, name: m.name, mealType: m.mealType,
         calories: String(m.calories), proteinG: String(m.proteinG),
         carbsG: String(m.carbsG), fatG: String(m.fatG), sugarG: String(m.sugarG ?? 0),
-        photoUri: m.photoUrl ?? '', loggedVia: m.loggedVia,
+        photoUri: m.photoUrl ?? '', loggedVia: m.loggedVia, date: m.date,
       },
     });
   }
@@ -128,11 +177,24 @@ export default function CalorieScreen() {
         right={<HeaderIcon icon="history" label="History" onPress={() => router.push('/calorie/history')} />}
       />
 
+      <View style={styles.dayBar}>
+        <Pressable onPress={() => step(-1)} style={({ pressed }) => [styles.dayStep, pressed && { backgroundColor: C.raised }]} accessibilityLabel="Previous day">
+          <MaterialCommunityIcons name="chevron-left" size={22} color={C.ink} />
+        </Pressable>
+        <Pressable onPress={() => { if (!isToday) { void Haptics.selectionAsync(); setMeals([]); setDk(todayKey()); } }} disabled={isToday} style={styles.dayMid} accessibilityLabel={isToday ? 'Today' : `${word}, tap to go back to today`}>
+          <Text style={styles.dayWord}>{word}</Text>
+          {!isToday && <Text style={styles.dayBack}>BACK TO TODAY</Text>}
+        </Pressable>
+        <Pressable onPress={() => step(1)} disabled={isToday} style={({ pressed }) => [styles.dayStep, isToday && { opacity: 0.2 }, pressed && { backgroundColor: C.raised }]} accessibilityLabel="Next day">
+          <MaterialCommunityIcons name="chevron-right" size={22} color={C.ink} />
+        </Pressable>
+      </View>
+
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Today's total, as big as the screen allows. */}
         <Pressable style={({ pressed }) => [styles.hero, pressed && { opacity: 0.85 }]} onPress={() => router.push({ pathname: '/calorie/goal', params: { key: 'calories' } })}>
           <Corners size={16} color={over ? C.alert : C.food} />
-          <Text style={styles.eyebrow}>EATEN TODAY  ›</Text>
+          <Text style={styles.eyebrow}>{`EATEN ${isToday ? 'TODAY' : word}  ›`}</Text>
           <Text style={styles.kcal} numberOfLines={1} adjustsFontSizeToFit>{fmt(totals.calories)}</Text>
           <Text style={styles.kcalUnit}>{`KCAL OF ${fmt(calGoal)}`}</Text>
           <DotBar value={totals.calories} goal={calGoal} color={over ? C.alert : C.food} cells={30} />
@@ -157,13 +219,34 @@ export default function CalorieScreen() {
           })}
         </View>
 
+        <View style={styles.water}>
+          <Corners size={8} color={C.lineHi} />
+          <View style={styles.waterHead}>
+            <Text style={styles.cellLabel}>WATER</Text>
+            <Text style={[styles.waterVal, TNUM]}>
+              {(waterMl / 1000).toFixed(2)}<Text style={styles.cellUnit}>{` / ${(waterGoal / 1000).toFixed(1)} L`}</Text>
+            </Text>
+          </View>
+          <DotBar value={waterMl} goal={waterGoal} color={MOD.water} cells={30} />
+          <View style={styles.waterRow}>
+            <Pressable onPress={undrink} disabled={!water.length} style={({ pressed }) => [styles.waterKey, !water.length && { opacity: 0.25 }, pressed && { backgroundColor: C.raised }]} accessibilityLabel="Remove the last water">
+              <MaterialCommunityIcons name="minus" size={18} color={C.ink} />
+            </Pressable>
+            {[250, 500, 750].map(ml => (
+              <Pressable key={ml} onPress={() => void drink(ml)} style={({ pressed }) => [styles.waterKey, { flex: 1 }, pressed && { backgroundColor: C.raised }]} accessibilityLabel={`Add ${ml} millilitres`}>
+                <Text style={styles.waterKeyText}>{`+${ml}`}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
         <View style={styles.actions}>
           {([
             { label: 'SCAN', icon: 'barcode-scan', to: '/calorie/scan', primary: true },
             { label: 'SNAP', icon: 'camera', to: '/calorie/capture', primary: false },
             { label: 'ADD', icon: 'plus', to: '/calorie/confirm', primary: false },
           ] as const).map(a => (
-            <Pressable key={a.label} onPress={() => router.push(a.to)}
+            <Pressable key={a.label} onPress={() => router.push({ pathname: a.to, params: { date: dk } })}
               style={({ pressed }) => [styles.action, a.primary && styles.actionPrimary, pressed && { opacity: 0.8 }]}>
               <MaterialCommunityIcons name={a.icon} size={22} color={a.primary ? C.onHot : C.ink} />
               <Text style={[styles.actionText, a.primary && { color: C.onHot }]}>{a.label}</Text>
@@ -186,7 +269,9 @@ export default function CalorieScreen() {
         )}
 
         <Text style={styles.sectionLabel}>LOG</Text>
-        {shown.length === 0 && <Text style={styles.empty}>Nothing logged yet today. Scan a barcode, snap a photo or add it by hand.</Text>}
+        {shown.length === 0 && <Text style={styles.empty}>{isToday
+          ? 'Nothing logged yet today. Scan a barcode, snap a photo or add it by hand.'
+          : `Nothing logged for ${word.toLowerCase()}. Anything you add here goes on that day.`}</Text>}
         {MEAL_TYPES.map(type => {
           const group = shown.filter(m => m.mealType === type);
           if (group.length === 0) return null;
@@ -228,6 +313,19 @@ export default function CalorieScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   scroll: { paddingHorizontal: 16, paddingBottom: 20 },
+
+  dayBar: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 6, borderWidth: 1, borderColor: C.line, borderRadius: 12, borderCurve: 'continuous' },
+  dayStep: { width: TAP + 8, height: TAP, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderCurve: 'continuous' },
+  dayMid: { flex: 1, minHeight: TAP, alignItems: 'center', justifyContent: 'center' },
+  dayWord: { fontFamily: F.dot, fontSize: 14, color: C.ink, letterSpacing: 2 },
+  dayBack: { fontFamily: F.dot, fontSize: 8, color: C.dim, letterSpacing: 1.5, marginTop: 3 },
+
+  water: { backgroundColor: C.surface, padding: 14, marginTop: 8 },
+  waterHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
+  waterVal: { fontFamily: F.dot, fontSize: 22, color: C.ink },
+  waterRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  waterKey: { minWidth: TAP, minHeight: TAP, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.lineHi },
+  waterKeyText: { fontFamily: F.dot, fontSize: 13, color: C.ink, letterSpacing: 1 },
 
   hero: { backgroundColor: C.surface, alignItems: 'center', paddingTop: 18, paddingBottom: 16, paddingHorizontal: 18, marginTop: 4 },
   eyebrow: { fontFamily: F.mono, fontSize: 11, color: C.dim, letterSpacing: 2 },

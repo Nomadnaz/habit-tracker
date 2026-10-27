@@ -11,7 +11,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -48,6 +48,7 @@ const g = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
 
 export default function ScanScreen() {
   const router = useRouter();
+  const date = String(useLocalSearchParams<{ date?: string }>().date ?? '') || todayKey(); // the day FUEL was showing
   const [perm, requestPerm] = useCameraPermissions();
   const [state, setState] = useState<State>({ kind: 'scanning' });
   const locked = useRef(false); // the camera fires many times per code
@@ -109,14 +110,14 @@ export default function ScanScreen() {
         {state.kind === 'missing' && (
           <Notice title="NOT FOUND" code={state.code}
             copy="This barcode isn't in the food database yet. Add it by hand — the label's numbers are all you need."
-            action="ADD MANUALLY" onAction={() => router.replace('/calorie/confirm')} onAgain={again} />
+            action="ADD MANUALLY" onAction={() => router.replace({ pathname: '/calorie/confirm', params: { date } })} onAgain={again} />
         )}
         {state.kind === 'offline' && (
           <Notice title="NO CONNECTION" code={state.code}
             copy="Couldn't reach the food database. Check your connection and try again."
             action="TRY AGAIN" onAction={() => void lookup(state.code)} onAgain={again} />
         )}
-        {state.kind === 'found' && <ProductPanel product={state.product} onAgain={again} onLogged={() => router.replace('/calorie')} />}
+        {state.kind === 'found' && <ProductPanel product={state.product} date={date} onAgain={again} onLogged={() => router.replace({ pathname: '/calorie', params: { date } })} />}
       </SafeAreaView>
     </View>
   );
@@ -160,7 +161,7 @@ function Notice({ title, code, copy, action, onAction, onAgain }: {
   );
 }
 
-function ProductPanel({ product: p, onAgain, onLogged }: { product: FoodProduct; onAgain: () => void; onLogged: () => void }) {
+function ProductPanel({ product: p, date, onAgain, onLogged }: { product: FoodProduct; date: string; onAgain: () => void; onLogged: () => void }) {
   const [amount, setAmount] = useState(String(p.servingG ?? 100));
   const [mealType, setMealType] = useState<MealType>(guessMealType());
   const [saving, setSaving] = useState(false);
@@ -177,7 +178,7 @@ function ProductPanel({ product: p, onAgain, onLogged }: { product: FoodProduct;
     if (saving || qty <= 0) return;
     setSaving(true);
     await addMeal({
-      date: todayKey(), mealType,
+      date, mealType,
       name: `${p.name}${p.brand && !p.name.toLowerCase().includes(p.brand.toLowerCase()) ? ` (${p.brand})` : ''} · ${g(qty)}${p.unit}`,
       calories: n.calories, proteinG: n.proteinG, carbsG: n.carbsG, fatG: n.fatG, sugarG: n.sugarG,
       loggedVia: 'barcode',

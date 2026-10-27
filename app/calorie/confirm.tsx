@@ -48,8 +48,10 @@ export default function ConfirmScreen() {
   const params = useLocalSearchParams<{
     editingId?: string; name?: string; mealType?: string; calories?: string;
     proteinG?: string; carbsG?: string; fatG?: string; sugarG?: string; photoUri?: string; source?: string;
-    loggedVia?: string; mode?: string;
+    loggedVia?: string; mode?: string; date?: string;
   }>();
+  // The day it's logged to: the one FUEL was showing, today by default.
+  const date = str(params.date) || todayKey();
 
   const editingId = str(params.editingId) || null;
   const photoUri = str(params.photoUri) || undefined;
@@ -106,7 +108,7 @@ export default function ConfirmScreen() {
       : editingId ? ((str(params.loggedVia) as Meal['loggedVia']) || 'manual')
       : 'manual';
     const input = {
-      date: todayKey(), mealType, name: name.trim() || 'Meal',
+      date, mealType, name: name.trim() || 'Meal',
       calories: kcal > 0 ? kcal : fromMacros,
       proteinG: num(proteinG), carbsG: num(carbsG), fatG: num(fatG), sugarG: num(sugarG),
       photoUrl: photoUri, loggedVia,
@@ -117,7 +119,7 @@ export default function ConfirmScreen() {
       await addMeal(input);
     }
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace('/calorie');
+    router.replace({ pathname: '/calorie', params: { date } });
   }
 
   function switchTo(m: Mode) {

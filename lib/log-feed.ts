@@ -10,7 +10,7 @@ export type FeedItem = { key: string; at: number; kind: HudModule; text: string;
 export type FeedDay = { date: string; word: string; items: FeedItem[] };
 
 export type FeedInput = {
-  meals: { id: string; name: string; calories: number; createdAt: string; loggedVia: string }[];
+  meals: { id: string; name: string; calories: number; createdAt: string; loggedVia: string; date?: string }[];
   sessions: { exerciseId: string; name: string; date: string; at: number; sets: number; weightKg: number; reps: number | null; measured: boolean }[];
   water: { amountMl: number; at: string }[];
   weight: { weightKg: number; at: string }[];
@@ -32,12 +32,22 @@ function sleepAt(s: FeedInput['sleep'][number]) {
   return Date.parse(s.createdAt);
 }
 
+/** A meal sits on the day it was eaten (`date`), at the time it was logged:
+ *  one added to yesterday from FUEL today belongs to yesterday. */
+function mealAt(m: FeedInput['meals'][number]) {
+  const t = new Date(m.createdAt);
+  if (!m.date || !Number.isFinite(t.getTime()) || toDateKey(t) === m.date) return t.getTime();
+  const [y, mo, d] = m.date.split('-').map(Number);
+  t.setFullYear(y, mo - 1, d);
+  return t.getTime();
+}
+
 const kg = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 export function buildFeed(input: FeedInput, now = new Date(), days = 7): FeedDay[] {
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1)).getTime();
   const items: FeedItem[] = [
-    ...input.meals.map(m => ({ key: `meal:${m.id}`, at: Date.parse(m.createdAt), kind: 'fuel' as const, text: m.name, value: `${Math.round(m.calories)} KCAL`, via: VIA[m.loggedVia] })),
+    ...input.meals.map(m => ({ key: `meal:${m.id}`, at: mealAt(m), kind: 'fuel' as const, text: m.name, value: `${Math.round(m.calories)} KCAL`, via: VIA[m.loggedVia] })),
     ...input.sessions.map(s => ({
       key: `lift:${s.exerciseId}:${s.date}`, at: s.at, kind: 'train' as const, text: s.name,
       value: `${s.sets}×${s.reps ?? '?'}${s.weightKg > 0 ? ` · ${kg(s.weightKg)} KG` : ''}`, via: s.measured ? 'PUCK' : undefined,
