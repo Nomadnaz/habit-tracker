@@ -6,8 +6,9 @@
 // (components/train/DayPanel.tsx) to put right what was logged on it:
 // lifts, runs, food, water, weigh-ins, or mark a blank day missed so an
 // average day is assumed. Every change recomputes the twin (lib/twin-data.ts:
-// muscles, targets, the coach's pick). The routine, PBs, history, strength
-// and steps sit in a row of links underneath.
+// muscles, targets, the coach's pick). The routine, PBs, strength and steps
+// sit in a row of links underneath, and HISTORY last: the latest training
+// day with the muscles it worked, opening the full history.
 // ─────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from 'react';
@@ -19,12 +20,14 @@ import * as Haptics from 'expo-haptics';
 
 import { onWrite } from '@/lib/postWrite';
 import { loadBodyData, pullRemoteBody, refreshAppleHealthIfConnected } from '@/lib/body-data';
-import { getDoneLog, getTrainingSessions } from '@/lib/workout-data';
+import { getDoneLog, getJunctions, getTemplates, getTrainingSessions } from '@/lib/workout-data';
 import { getMealMap } from '@/lib/meals-data';
 import { getActivitiesInRange, getRecentActivities, formatDistance } from '@/lib/activity-data';
 import { loadCoach, recalibrateStarterLifts, saveRoutine, type CoachState } from '@/lib/routine';
 import { weekPlan, type Routine } from '@/lib/coach';
 import { getMissedDays, setMissed } from '@/lib/missed-days';
+import { dialOrder, type DialItem } from '@/lib/workout-dial';
+import { buildHistory, dayName, shortDate, type DayLog } from '@/lib/history';
 import { blankDays, dayMarks, type DayMark } from '@/lib/train-days';
 import { loadToday } from '@/lib/twin-data';
 import { toDateKey } from '@/lib/dateKey';
@@ -33,6 +36,8 @@ import { ActionSquare, RunGlyph, WeekDots } from '@/components/train/ActionSquar
 import { RoutineCard } from '@/components/train/RoutineCard';
 import { DayStrip } from '@/components/train/DayStrip';
 import { DayPanel } from '@/components/train/DayPanel';
+import { BodyMini } from '@/components/train/BodyMini';
+import { Corners } from '@/components/Corners';
 
 import { C, F } from '@/lib/theme';
 import { TAP } from '@/lib/hit';
@@ -60,6 +65,8 @@ export default function TrainScreen() {
   const [marks, setMarks] = useState<DayMark[]>([]);
   const [selected, setSelected] = useState(today);
   const [routineOpen, setRoutineOpen] = useState(false);
+  const [dial, setDial] = useState<DialItem[]>([]);
+  const [lastDay, setLastDay] = useState<DayLog | null>(null);
 
   const refresh = useCallback(async () => {
     const c = await loadCoach();
@@ -69,14 +76,19 @@ export default function TrainScreen() {
 
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - BACK);
-    const [lifts, runs, meals, missed, done, recent] = await Promise.all([
+    const [lifts, runs, meals, missed, done, recent, templates, junctions] = await Promise.all([
       getTrainingSessions(BACK + 1).catch(() => []),
       getActivitiesInRange(from.toISOString(), new Date(now.getTime() + 60_000).toISOString()).catch(() => []),
       getMealMap(),
       getMissedDays(),
       getDoneLog(),
       getRecentActivities(1).catch(() => []),
+      getTemplates(),
+      getJunctions(),
     ]);
+    // The day panel's picker: SELECT's sessions, in its order.
+    setDial(dialOrder({ today: c.today, routine: c.routine, templates, liftsOf: id => junctions.filter(j => j.templateId === id).length, now }));
+    setLastDay(buildHistory(lifts, done, templates.filter(t => !t.isArchived))[0] ?? null);
     const body = c.body;
     const day = (iso: string | number) => toDateKey(new Date(iso));
     const liftDays = [...lifts.filter(s => !CARDIO.has(s.name)).map(s => s.date), ...done.map(d => d.date)];
@@ -206,7 +218,7 @@ export default function TrainScreen() {
 
         {pick && (
           <DayPanel
-            date={selected} today={today} missed={pick.missed} plan={pick.plan}
+            date={selected} today={today} missed={pick.missed} plan={pick.plan} sessions={dial}
             onChanged={changed} onStart={openLog}
           />
         )}
@@ -216,7 +228,6 @@ export default function TrainScreen() {
           {([
             { label: 'ROUTINE', icon: 'calendar-sync-outline', on: routineOpen, go: () => setRoutineOpen(o => !o) },
             { label: 'PBS', icon: 'trophy-outline', go: () => router.push('/pbs') },
-            { label: 'HISTORY', icon: 'history', go: () => router.push('/history') },
             { label: 'STRENGTH', icon: 'arm-flex-outline', go: () => router.push('/strength') },
             { label: 'STEPS', icon: 'shoe-print', go: () => router.push('/steps') },
           ] as const).map(l => (
@@ -228,10 +239,24 @@ export default function TrainScreen() {
           ))}
         </View>
         {routineOpen && (
-          <View style={{ marginTop: 4 }}>
+          <View style={{ marginTop: 10 }}>
             <RoutineCard routine={coach?.routine ?? null} todayIdx={todayIdx} doneIdx={[]} onChange={changeRoutine} />
           </View>
         )}
+
+        {/* ── History: the latest training day and what it worked ── */}
+        <Pressable onPress={() => router.push('/history')} style={({ pressed }) => [styles.history, pressed && { backgroundColor: C.raised }]} accessibilityLabel="History">
+          <Corners size={10} color={lastDay ? C.alert : C.lineHi} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.histLabel}>HISTORY  ›</Text>
+            <Text style={styles.histTitle} numberOfLines={2}>{lastDay ? lastDay.title : 'NOTHING YET'}</Text>
+            <Text style={styles.histSub}>{lastDay ? `${dayName(lastDay.date)} ${shortDate(lastDay.date)} · ${lastDay.lifts.length} LIFTS` : 'YOUR TRAINING DAYS SHOW UP HERE'}</Text>
+            {lastDay && (
+              <Text style={styles.histLifts} numberOfLines={3}>{lastDay.lifts.map(l => l.name).join(' · ')}</Text>
+            )}
+          </View>
+          <BodyMini load={lastDay?.load ?? {}} height={104} />
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -244,24 +269,30 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14 },
   title: { fontFamily: F.dot, fontSize: 40, color: C.ink, letterSpacing: 2, marginTop: 2 },
   subtitle: { fontFamily: F.dot, fontSize: 10, color: C.dim, letterSpacing: 3 },
-  headIcon: { width: TAP, height: TAP, borderRadius: TAP / 2, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
+  headIcon: { width: TAP, height: TAP, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
 
   squares: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 18 },
 
   calHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, marginBottom: 10 },
   calMonth: { fontFamily: F.dot, fontSize: 11, color: C.ink, letterSpacing: 3 },
   legend: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legBar: { width: 9, height: 4, borderRadius: 2 },
-  legRing: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.2, borderColor: C.dim },
+  legBar: { width: 9, height: 4 },
+  legRing: { width: 8, height: 8, borderWidth: 1.2, borderColor: C.dim },
   legText: { fontFamily: F.dot, fontSize: 7, color: C.faint, letterSpacing: 1, marginRight: 6 },
-  todayKey: { minHeight: 30, paddingHorizontal: 12, borderRadius: 15, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
+  todayKey: { minHeight: 30, paddingHorizontal: 12, borderWidth: 1, borderColor: C.lineHi, alignItems: 'center', justifyContent: 'center' },
   todayKeyText: { fontFamily: F.dot, fontSize: 9, color: C.ink, letterSpacing: 1.5 },
 
-  blanks: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 10, minHeight: TAP, paddingHorizontal: 14, borderRadius: 12, borderCurve: 'continuous', borderWidth: 1, borderStyle: 'dashed', borderColor: C.lineHi },
+  blanks: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 10, minHeight: TAP, paddingHorizontal: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: C.lineHi },
   blanksText: { flex: 1, fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.2 },
 
   links: { flexDirection: 'row', gap: 6, marginHorizontal: 16, marginTop: 14 },
-  link: { flex: 1, minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 14, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  link: { flex: 1, minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 5, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   linkOn: { backgroundColor: C.hot, borderColor: C.hot },
   linkText: { fontFamily: F.dot, fontSize: 7, color: C.ink, letterSpacing: 1 },
+
+  history: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginHorizontal: 16, marginTop: 14, padding: 14, backgroundColor: C.surface },
+  histLabel: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2 },
+  histTitle: { fontFamily: F.dot, fontSize: 18, color: C.ink, letterSpacing: 1 },
+  histSub: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1 },
+  histLifts: { fontFamily: F.mono, fontSize: 11, color: C.faint, marginTop: 4, lineHeight: 15 },
 });

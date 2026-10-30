@@ -162,7 +162,7 @@ export function WeekDots({ counts, todayIdx, w, h, color = C.onHot, ghost = 'rgb
 }
 
 const st = StyleSheet.create({
-  box: { borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, padding: 16, paddingBottom: 18, justifyContent: 'space-between', overflow: 'hidden' },
+  box: { borderWidth: 1, padding: 16, paddingBottom: 18, justifyContent: 'space-between', overflow: 'hidden' },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   index: { fontFamily: F.dot, fontSize: 11, letterSpacing: 1 },
   eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

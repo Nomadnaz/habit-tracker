@@ -105,7 +105,7 @@ const CORNER: Record<Kind, string> = { today: C.live, next: C.live, past: C.line
 const TEXT: Record<Kind, string> = { today: C.onHot, next: C.ink, past: C.dim, cheat: C.alert, rest: C.faint };
 
 const st = StyleSheet.create({
-  card: { marginHorizontal: 16, marginBottom: 18, backgroundColor: C.surface, borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: C.line, padding: 16, gap: 10 },
+  card: { marginHorizontal: 16, marginBottom: 18, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, padding: 16, gap: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   label: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 2 },
   caption: { flexShrink: 1, fontFamily: F.dot, fontSize: 8, color: C.faint, letterSpacing: 1.2, textAlign: 'right' },
@@ -121,7 +121,7 @@ const st = StyleSheet.create({
   dayText: { fontFamily: F.dot, fontSize: 8, letterSpacing: 0.5 },
   hint: { fontFamily: F.mono, fontSize: 9, letterSpacing: 1.5, color: C.faint, textAlign: 'center' },
   splits: { gap: 6 },
-  split: { height: 34, paddingHorizontal: 14, borderRadius: 17, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
+  split: { height: 34, paddingHorizontal: 14, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center' },
   splitOn: { backgroundColor: C.hot, borderColor: C.hot },
   splitText: { fontFamily: F.dot, fontSize: 9, color: C.dim, letterSpacing: 1.2 },
   splitTextOn: { color: C.onHot },
