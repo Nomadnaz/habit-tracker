@@ -146,14 +146,9 @@ const ART: Record<HudModule, readonly string[]> = {
 };
 
 export function DotIcon({ kind, tone, dot = 1.4, gap = 0.34 }: { kind: HudModule; tone: string; dot?: number; gap?: number }) {
-  return <DotGlyph art={ART[kind]} tone={tone} dot={dot} gap={gap} />;
-}
-
-/** Any 7×7 glyph drawn the same way ('#' lit, '.' clear), e.g. the tab bar's. */
-export function DotGlyph({ art, tone, dot = 1.4, gap = 0.34 }: { art: readonly string[]; tone: string; dot?: number; gap?: number }) {
   return (
     <View style={{ gap }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      {art.map((row, r) => (
+      {ART[kind].map((row, r) => (
         <View key={r} style={{ flexDirection: 'row', gap }}>
           {row.split('').map((ch, c) => (
             <View key={c} style={{ width: dot, height: dot, backgroundColor: ch === '#' ? tone : 'transparent' }} />

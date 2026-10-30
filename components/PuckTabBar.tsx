@@ -1,36 +1,65 @@
-// Bottom bar: four destinations, each a pixel glyph in the puck's square
-// dots over its name. A lit plate slides to the tab you're on (it jumps
-// there under Reduce Motion). Talking to the assistant lives on LOG: its
-// send button is hold-to-talk while the box is empty.
+// Bottom bar: four destinations, each a line icon over its name. A lit pill
+// slides behind the current tab's icon (it jumps there under Reduce Motion).
+// Talking to the assistant lives on LOG: its send button is hold-to-talk
+// while the box is empty.
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { C, F, SPRING } from '@/lib/theme';
 import { TAP } from '@/lib/hit';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
-import { DotGlyph } from '@/components/today/DotIcon';
 
-// 7×7, the readout glyphs' grid: a list, a figure, a dumbbell, a calendar.
-const GLYPH = {
-  log:   ['#.#####', '.......', '#.####.', '.......', '#.#####', '.......', '#.###..'],
-  body:  ['..###..', '..###..', '.......', '#######', '..###..', '.##.##.', '.##.##.'],
-  train: ['.......', '##...##', '##...##', '#######', '##...##', '##...##', '.......'],
-  life:  ['.#...#.', '#######', '#.....#', '#.#.#.#', '#.....#', '#.#.#.#', '#######'],
-} as const;
+type Glyph = 'log' | 'body' | 'train' | 'life';
 
-export const TAB_ORDER: { name: string; label: string; glyph: readonly string[] }[] = [
-  { name: 'log',   label: 'LOG',   glyph: GLYPH.log   },
-  { name: 'index', label: 'BODY',  glyph: GLYPH.body  },
-  { name: 'gym',   label: 'TRAIN', glyph: GLYPH.train },
-  { name: 'life',  label: 'LIFE',  glyph: GLYPH.life  },
+export const TAB_ORDER: { name: string; label: string; glyph: Glyph }[] = [
+  { name: 'log',   label: 'LOG',   glyph: 'log'   },
+  { name: 'index', label: 'BODY',  glyph: 'body'  },
+  { name: 'gym',   label: 'TRAIN', glyph: 'train' },
+  { name: 'life',  label: 'LIFE',  glyph: 'life'  },
 ];
 
 // Hidden tab routes light up the tab they belong to, so you never lose your place.
 const PARENT: Record<string, string> = { habits: 'life', activity: 'gym', progress: 'gym' };
 
-const INSET = 6; // the plate sits this far inside its slot
+const PILL_W = 54;
+const PILL_H = 30;
+
+/** 24-unit line icons, drawn at 22 pt: a log list, a figure, a dumbbell, a calendar with a tick. */
+function Icon({ glyph, color }: { glyph: Glyph; color: string }) {
+  const line = { stroke: color, strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24">
+      {glyph === 'log' && (
+        <>
+          <Rect x={4} y={3} width={16} height={18} rx={3.5} {...line} />
+          <Path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" {...line} />
+        </>
+      )}
+      {glyph === 'body' && (
+        <>
+          <Circle cx={12} cy={4.6} r={2.3} {...line} />
+          <Path d="M6 9.4c2 .9 4 1.3 6 1.3s4-.4 6-1.3M12 10.7v4.6M12 15.3l-2.6 5.6M12 15.3l2.6 5.6M9.2 10.3l-.9 4.4M14.8 10.3l.9 4.4" {...line} />
+        </>
+      )}
+      {glyph === 'train' && (
+        <>
+          <Rect x={4.6} y={7} width={3} height={10} rx={1.2} {...line} />
+          <Rect x={16.4} y={7} width={3} height={10} rx={1.2} {...line} />
+          <Path d="M7.6 12h8.8M2.6 10v4M21.4 10v4" {...line} />
+        </>
+      )}
+      {glyph === 'life' && (
+        <>
+          <Rect x={3.5} y={5} width={17} height={15.5} rx={3.5} {...line} />
+          <Path d="M3.5 9.8h17M8.2 3v4M15.8 3v4M9 14.8l2 2 4-4" {...line} />
+        </>
+      )}
+    </Svg>
+  );
+}
 
 export function PuckTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -44,7 +73,7 @@ export function PuckTabBar({ state, navigation }: BottomTabBarProps) {
 
   useEffect(() => {
     if (!slot) return;
-    const to = at * slot;
+    const to = at * slot + (slot - PILL_W) / 2;
     // First layout, or Reduce Motion: put it there; otherwise slide.
     if (!placed.current || reduced) { x.setValue(to); placed.current = true; return; }
     Animated.spring(x, { toValue: to, ...SPRING.settle }).start();
@@ -61,13 +90,9 @@ export function PuckTabBar({ state, navigation }: BottomTabBarProps) {
   };
 
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom - 8, 8) }]}>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom - 12, 6) }]}>
       <View style={styles.row} onLayout={e => setSlot(e.nativeEvent.layout.width / TAB_ORDER.length)}>
-        {slot > 0 && (
-          <Animated.View pointerEvents="none" style={[styles.plate, { width: slot - INSET * 2, transform: [{ translateX: x }] }]}>
-            <View style={styles.plateTick} />
-          </Animated.View>
-        )}
+        {slot > 0 && <Animated.View pointerEvents="none" style={[styles.pill, { transform: [{ translateX: x }] }]} />}
         {TAB_ORDER.map(t => (
           <Tab key={t.name} label={t.label} glyph={t.glyph} active={lit === t.name} reduced={reduced} onPress={() => go(t.name)} />
         ))}
@@ -77,7 +102,7 @@ export function PuckTabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 function Tab({ label, glyph, active, reduced, onPress }: {
-  label: string; glyph: readonly string[]; active: boolean; reduced: boolean; onPress: () => void;
+  label: string; glyph: Glyph; active: boolean; reduced: boolean; onPress: () => void;
 }) {
   const press = useRef(new Animated.Value(1)).current;
   const to = (v: number) => { if (!reduced) Animated.spring(press, { toValue: v, ...SPRING.pop }).start(); };
@@ -85,31 +110,26 @@ function Tab({ label, glyph, active, reduced, onPress }: {
     <Pressable
       style={styles.tab}
       onPress={onPress}
-      onPressIn={() => to(0.92)}
+      onPressIn={() => to(0.9)}
       onPressOut={() => to(1)}
       role="tab"
       accessibilityState={{ selected: active }}
       accessibilityLabel={label}
     >
-      <Animated.View style={[styles.tabInner, { transform: [{ scale: press }] }]}>
-        <DotGlyph art={glyph} tone={active ? C.hot : C.faint} dot={2} gap={1} />
-        <Text style={[styles.label, active && styles.labelActive]}>{label}</Text>
+      <Animated.View style={[styles.icon, { transform: [{ scale: press }] }]}>
+        <Icon glyph={glyph} color={active ? C.onHot : C.dim} />
       </Animated.View>
+      <Text style={[styles.label, active && styles.labelActive]}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: { backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.line, paddingTop: 6, paddingHorizontal: 8 },
+  bar: { backgroundColor: C.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.lineHi, paddingTop: 6, paddingHorizontal: 6 },
   row: { flexDirection: 'row' },
-  plate: {
-    position: 'absolute', top: 0, bottom: 0, left: INSET,
-    backgroundColor: C.raised, borderWidth: 1, borderColor: C.lineHi,
-    borderRadius: 14, borderCurve: 'continuous', alignItems: 'center',
-  },
-  plateTick: { width: 14, height: 2, backgroundColor: C.hot, marginTop: -1 },
-  tab: { flex: 1, minHeight: TAP + 10 },
-  tabInner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
-  label: { fontFamily: F.dot, fontSize: 10, letterSpacing: 2, color: C.faint },
+  pill: { position: 'absolute', top: 0, left: 0, width: PILL_W, height: PILL_H, borderRadius: PILL_H / 2, backgroundColor: C.hot },
+  tab: { flex: 1, minHeight: TAP, alignItems: 'center', gap: 3 },
+  icon: { height: PILL_H, width: PILL_W, alignItems: 'center', justifyContent: 'center' },
+  label: { fontFamily: F.dot, fontSize: 9, letterSpacing: 1.5, color: C.faint },
   labelActive: { color: C.hot },
 });
