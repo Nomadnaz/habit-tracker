@@ -93,6 +93,7 @@ export default function ActivityScreen() {
     subRef.current?.remove();
     subRef.current = null;
     if (tickRef.current) clearInterval(tickRef.current);
+    void stopBackgroundLocation(); // never leave the GPS on behind a screen that's gone
   }, []);
 
   useFocusEffect(useCallback(() => {

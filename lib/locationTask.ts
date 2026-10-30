@@ -86,6 +86,14 @@ function registerLocationTask(): void {
 
 registerLocationTask();
 
+// A recording lives in RECORD's memory, so when the JS starts cold no run can
+// be in progress — yet iOS keeps background updates registered across launches
+// (expo-task-manager restores them every start). A run cut short by the app
+// being closed or reloaded used to leave the GPS on for good: the blue location
+// arrow in the Dynamic Island on every launch, and the app relaunched by its
+// location events. Anything still running at cold start is that leftover.
+void stopBackgroundLocation().then(() => AsyncStorage.removeItem(BUFFER_KEY)).catch(() => {}); // and its points
+
 /** Drain + clear the background buffer — called once from stop(). */
 export async function drainBackgroundWaypoints(): Promise<Waypoint[]> {
   try {
@@ -114,7 +122,10 @@ export async function startBackgroundLocation(): Promise<boolean> {
       accuracy: Location.Accuracy.Balanced,
       timeInterval: 5000,
       distanceInterval: 10,
-      showsBackgroundLocationIndicator: true, // iOS: the blue status-bar pill while tracking in background
+      // iOS: no blue pill while a run records in the background. (With only
+      // "While Using" permission iOS shows it anyway; the system's own
+      // location arrow can't be changed or hidden by an app.)
+      showsBackgroundLocationIndicator: false,
       foregroundService: {
         notificationTitle: 'Recording activity',
         notificationBody: 'Tracking your route in the background.',
@@ -130,7 +141,8 @@ export async function stopBackgroundLocation(): Promise<void> {
   const TaskManager = getTaskManager();
   if (!TaskManager) return;
   try {
-    const running = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
+    const running = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME)
+      || await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
     if (running) await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
   } catch {
     // Nothing to stop, or the OS already tore it down — not an error case.
