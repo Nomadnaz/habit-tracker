@@ -437,10 +437,15 @@ export async function setDailyGoals(stepsGoal: number, waterGoalMl: number): Pro
   });
 }
 
-export async function logWeight(weightKg: number): Promise<BodyData> {
+/** A weigh-in now, or on an earlier day (`date`, a date key) at this time of day. */
+export async function logWeight(weightKg: number, date?: string): Promise<BodyData> {
   const data = await loadBodyData();
-  const entry = { weightKg, at: new Date().toISOString() };
+  const at = new Date();
+  const day = date ? fromDateKey(date) : null;
+  if (day) at.setFullYear(day.getFullYear(), day.getMonth(), day.getDate());
+  const entry = { weightKg, at: at.toISOString() };
   data.weightLogs.push(entry);
+  data.weightLogs.sort((a, b) => epoch(a.at) - epoch(b.at)); // latestWeight etc. read the end as now
   await save(data);
   bg(async () => {
     const userId = await getUid();

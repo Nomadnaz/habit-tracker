@@ -12,6 +12,7 @@ import { getRecentSleepLogs } from './sleep-data';
 import { getActivitiesInRange } from './activity-data';
 import { getExercises, getTemplateExercises, getTemplates } from './workout-data';
 import { FOCUS_LINEUP, focusOfName, planSession, type Today } from './coach';
+import { fillMissed, getMissedDays } from './missed-days';
 import { buildTwin, DEFAULT_GOAL, type Twin, type TwinGoal, type TwinInput } from './twin';
 
 const GOAL_KEY = '@twin_goal';
@@ -64,13 +65,14 @@ export async function loadToday(): Promise<{ view: TodayView; input: TwinInput }
   const now = new Date();
   const back = (d: number) => dateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - d));
   const since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 8).toISOString();
-  const [coach, goal, profile, sleepLogs, activities, meals] = await Promise.all([
+  const [coach, goal, profile, sleepLogs, activities, meals, missed] = await Promise.all([
     loadCoach(),
     getGoal(),
     getBodyProfile(),
     getRecentSleepLogs(14),
     getActivitiesInRange(since, new Date(now.getTime() + 60_000).toISOString()).catch(() => []),
     Promise.all(Array.from({ length: 8 }, (_, d) => getMealsForDate(back(d)).then(m => [back(d), m] as const))),
+    getMissedDays(),
   ]);
   const body = coach.body;
 
@@ -78,6 +80,9 @@ export async function loadToday(): Promise<{ view: TodayView; input: TwinInput }
   for (const l of body.waterLogs) { const k = dateKey(new Date(l.at)); water[k] = (water[k] ?? 0) + l.amountMl; }
   const eaten: Record<string, number> = {};
   for (const [k, m] of meals) if (m.length) eaten[k] = dailyTotals(m).calories;
+  // A day marked missed on TRAIN counts as an average day, not a fast.
+  const ate = fillMissed(eaten, missed);
+  const drank = fillMissed(water, missed);
   // Sleep: the wearable's night, else the logged one; last night falls back to Health's figure.
   const sleep: Record<string, number> = {};
   for (const l of sleepLogs) if (l.totalHours) sleep[l.date] = l.totalHours * 60;
@@ -93,7 +98,7 @@ export async function loadToday(): Promise<{ view: TodayView; input: TwinInput }
     now, goal,
     profile: { age: profile.age ?? null, sex: profile.sex, heightCm: profile.heightCm, weightKg: profile.weightKg, goalWeightKg: profile.goalWeightKg ?? null },
     weights: body.weightLogs.map(w => ({ kg: w.weightKg, at: w.at })),
-    steps: body.stepsHistory, water, eaten, sleep,
+    steps: body.stepsHistory, water: drank, eaten: ate, sleep,
     wake: wakeMin == null ? null : `${String(Math.floor(wakeMin / 60)).padStart(2, '0')}:${String(wakeMin % 60).padStart(2, '0')}`,
     runsKm, coach: coach.today, routine: coach.routine, sessions: coach.sessions,
   };

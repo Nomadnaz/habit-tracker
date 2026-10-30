@@ -398,7 +398,11 @@ export async function removeExerciseFromTemplate(junctionId: string): Promise<vo
 }
 
 export async function markDoneToday(templateId: string, skip: string[] = []): Promise<void> {
-  const today = todayKey();
+  return markDoneOn(templateId, todayKey(), skip);
+}
+
+/** Ticks a workout done on any day, a date key (TRAIN's calendar fills in a past one). */
+export async function markDoneOn(templateId: string, today: string, skip: string[] = []): Promise<void> {
   const entry = { id: genId(), templateId, date: today };
 
   const wasAlreadyDone = await withStorageLock(K.doneLog, async () => {
@@ -431,7 +435,10 @@ export async function markDoneToday(templateId: string, skip: string[] = []): Pr
 }
 
 export async function unmarkDoneToday(templateId: string): Promise<void> {
-  const today = todayKey();
+  return unmarkDoneOn(templateId, todayKey());
+}
+
+export async function unmarkDoneOn(templateId: string, today: string): Promise<void> {
   await withStorageLock(K.doneLog, async () => {
     const log = await getDoneLog();
     await save(K.doneLog, log.filter(e => !(e.templateId === templateId && e.date === today)));
@@ -441,6 +448,32 @@ export async function unmarkDoneToday(templateId: string): Promise<void> {
     if (!userId) return;
     await supabase.from('workout_done_log').delete().eq('user_id', userId).eq('workout_template_id', templateId).eq('date', today);
   });
+}
+
+/** Takes one lift off a day: off the day's ticked workouts (skipped, and the
+ *  tick itself goes once nothing's left of it) and its logged sets deleted.
+ *  The muscles, the coach and the twin all read from these, so they follow. */
+export async function removeLiftOn(exerciseId: string, date: string): Promise<void> {
+  const junctions = await getJunctions();
+  const emptied: string[] = []; // ticks with nothing left: gone from the server too
+  await withStorageLock(K.doneLog, async () => {
+    const log = await getDoneLog();
+    const next = log.flatMap(e => {
+      if (e.date !== date) return [e];
+      const lifts = junctions.filter(j => j.templateId === e.templateId).map(j => j.exerciseId);
+      if (!lifts.includes(exerciseId)) return [e];
+      const skip = [...new Set([...(e.skip ?? []), exerciseId])];
+      if (lifts.every(id => skip.includes(id))) { emptied.push(e.templateId); return []; }
+      return [{ ...e, skip }];
+    });
+    await save(K.doneLog, next);
+  });
+  const userId = await uid();
+  if (userId) {
+    await supabase.from('exercise_sets').delete().eq('user_id', userId).eq('exercise_id', exerciseId).eq('date', date);
+    for (const t of emptied) await supabase.from('workout_done_log').delete().eq('user_id', userId).eq('workout_template_id', t).eq('date', date);
+  }
+  postWrite('workout', { exercise_id: exerciseId, date }, 'delete');
 }
 
 // ── PB tracking ────────────────────────────────────────────────────────────
