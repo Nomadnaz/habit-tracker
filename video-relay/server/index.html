@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Relay</title>
+<style>
+  body { margin: 0; min-height: 100vh; background: #000; color: #fff; font: 16px system-ui, sans-serif; display: flex; justify-content: center; }
+  main { width: 100%; max-width: 420px; padding: 32px 16px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+  h1 { margin: 0 0 8px; font-size: 28px; }
+  input { padding: 14px; border-radius: 12px; border: 1px solid #333; background: #111; color: #fff; font-size: 16px; }
+  button, a.btn { padding: 14px; border: 0; border-radius: 999px; background: #fff; color: #000; font-size: 16px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; }
+  button:disabled { opacity: 0.5; }
+  #msg { color: #aaa; margin: 0; }
+  #msg.err { color: #ff5a5a; }
+  video { width: 100%; border-radius: 12px; background: #111; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Video Relay</h1>
+  <form id="form"><input id="url" type="url" placeholder="Paste a TikTok or Instagram link" required></form>
+  <button id="go" form="form">Convert</button>
+  <p id="msg"></p>
+  <video id="video" controls playsinline hidden></video>
+  <a id="download" class="btn" download="video.mp4" hidden>Download</a>
+  <button id="share" hidden>Share</button>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const key = new URLSearchParams(location.search).get("key");
+  let file;
+
+  $("form").onsubmit = async (e) => {
+    e.preventDefault();
+    $("go").disabled = true;
+    $("msg").className = "";
+    $("msg").textContent = "Converting…";
+    $("video").hidden = $("download").hidden = $("share").hidden = true;
+    try {
+      const res = await fetch("convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(key && { Authorization: "Bearer " + key }) },
+        body: JSON.stringify({ url: $("url").value }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail ?? "Server error " + res.status);
+      }
+      const blob = await res.blob();
+      file = new File([blob], "video.mp4", { type: "video/mp4" });
+      $("video").src = $("download").href = URL.createObjectURL(blob);
+      $("video").hidden = $("download").hidden = false;
+      $("share").hidden = !navigator.canShare?.({ files: [file] });
+      $("msg").textContent = "";
+    } catch (err) {
+      $("msg").className = "err";
+      $("msg").textContent = err.message;
+    }
+    $("go").disabled = false;
+  };
+
+  $("share").onclick = () => navigator.share({ files: [file] }).catch(() => {});
+</script>
+</body>
+</html>

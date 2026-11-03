@@ -1,19 +1,21 @@
 """Video Relay server: social link in, plain watermarked MP4 out."""
-import json
 import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
+import imageio_ffmpeg
 import yt_dlp
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
-RELAY_KEY = os.environ["RELAY_KEY"]
+RELAY_KEY = os.environ.get("RELAY_KEY")  # unset = no key needed (running on your own PC)
+FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()  # bundled with the pip package, no separate install
 LOGO = Path(__file__).with_name("watermark.png")
+PAGE = Path(__file__).with_name("index.html")
 COOKIES = Path(__file__).with_name("cookies.txt")  # optional, for Instagram posts that need a login
 
 app = FastAPI()
@@ -24,22 +26,20 @@ class ConvertRequest(BaseModel):
 
 
 def video_width(path: Path) -> int:
-    out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width",
-         "-of", "json", str(path)],
-        capture_output=True, text=True, check=True,
-    ).stdout
-    return json.loads(out)["streams"][0]["width"]
+    frames = imageio_ffmpeg.read_frames(str(path))
+    width = next(frames)["size"][0]
+    frames.close()
+    return width
 
 
 @app.get("/")
-def health():
-    return {"ok": True}
+def page():
+    return FileResponse(PAGE)
 
 
 @app.post("/convert")
 def convert(req: ConvertRequest, authorization: str = Header("")):
-    if authorization != f"Bearer {RELAY_KEY}":
+    if RELAY_KEY and authorization != f"Bearer {RELAY_KEY}":
         raise HTTPException(401, "Bad key")
 
     work = Path(tempfile.mkdtemp())
@@ -68,7 +68,7 @@ def convert(req: ConvertRequest, authorization: str = Header("")):
         margin = round(width * 0.03)
         out = work / "video.mp4"
         subprocess.run(
-            ["ffmpeg", "-v", "error", "-y", "-i", str(src), "-i", str(LOGO),
+            [FFMPEG, "-v", "error", "-y", "-i", str(src), "-i", str(LOGO),
              "-filter_complex",
              f"[1]scale={logo_w}:-1[wm];[0:v][wm]overlay=W-w-{margin}:H-h-{margin},format=yuv420p[v]",
              "-map", "[v]", "-map", "0:a?",

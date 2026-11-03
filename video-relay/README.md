@@ -6,9 +6,30 @@ Nobody you send it to needs an account.
 
 Separate from the habit tracker. Two parts:
 
-- `server/`: downloads the video (yt-dlp) and burns in `watermark.png` (ffmpeg). Docker.
+- `server/`: downloads the video (yt-dlp) and burns in `watermark.png` (ffmpeg, bundled
+  via the `imageio-ffmpeg` pip package). It also serves a web page at `/`: paste a link,
+  then watch, download or share the result.
 - `app/`: Expo SDK 54 app. It registers as a share target on Android (share intent) and
   iOS (Share Extension, shown as "Relay Video").
+
+## Try it on your PC
+
+Needs Python 3.10+, nothing else. From the repo:
+
+```bash
+cd video-relay/server
+python -m venv .venv
+.venv\Scripts\activate          # Windows; on macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8080
+```
+
+Open http://localhost:8080 and paste a link.
+
+To use it from your phone, connect the phone to the same Wi-Fi and open
+`http://<your PC's IP>:8080`. Allow Python through the firewall if Windows asks.
+Without `RELAY_KEY` set there is no password, so anyone on your Wi-Fi can use it.
+When it's online, set `RELAY_KEY` and open the page as `https://<host>/?key=<RELAY_KEY>`.
 
 ## 1. Your logo
 
@@ -27,7 +48,7 @@ fly secrets set RELAY_KEY=$(openssl rand -hex 16)   # note this value
 fly deploy
 ```
 
-Check it: `curl https://<app>.fly.dev/` should return `{"ok":true}`.
+Check it: open `https://<app>.fly.dev/?key=<RELAY_KEY>` and convert a link.
 
 **Instagram:** anonymous downloads work, but Instagram rate-limits them quickly
 ("redirected to the login page"). To fix that, export cookies from a logged-in browser
