@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Video Relay",
+    "slug": "video-relay",
+    "scheme": "videorelay",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "ios": {
+      "bundleIdentifier": "com.nomadnaz.videorelay"
+    },
+    "android": {
+      "package": "com.nomadnaz.videorelay"
+    },
+    "plugins": [
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsText": true
+          },
+          "iosShareExtensionName": "Relay Video",
+          "androidIntentFilters": ["text/*"]
+        }
+      ]
+    ]
+  }
+}
