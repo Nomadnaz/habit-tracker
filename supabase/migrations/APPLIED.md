@@ -45,6 +45,7 @@
 | 030_exercise_sets.sql | ✅ yes | 2026-08-28 | Applied via `supabase db query --linked --file` (CLI, Management API — not `db push`, so `002` was never touched). New `exercise_sets` table + estimated-1RM PB detection (rep-sensor pivot, handover-8 element 2). Confirmed live via `information_schema.columns`. `ai-chat` and `device-log` both redeployed same session (both import the changed `_shared/actionExecutor.ts`). |
 | 031_drop_legacy_signup_trigger.sql | ✅ yes | 2026-10-22 | Applied via `supabase db query --linked --file`. Drops the prototype `on_auth_user_created` trigger / `handle_new_user()` that inserted into the dropped `profiles` + `bonsai` tables — every sign-up since 2026-07-06 failed with "Database error saving new user" (reported by an Android tester). |
 | 032_sugar.sql | ✅ yes | 2026-10-22 | Applied via `supabase db query --linked --file`. `meals.sugar_g` + `nutrition_targets.sugar_g` (default 90 g, the total-sugars reference intake). |
+| 033_delete_account.sql | ❌ **not yet** | — | `delete_my_account()` for Settings → DELETE ACCOUNT. Apply with `supabase db query --linked --file`. Additive (one new function); safe to re-run (CREATE OR REPLACE). |
 
 All 32 numbered migrations are now live. `supabase/migrations/` and the live project are in sync.
 
