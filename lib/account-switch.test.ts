@@ -12,7 +12,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
-import { adoptAccount } from './account-switch';
+import { adoptAccount, forgetAccount } from './account-switch';
 
 const SESSION = 'sb-ref-auth-token';
 
@@ -52,5 +52,29 @@ describe('adoptAccount', () => {
     store.set('@owner_uid', 'A'); store.set('@meals', 'A meals');
     expect(await adoptAccount('A')).toBe(false);
     expect(store.get('@meals')).toBe('A meals');
+  });
+});
+
+describe('forgetAccount', () => {
+  beforeEach(() => store.clear());
+
+  it("removes the owner's data and leaves other stashes, the session and onboarding", async () => {
+    store.set('@owner_uid', 'A'); store.set('@meals', 'A meals'); store.set('@stash:A:@old', 'A old');
+    store.set('@stash:B:@meals', 'B meals'); store.set(SESSION, 'A session'); store.set('@onboarding_complete', 'true');
+    await forgetAccount('A');
+    expect(store.get('@meals')).toBeUndefined();
+    expect(store.get('@stash:A:@old')).toBeUndefined();
+    expect(store.get('@owner_uid')).toBeUndefined();
+    expect(store.get('@stash:B:@meals')).toBe('B meals');
+    expect(store.get(SESSION)).toBe('A session');
+    expect(store.get('@onboarding_complete')).toBe('true');
+  });
+
+  it("only removes a stash when someone else owns the phone", async () => {
+    store.set('@owner_uid', 'B'); store.set('@meals', 'B meals'); store.set('@stash:A:@meals', 'A meals');
+    await forgetAccount('A');
+    expect(store.get('@meals')).toBe('B meals');
+    expect(store.get('@owner_uid')).toBe('B');
+    expect(store.get('@stash:A:@meals')).toBeUndefined();
   });
 });

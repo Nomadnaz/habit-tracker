@@ -52,3 +52,16 @@ export async function adoptAccount(uid: string): Promise<boolean> {
   await AsyncStorage.setItem(OWNER_KEY, uid);
   return true;
 }
+
+/**
+ * After an account is deleted: remove its data from this phone — what's live
+ * if it owns the phone, or its stash if not. Other accounts' stashes, the
+ * session and onboarding state are left alone (the caller signs out).
+ */
+export async function forgetAccount(uid: string): Promise<void> {
+  const keys = await AsyncStorage.getAllKeys();
+  const owner = await AsyncStorage.getItem(OWNER_KEY);
+  const gone = keys.filter(k => k.startsWith(`${STASH}${uid}:`) || (owner === uid && isAccountData(k)));
+  if (owner === uid) gone.push(OWNER_KEY);
+  if (gone.length) await AsyncStorage.multiRemove(gone);
+}

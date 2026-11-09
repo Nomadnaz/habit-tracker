@@ -19,6 +19,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { companions } from '@/lib/companions';
 import { exportToObsidian } from '@/lib/obsidianExport';
+import { deleteAccount } from '@/lib/delete-account';
 import { getWearable, wearableById, type Wearable } from '@/lib/wearables';
 
 import { C, F } from '@/lib/theme';
@@ -52,6 +53,7 @@ export default function Settings() {
   const [loaded, setLoaded] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [wearable, setWearable] = useState<Wearable | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleExport() {
     setExporting(true);
@@ -111,6 +113,32 @@ export default function Settings() {
         router.replace('/(auth)/login');
       } },
     ]);
+  }
+
+  // Two steps: it can't be undone.
+  function confirmDelete() {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently deletes your account and everything in it: logs, meals, workouts, runs, habits, photos and chats. It cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', style: 'destructive', onPress: () => Alert.alert('Delete everything now?', 'There is no way to get it back.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete account', style: 'destructive', onPress: runDelete },
+        ]) },
+      ],
+    );
+  }
+
+  async function runDelete() {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      router.replace('/(auth)/login');
+    } catch (err) {
+      setDeleting(false);
+      Alert.alert('Could not delete', err instanceof Error ? err.message : 'Try again in a moment.');
+    }
   }
 
   if (!loaded) {
@@ -187,7 +215,15 @@ export default function Settings() {
         </Board>
 
         <Board title="ACCOUNT">
-          <BoardRow index={1} label="SIGN OUT" right={<MaterialCommunityIcons name="logout" size={18} color={C.dim} />} last onPress={confirmSignOut} />
+          <BoardRow index={1} label="SIGN OUT" right={<MaterialCommunityIcons name="logout" size={18} color={C.dim} />} onPress={confirmSignOut} />
+          <BoardRow
+            index={2}
+            label="DELETE ACCOUNT"
+            sub={deleting ? 'Deleting…' : 'Permanently, with all your data'}
+            right={deleting ? <ActivityIndicator size="small" color={C.alert} /> : <MaterialCommunityIcons name="delete-outline" size={18} color={C.alert} />}
+            last
+            onPress={deleting ? undefined : confirmDelete}
+          />
         </Board>
       </ScrollView>
     </SafeAreaView>
