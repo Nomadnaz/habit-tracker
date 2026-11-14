@@ -1,16 +1,16 @@
-// Bottom tabs: LOG · BODY · TRAIN · LIFE, drawn by PuckTabBar.
+// Tabs: LOG · BODY · TRAIN · LIFE, reached from NavOrb's one circle (no bar).
 // BODY is `index`, so the app opens on it.
 // habits/activity/progress stay registered (reachable via router.push —
-// habits and progress from LIFE, activity from TRAIN) but have no bar slot:
-// the custom bar only draws TAB_ORDER.
+// habits and progress from LIFE, activity from TRAIN) but aren't on the
+// circle's menu: NavOrb only draws its own PLACES.
 import { Tabs } from 'expo-router';
-import { PuckTabBar } from '@/components/PuckTabBar';
+import { NavOrb } from '@/components/NavOrb';
 import { C } from '@/lib/theme';
 
 export default function TabsLayout() {
   return (
     <Tabs
-      tabBar={props => <PuckTabBar {...props} />}
+      tabBar={props => <NavOrb {...props} />}
       backBehavior="history"
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg } }}
     >
